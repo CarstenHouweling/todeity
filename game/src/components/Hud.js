@@ -74,6 +74,13 @@ export class Hud {
     this.owned = element('owned', this.root);
 
     this.buttons = element('corner-buttons', document.body);
+    this.photoButton = element('round-button', this.buttons, 'button');
+    this.photoButton.textContent = '📸';
+    this.photoButton.title = 'Save a screenshot (C)';
+    this.photoButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.onAction('photo');
+    });
     this.pauseButton = element('round-button', this.buttons, 'button');
     this.pauseButton.textContent = '⏸';
     this.pauseButton.title = 'Pause (Esc)';
@@ -360,7 +367,16 @@ export class Hud {
         <p class="subtitle">Rise of the Tea God</p>
         <p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
         Brew mighty powers, rise from frog to god, and topple the Empress of the hive.</p>
-        <div class="controls">
+${
+          document.body.classList.contains('touch')
+            ? `<div class="controls">
+          <span><b>Drag left side</b> move</span>
+          <span>Tode <b>aims &amp; spits</b> by himself</span>
+          <span><b>💨</b> hop dash</span>
+          <span><b>🍵</b> tea splash</span>
+          <span><b>✨</b> ultimate</span>
+        </div>`
+            : `<div class="controls">
           <span><b>WASD</b> move</span>
           <span><b>Mouse</b> aim</span>
           <span><b>Hold LMB</b> spit</span>
@@ -369,7 +385,8 @@ export class Hud {
           <span><b>R</b> ultimate</span>
           <span><b>Q/E/F</b> skills (or auto)</span>
           <span><b>Esc</b> pause</span>
-        </div>
+        </div>`
+        }
         ${best ? `<p class="best">Best score: ${best}${meta.victories ? ` · 👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : ''}</p>` : ''}
         <div class="menu-buttons">
           <button class="menu-button primary" data-action="start">▶ Start run</button>

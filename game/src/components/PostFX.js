@@ -55,7 +55,9 @@ const BASE_BLOOM = 0.35;
 export class PostFX {
   constructor(renderer, scene, camera) {
     const size = renderer.getSize(new THREE.Vector2());
-    this.composer = new EffectComposer(renderer);
+    // Multisampled targets keep edges smooth (the canvas' own antialiasing doesn't apply to post-processing).
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
     this.bloom = new UnrealBloomPass(size, BASE_BLOOM, 0.55, 0.93);
     this.composer.addPass(this.bloom);
@@ -72,6 +74,10 @@ export class PostFX {
 
   setSize(width, height) {
     this.composer.setSize(width, height);
+  }
+
+  setPixelRatio(ratio) {
+    this.composer.setPixelRatio(ratio);
   }
 
   setTargets({ bloom = BASE_BLOOM, warp = 0, aberration = 0 }) {

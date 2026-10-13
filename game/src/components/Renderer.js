@@ -9,7 +9,8 @@ export function createRenderer() {
     alpha: true,
     antialias: true,
   });
-  renderer.setPixelRatio(window.devicePixelRatio);
+  // Retina screens at full resolution plus bloom are heavy; main.js adapts this to the frame rate.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;

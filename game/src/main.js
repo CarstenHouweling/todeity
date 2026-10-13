@@ -28,6 +28,7 @@ import { fetchScores, playerName, savePlayerName, submitScore } from './componen
 import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
+import { TouchControls } from './components/TouchControls.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
 THREE.Cache.enabled = true;
@@ -196,6 +197,9 @@ player.group.add(camera);
 const renderer = createRenderer();
 const postfx = new PostFX(renderer, scene, camera);
 const input = new Input(renderer.domElement);
+const touch = new TouchControls(input);
+// Phones can't use Q/E/F, so skills always cast themselves there.
+const autoCasting = () => settings.autoCast || touch.enabled;
 const hud = new Hud(camera);
 const particles = new Particles();
 scene.add(particles.mesh);
@@ -1350,18 +1354,62 @@ const reticle = new THREE.Mesh(
 reticle.renderOrder = 1;
 scene.add(reticle);
 
+let autoFire = false;
+
+/** Touch mode: aim at the nearest bee in range and keep spitting; otherwise look where Tode walks. */
+function updateTouchAim() {
+  let target = null;
+  let best = player.stats.spitRange * 1.05;
+  for (const enemy of aliveEnemies()) {
+    const distance = enemy.position.distanceTo(player.position);
+    if (distance < best) {
+      best = distance;
+      target = enemy;
+    }
+  }
+  autoFire = Boolean(target);
+  if (target) player.aimAt(target.position);
+  else if (moveDirection.lengthSq() > 0) player.aimAt(player.position.clone().addScaledVector(moveDirection, 10));
+  ctx.aimGround.copy(target ? target.position : player.position.clone().addScaledVector(player.facing, 160)).setZ(0);
+  reticle.visible = false;
+}
+
 function updateAim() {
+  if (touch.enabled) {
+    updateTouchAim();
+    return;
+  }
   player.group.updateMatrixWorld(true);
   raycaster.setFromCamera(input.pointer, camera);
   if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) player.aimAt(aimPoint);
   if (raycaster.ray.intersectPlane(groundPlane, ctx.aimGround)) reticle.position.set(ctx.aimGround.x, ctx.aimGround.y, 0.4);
 }
 
+const BASE_CAMERA_ROTATION = camera.quaternion.clone();
+const TITLE_TIER = 2; // the title shows Tode with his golden aura: a taste of what's to come
+let titleOrbit = -Math.PI / 4;
+let orbiting = false;
+
 function updateCamera(delta) {
   shake *= Math.exp(-SHAKE_DECAY * delta);
   if (shake < 0.05) shake = 0;
   zoomPunch *= Math.exp(-2.5 * delta);
-  const zoom = cameraZoom * (1 - zoomPunch);
+
+  // Title screen: a slow cinematic orbit around Tode.
+  if (phase === 'title' || phase === 'loading') {
+    orbiting = true;
+    titleOrbit += delta * 0.1;
+    camera.position.set(Math.cos(titleOrbit) * 210, Math.sin(titleOrbit) * 210, 85);
+    camera.lookAt(player.position.x, player.position.y, player.position.z + 42); // Tode stands in the lower half
+    return;
+  }
+  if (orbiting) {
+    orbiting = false;
+    camera.quaternion.copy(BASE_CAMERA_ROTATION);
+  }
+  // Tall, narrow screens (phones) see more of the garden.
+  const portrait = camera.aspect < 1 ? 1.45 : 1;
+  const zoom = cameraZoom * (1 - zoomPunch) * portrait;
   camera.position.set(
     CAMERA_OFFSET.x * zoom + cameraPan.x + (Math.random() - 0.5) * shake,
     CAMERA_OFFSET.y * zoom + cameraPan.y + (Math.random() - 0.5) * shake,
@@ -2309,6 +2357,7 @@ function goToTitle() {
   hud.wave.textContent = '';
   muffleMusic(false);
   setPhase('title');
+  ascension.setTier(TITLE_TIER);
   hud.showTitle(bestScore);
 }
 
@@ -2355,6 +2404,35 @@ function resume() {
   hud.hideMenu();
   muffleMusic(false);
   setPhase(pausedFrom, pausedPhaseTimer);
+}
+
+/** Saves a clean screenshot (no HUD) with a small watermark, for sharing the most epic moments. */
+function takePhoto() {
+  postfx.render(0);
+  const source = renderer.domElement;
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const context = canvas.getContext('2d');
+  context.drawImage(source, 0, 0);
+  const unit = canvas.width / 1280;
+  context.textAlign = 'right';
+  context.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  context.shadowBlur = 8 * unit;
+  context.fillStyle = 'rgba(255, 243, 196, 0.92)';
+  context.font = `900 ${Math.round(40 * unit)}px system-ui, sans-serif`;
+  context.fillText('TODEITY', canvas.width - 24 * unit, canvas.height - 46 * unit);
+  context.font = `700 ${Math.round(17 * unit)}px system-ui, sans-serif`;
+  context.fillText('Rise of the Tea God', canvas.width - 24 * unit, canvas.height - 22 * unit);
+  canvas.toBlob((blob) => {
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `todeity-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+  });
+  postfx.flash('#ffffff', 0.5);
+  play('click');
 }
 
 function toggleMute() {
@@ -2408,6 +2486,7 @@ const MENU_ACTIONS = {
   resume,
   restart: () => startRun(),
   mute: toggleMute,
+  photo: takePhoto,
   'toggle-music': () => {
     setSound('music', !soundSettings().music);
     showPauseMenu();
@@ -2469,10 +2548,10 @@ function updateGame(delta) {
   SKILL_KEYS.forEach((key, i) => input.wasPressed(key) && skills.castManual(i, ctx.aimGround));
 
   spitCooldownLeft = Math.max(0, spitCooldownLeft - delta);
-  if (input.primaryDown && spitCooldownLeft === 0 && !player.rooted) spit();
+  if ((input.primaryDown || autoFire) && spitCooldownLeft === 0 && !player.rooted) spit();
 
   splashCooldownLeft = Math.max(0, splashCooldownLeft - delta);
-  if (splashCooldownLeft === 0 && (input.wasPressed('Space') || (settings.autoCast && splashWorthIt()))) teaSplash();
+  if (splashCooldownLeft === 0 && (input.wasPressed('Space') || (autoCasting() && splashWorthIt()))) teaSplash();
 
   player.update(delta, moveDirection, movePlayer);
   if (player.justLanded) {
@@ -2485,7 +2564,7 @@ function updateGame(delta) {
   hud.setCombo(combo);
 
   updatePowers(delta);
-  skills.update(delta, settings.autoCast);
+  skills.update(delta, autoCasting());
   updateProjectiles(delta);
   updateEnemies(delta);
   if (phase !== 'gameover') updateEnemyProjectiles(delta);
@@ -2533,6 +2612,7 @@ function frame(realDelta, render = true) {
     startRun();
   }
   if (input.wasPressed('KeyM')) toggleMute();
+  if (input.wasPressed('KeyC')) takePhoto();
 
   // The world keeps living while menus are open (except when paused).
   if (phase !== 'paused') {
@@ -2545,6 +2625,8 @@ function frame(realDelta, render = true) {
     ascension.update(delta);
   }
   updateCoop(realDelta, delta);
+  touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate));
+  hud.root.classList.toggle('quiet', phase === 'title' || phase === 'loading');
   postfx.setTargets(ascension.postfxTargets());
   updateCamera(phase === 'paused' ? 0 : realDelta);
   if (render) postfx.render(realDelta);
@@ -2552,7 +2634,39 @@ function frame(realDelta, render = true) {
   input.endFrame();
 }
 
-renderer.setAnimationLoop(() => frame(Math.min(clock.getDelta(), 0.1)));
+// --- Adaptive quality: lower the resolution on slow devices, raise it again when there's room ---
+const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
+const quality = { ratio: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
+
+function setPixelRatio(ratio) {
+  quality.ratio = THREE.MathUtils.clamp(ratio, 0.6, MAX_PIXEL_RATIO);
+  renderer.setPixelRatio(quality.ratio);
+  postfx.setPixelRatio(quality.ratio);
+}
+
+function adaptQuality(delta) {
+  quality.time += delta;
+  quality.frames++;
+  if (quality.time < 2) return;
+  const fps = quality.frames / quality.time;
+  quality.time = quality.frames = 0;
+  if (document.hidden) return;
+  if (fps < 45 && quality.ratio > 0.6) {
+    setPixelRatio(quality.ratio - 0.2);
+    quality.goodWindows = 0;
+  } else if (fps < 30 && sun.castShadow) {
+    sun.castShadow = false; // last resort: no shadows
+  } else if (fps > 57 && quality.ratio < MAX_PIXEL_RATIO && ++quality.goodWindows >= 3) {
+    setPixelRatio(quality.ratio + 0.1);
+    quality.goodWindows = 0;
+  }
+}
+
+renderer.setAnimationLoop(() => {
+  const delta = Math.min(clock.getDelta(), 0.1);
+  adaptQuality(delta);
+  frame(delta);
+});
 
 // --- Load assets, then show the title screen ---
 Promise.all([player.load(), loadEnemyModel(), loadHouse(HOME)])
@@ -2562,6 +2676,7 @@ Promise.all([player.load(), loadEnemyModel(), loadHouse(HOME)])
     updateHealth();
     updateScore();
     setPhase('title');
+    ascension.setTier(TITLE_TIER);
     hud.showTitle(bestScore);
   })
   .catch((error) => {

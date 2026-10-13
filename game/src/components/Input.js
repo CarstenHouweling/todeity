@@ -13,6 +13,7 @@ export class Input {
     this.pressed = new Set();
     this.pointer = new THREE.Vector2(); // normalized device coordinates
     this.primaryDown = false;
+    this.touchAxis = new THREE.Vector2(); // set by the touch joystick
 
     window.addEventListener('keydown', (event) => {
       // Typing in a text field (the leaderboard name) is not playing.
@@ -57,6 +58,7 @@ export class Input {
 
   /** Movement stick from WASD / arrows: x = screen right, y = screen up, length 0 or 1. */
   moveAxis(target) {
+    if (this.touchAxis.lengthSq() > 0) return target.copy(this.touchAxis);
     const x = (this.isHeld('KeyD', 'ArrowRight') ? 1 : 0) - (this.isHeld('KeyA', 'ArrowLeft') ? 1 : 0);
     const y = (this.isHeld('KeyW', 'ArrowUp') ? 1 : 0) - (this.isHeld('KeyS', 'ArrowDown') ? 1 : 0);
     target.set(x, y);
