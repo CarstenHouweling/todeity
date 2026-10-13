@@ -33,13 +33,22 @@ The game works without the server; the leaderboard then just says it isn't reach
 
 ### Deploying to Azure App Service
 
-`game/server/server.js` has no dependencies and serves both the built game and the leaderboard API.
+`game/server/server.js` serves the built game, the leaderboard API and the co-op relay from one Node process (its
+only dependency is `ws`). With the Azure CLI (`az login` first), from the `game/` folder:
 
-1. Create an App Service: **Linux, Node 20 LTS** (the cheapest tier is fine to start; enable *Web sockets* for future
-   multiplayer).
-2. Deploy the `game/` folder with `dist/` built (`npm run build` first), e.g. with the Azure extension for
-   VS Code/JetBrains, `az webapp up`, or GitHub Actions. Startup command: `npm start`.
-3. App settings: `DATA_DIR=/home/data` so scores survive restarts and redeploys (App Service sets `PORT` itself).
+```bash
+npm install && npm run build
+az webapp up --name todeity-<something-unique> --runtime "NODE:20-lts" --sku B1 --location westeurope
+az webapp config set --name todeity-<something-unique> --resource-group <the group az webapp up printed> \
+  --startup-file "npm start" --web-sockets-enabled true
+az webapp config appsettings set --name todeity-<something-unique> --resource-group <group> \
+  --settings DATA_DIR=/home/data
+```
+
+- **Web sockets must be enabled** for co-op. `DATA_DIR=/home/data` keeps scores across restarts and redeploys.
+- App Service sets `PORT` itself. B1 is the cheapest tier that keeps the app awake (Free/F1 sleeps, which drops
+  co-op rooms). Redeploy after changes with the same `az webapp up` command.
+- The game also works from any static host (just `dist/`), without the leaderboard and co-op.
 
 Scores are stored as JSON (`scores.json`, top 100 all-time + 14 days of daily boards). The server rate-limits
 submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, so it is not cheat-proof.
@@ -59,7 +68,11 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven above the
   clouds).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
-  bonus.
+  bonus. The spit evolves with each ascension tier (+6% damage per tier).
+- **First impressions:** the title camera orbits a Golden Tode; the first run starts with a skippable story
+  cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
+- **Phones:** touch controls (floating joystick, dash/splash/ultimate buttons) with auto-aim and auto-fire; skills
+  always auto-cast. Quality adapts to the frame rate (pixel ratio 0.6–1.5, shadows off as a last resort).
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
   and Tode says a story line after each run. **Leaderboard** (all-time and a seeded **Daily Brew**) via
   `game/server`. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
@@ -156,9 +169,9 @@ const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of wav
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game
 with `game.step()` and take a screenshot to see the result.
 
-Balance reference (Oct 13, after skills, elites and boss phases): the bot (perfect aim, random picks, dodges
-stingers but not telegraphed strikes) mostly dies at the wave-10 Queen, sometimes at wave 5, and wins about 1 run
-in 4–5. Runs take about 6–8 minutes.
+Balance reference (Oct 14): the bot (perfect aim, random picks, dodges stingers but not telegraphed strikes) dies
+at the wave-5 or wave-10 Queen in most runs, sometimes reaches wave 13+, and wins now and then. Runs take about
+6–8 minutes. See `SUBMISSION.md` for the contest post kit.
 
 ## Ideas / roadmap
 
