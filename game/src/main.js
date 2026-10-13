@@ -7,7 +7,7 @@ import { ELITE_MODS, Enemy, loadEnemyModel } from './components/Enemy.js';
 import { Projectile, PROJECTILE_HEIGHT } from './components/Projectile.js';
 import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
-import { createMap, isInsideMap, MAP_HALF_SIZE, TILE_SIZE } from './components/Map.js';
+import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TILES, TILE_SIZE } from './components/Map.js';
 import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
@@ -26,6 +26,11 @@ import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
+import { Net } from './components/Net.js';
+import { RemoteTode } from './components/RemoteTode.js';
+
+// Teammates load the same models; let the loaders reuse the downloaded files.
+THREE.Cache.enabled = true;
 
 // Enemies
 const MAX_ALIVE_ENEMIES = 30;
@@ -117,7 +122,7 @@ const WAVE_CLEAR_BONUS = 25; // × wave number
 const WAVE_INTRO_TIME = 1.8; // seconds
 const WAVE_CLEARED_TIME = 1.4;
 const ASCEND_DURATION = 2.6;
-const PLAYING = new Set(['intro', 'fighting', 'cleared']);
+const PLAYING = new Set(['intro', 'fighting', 'cleared', 'waiting']);
 
 const CAMERA_OFFSET = new THREE.Vector3(300, -300, 300);
 // WASD is camera-relative: "up" walks away from the camera.
@@ -125,12 +130,18 @@ const SCREEN_RIGHT = new THREE.Vector3(1, 1, 0).normalize();
 const SCREEN_UP = new THREE.Vector3(-1, 1, 0).normalize();
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
-const SPAWN_CORNERS = [
-  [-1, -1],
-  [1, -1],
-  [-1, 1],
-  [1, 1],
-].map(([x, y]) => new THREE.Vector3(x, y, 0).multiplyScalar(MAP_HALF_SIZE - TILE_SIZE * 1.5));
+/** Where bees come in: the four corners, plus the middle of each side in a co-op garden. */
+function spawnPoints() {
+  const edge = MAP_HALF_SIZE - TILE_SIZE * 1.5;
+  const points = [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ];
+  if (MAP_TILES > SOLO_TILES) points.push([0, 1], [0, -1], [1, 0], [-1, 0]);
+  return points.map(([x, y]) => new THREE.Vector3(x * edge, y * edge, 0));
+}
 
 // --- Scene ---
 const scene = new THREE.Scene();
@@ -144,15 +155,37 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
-Object.assign(sun.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 1, far: 1000 });
 scene.add(ambient, hemisphere, sun);
 
-const map = createMap({ path: PATH });
-scene.add(map);
+// The world (lawn, garden, divine transformations) is rebuilt when the garden is resized for co-op.
+let map = null;
+let environment = null;
+let divinity = null;
 
-const environment = createEnvironment();
-scene.add(environment.group);
-const divinity = new Divinity({ scene, map, environment });
+function buildWorld(tiles) {
+  if (map) {
+    for (const root of [map, environment.group, divinity.root]) {
+      root.removeFromParent();
+      root.traverse((child) => {
+        if (child === houses[0]?.house || houses[0]?.house?.getObjectById(child.id)) return;
+        child.geometry?.dispose();
+      });
+    }
+  }
+  setMapTiles(tiles);
+  const reach = MAP_HALF_SIZE + 75;
+  Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 1200 });
+  sun.shadow.camera.updateProjectionMatrix();
+
+  map = createMap({ path: PATH });
+  scene.add(map);
+  environment = createEnvironment();
+  scene.add(environment.group);
+  divinity = new Divinity({ scene, map, environment });
+  if (houses[0]) map.add(houses[0].house);
+}
+let houses = []; // footprints of loaded houses: { rect }
+buildWorld(SOLO_TILES);
 
 const player = new Player();
 scene.add(player.group);
@@ -176,8 +209,6 @@ const splashEffects = [];
 const telegraphs = [];
 const brewLevels = new Map(); // brew id → level
 const brewTexts = new Map(); // brew id → description of the latest pick
-let houses = []; // footprints of loaded houses: { rect }
-
 // loading → title → intro → fighting → cleared → choosing/ultimate → (ascending) → intro …
 // plus paused, victory and gameover.
 let phase = 'loading';
@@ -222,6 +253,16 @@ let lastHitStop = 0;
 let combo = 0;
 let comboTimer = 0;
 let introBoss = null;
+
+// --- Co-op state ---
+// The host simulates the bees and the waves; every player simulates their own Tode.
+const net = new Net();
+let coop = null; // { host: boolean, remotes: Map<id, RemoteTode>, ready: Set<id>, size }
+let nextNetId = 1; // host: id for every bee, so guests can mirror them
+const mirrors = new Map(); // guest: netId → mirrored Enemy
+const isGuest = () => Boolean(coop && !coop.host);
+/** Shares a message with every other player (no-op when playing alone). */
+const share = (message) => coop && net.queue('all', message);
 let ascendingTo = 0;
 
 function safeStorage(op, key, value) {
@@ -233,7 +274,8 @@ function safeStorage(op, key, value) {
 }
 
 function updateScore() {
-  score = timeAlive * SCORE_PER_SECOND + points;
+  // In co-op the host keeps the team's score.
+  score = isGuest() ? coopScore : timeAlive * SCORE_PER_SECOND + points;
   hud.setScore(Math.floor(score), Math.max(bestScore, Math.floor(score)));
 }
 
@@ -253,6 +295,7 @@ const ctx = {
   hurtPlayer: (amount) => hurtPlayer(amount),
   lightningHit,
   fireSpit: (origin, direction, damage) => fireSpit(origin, direction, damage),
+  onSkillCast: (id, level, target) => share({ k: 'skill', id, lv: level, t: [target.x, target.y] }),
   isFree: (position, radius) => !isBlockedForPlayer(position, radius),
 };
 const effects = new Effects(ctx);
@@ -308,11 +351,32 @@ function movePlayer(dx, dy) {
   slide(player.position, dx, dy, (position) => isBlockedForPlayer(position));
 }
 
+/** Every Tode still standing: the local one and, in co-op, the teammates. */
+function standingTodes() {
+  const todes = player.downed || !player.group.visible ? [] : [player];
+  if (coop) for (const remote of coop.remotes.values()) if (remote.alive && remote.seen) todes.push(remote);
+  return todes;
+}
+
+/** Bees chase the nearest Tode. */
+function targetFor(position) {
+  let best = player.position;
+  let bestDistance = Infinity;
+  for (const tode of standingTodes()) {
+    const distance = distanceSqXY(tode.position, position);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = tode.position;
+    }
+  }
+  return best;
+}
+
 function enemyBlocker(enemy) {
   return (position) =>
     !isInsideMap(position, enemy.radius) ||
     hitsObstacle(position, enemy.radius) ||
-    closingIn(enemy.position, position, enemy.radius, player.position, player.radius) ||
+    standingTodes().some((tode) => closingIn(enemy.position, position, enemy.radius, tode.position, player.radius)) ||
     enemies.some(
       (other) =>
         other !== enemy && !other.dying && closingIn(enemy.position, position, enemy.radius, other.position, other.radius)
@@ -363,7 +427,7 @@ function directionTo(from, to, out) {
 
 // --- Enemies ---
 function freeCorner(radius) {
-  const corners = [...SPAWN_CORNERS].sort(() => Math.random() - 0.5);
+  const corners = spawnPoints().sort(() => Math.random() - 0.5);
   return corners.find(
     (corner) =>
       !enemies.some((other) => circlesOverlap(corner, radius, other.position, other.radius)) &&
@@ -372,7 +436,7 @@ function freeCorner(radius) {
 }
 
 function farthestCorner() {
-  return [...SPAWN_CORNERS].sort((a, b) => distanceSqXY(b, player.position) - distanceSqXY(a, player.position))[0];
+  return spawnPoints().sort((a, b) => distanceSqXY(b, player.position) - distanceSqXY(a, player.position))[0];
 }
 
 function rollElite(kind) {
@@ -385,6 +449,9 @@ const ENEMY_TYPES_BOSS = new Set(['queen', 'empress']);
 
 function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   const enemy = new Enemy(kind, { hpScale: config.hpScale, speedScale: config.speedScale, elite });
+  enemy.netId = nextNetId++;
+  // More frogs, mightier bosses.
+  if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.6 * (coop.size - 1)));
   const spot = at ?? freeCorner(enemy.radius);
   if (!spot || (at && enemyBlocker(enemy)(spot))) {
     enemy.dispose();
@@ -400,6 +467,7 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
 
 function removeEnemy(enemy) {
   enemies.splice(enemies.indexOf(enemy), 1);
+  if (mirrors.get(enemy.netId) === enemy) mirrors.delete(enemy.netId);
   hud.removeHealthBar(enemy);
   if (enemy.ai.telegraph) removeTelegraph(enemy.ai.telegraph);
   enemy.dispose();
@@ -410,15 +478,20 @@ const DAMAGE_STYLES = { burn: 'burn', lightning: 'zap', ultimate: 'big', frost: 
 /** Every source of damage goes through here, so brews, the ultimate gauge and kills stay in sync. */
 function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit') {
   if (enemy.dying) return;
-  let damage = amount * player.stats.damageMultiplier;
-  if (player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
+  // A teammate's hit forwarded to the host is already final; local hits get Tode's multipliers.
+  const fromTeammate = source === 'net';
+  let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier;
+  if (!fromTeammate && player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
   damage = Math.max(1, Math.round(damage));
 
+  if (isGuest()) {
+    net.queue('host', { k: 'hit', id: enemy.netId, dm: damage, kx: direction ? direction.x * force : 0, ky: direction ? direction.y * force : 0 });
+  }
   const killed = enemy.takeDamage(damage, direction, force);
-  if (source !== 'burn') play('hit');
-  if (damage >= HIT_STOP_DAMAGE) hitStop(0.045);
+  if (source !== 'burn' && !fromTeammate) play('hit');
+  if (damage >= HIT_STOP_DAMAGE && !fromTeammate) hitStop(0.045);
   hud.damageNumber(enemy.position, damage, enemy.height + 4, DAMAGE_STYLES[source] ?? '');
-  if (source !== 'ultimate') addGauge(damage * GAUGE_PER_DAMAGE);
+  if (source !== 'ultimate' && !fromTeammate) addGauge(damage * GAUGE_PER_DAMAGE);
   if (killed) onEnemyKilled(enemy);
 }
 
@@ -426,14 +499,14 @@ function onEnemyKilled(enemy) {
   kills++;
   combo++;
   comboTimer = COMBO_WINDOW;
-  points += Math.round(enemy.score * (1 + Math.min(combo, 50) * COMBO_BONUS));
+  if (!isGuest()) points += Math.round(enemy.score * (1 + Math.min(combo, 50) * COMBO_BONUS));
   const streak = STREAKS.get(combo);
   if (streak) {
     hud.showCallout(streak);
     play('streak');
   }
   play('pop');
-  if (enemy.elite) eliteDeath(enemy);
+  if (enemy.elite && !isGuest()) eliteDeath(enemy);
   particles.burst(enemy.position, {
     count: enemy.type.boss ? 70 : 14,
     colors: BEE_FLUFF,
@@ -451,18 +524,27 @@ function onEnemyKilled(enemy) {
     healPlayer(1);
   }
 
-  const lastOfWave = phase === 'fighting' && !spawnQueue.length && aliveEnemies().length === 0;
-  if (enemy.type.boss || lastOfWave) finisher(enemy.type.boss);
+  if (isGuest()) return; // the host announces finishers and boss kills to everyone
 
-  if (enemy.type.boss) {
-    bossKills++;
-    hud.setBoss(null);
-    shake = BOSS_DEATH_SHAKE;
-    postfx.flash('#fff2c0', 0.6);
-    healPlayer(2);
-    hud.showBanner(`${enemy.type.name} is down!`, `+${enemy.type.score} points`, 2.6);
-    play('victory');
+  const lastOfWave = phase === 'fighting' && !spawnQueue.length && aliveEnemies().length === 0;
+  if (enemy.type.boss || lastOfWave) {
+    finisher(enemy.type.boss);
+    share({ k: 'fin', big: enemy.type.boss });
   }
+  if (enemy.type.boss) {
+    bossDefeated(enemy.type.name, enemy.type.score);
+    share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score });
+  }
+}
+
+function bossDefeated(name, score) {
+  bossKills++;
+  hud.setBoss(null);
+  shake = BOSS_DEATH_SHAKE;
+  postfx.flash('#fff2c0', 0.6);
+  healPlayer(2);
+  hud.showBanner(`${name} is down!`, `+${score} points`, 2.6);
+  play('victory');
 }
 
 const chase = new THREE.Vector3();
@@ -501,6 +583,15 @@ function timeScale(delta) {
   return 1;
 }
 
+/** What everyone sees and feels when an explosive bee goes off (damage to bees is the host's job). */
+function explosionEffects(position) {
+  play('boom');
+  shake = Math.max(shake, 8);
+  particles.burst(position, { count: 30, colors: FIRE, speed: 220, up: 140, size: 2.2, glow: true });
+  effects.ring(position, { radius: 75, color: '#ff6a3d', duration: 0.35 });
+  if (player.position.distanceTo(position) < 75 + player.radius * 0.5) hurtPlayer(1);
+}
+
 function eliteDeath(enemy) {
   const position = enemy.position.clone();
   if (enemy.elite === ELITE_MODS.explosive) {
@@ -509,13 +600,11 @@ function eliteDeath(enemy) {
       delay: 0.7,
       color: '#ff6a3d',
       onDone: () => {
-        play('boom');
-        shake = Math.max(shake, 8);
-        particles.burst(position, { count: 30, colors: FIRE, speed: 220, up: 140, size: 2.2, glow: true });
+        explosionEffects(position);
         effects.blast(position, { radius: 75, damage: 6, knockback: 300, color: '#ff6a3d', source: 'burn' });
-        if (player.position.distanceTo(position) < 75 + player.radius * 0.5) hurtPlayer(1);
       },
     });
+    share({ k: 'boom', p: [position.x, position.y] });
   } else if (enemy.elite === ELITE_MODS.splitting) {
     for (const angle of [0, Math.PI]) {
       const offset = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(enemy.radius + 12);
@@ -580,12 +669,13 @@ function hurtPlayer(amount, enemy = null) {
     aliveEnemies()
       .sort((a, b) => distanceSqXY(a.position, player.position) - distanceSqXY(b.position, player.position))
       .slice(0, player.stats.hitStorm)
-      .forEach((target) => effects.strike(target.position, { damage: 6, radius: 35 }));
+      .forEach((target) => sharedStrike(target.position, { damage: 6, radius: 35 }));
   }
 
   updateHealth();
   if (player.isDead) {
     if (player.stats.revives > 0) revive();
+    else if (coop) playerDown();
     else gameOver();
   }
   return true;
@@ -630,8 +720,9 @@ function checkContact(enemy) {
 }
 
 function updateChaser(enemy, delta) {
-  const distance = directionTo(enemy.position, player.position, chase);
-  enemy.faceTowards(player.position);
+  const target = targetFor(enemy.position);
+  const distance = directionTo(enemy.position, target, chase);
+  enemy.faceTowards(target);
   const reached = distance < enemy.radius + player.radius + ENEMY_CONTACT_REACH;
   const speed = reached ? 0 : enemy.speed;
   moveEnemy(enemy, chase.x * speed, chase.y * speed, delta);
@@ -640,8 +731,9 @@ function updateChaser(enemy, delta) {
 /** Stingers keep their distance, circle around Tode and shoot. */
 function updateStinger(enemy, delta) {
   const { ranged } = enemy.type;
-  const distance = directionTo(enemy.position, player.position, chase);
-  enemy.faceTowards(player.position);
+  const target = targetFor(enemy.position);
+  const distance = directionTo(enemy.position, target, chase);
+  enemy.faceTowards(target);
 
   let vx = 0;
   let vy = 0;
@@ -666,27 +758,54 @@ function updateStinger(enemy, delta) {
 
 function fireStinger(enemy, direction, speed) {
   const origin = enemy.position.clone().addScaledVector(direction, enemy.radius * 0.8);
+  launchStinger(origin, direction, speed);
+  share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed });
+}
+
+/** Every player simulates the stingers themselves and only checks hits on their own Tode. */
+function launchStinger(origin, direction, speed) {
   const stinger = new Projectile(origin, direction, { ...STINGER, speed });
   enemyProjectiles.push(stinger);
   scene.add(stinger.mesh);
   play('sting');
 }
 
+/** A lightning strike everyone sees; only the one who calls it deals damage to bees. */
+function sharedStrike(position, options) {
+  effects.strike(position, options);
+  share({
+    k: 'strike',
+    p: [position.x, position.y],
+    r: options.radius,
+    dl: options.delay ?? 0,
+    h: Boolean(options.hurtsPlayer),
+    c: options.color,
+    dm: options.damage,
+    f: options.from && [options.from.x, options.from.y, options.from.z],
+  });
+}
+
 /** At set health thresholds the boss roars, shoves Tode back, calls guards and learns stinger rain. */
 function bossRoar(boss) {
   boss.ai.phase = (boss.ai.phase ?? 0) + 1;
   boss.ai.rain = true;
-  play('roar');
-  shake = Math.max(shake, 14);
-  postfx.flash('#ff3b1f', 0.35);
-  effects.ring(boss.position, { radius: 320, color: '#ff3b1f', duration: 0.7, thickness: 0.2 });
-  directionTo(boss.position, player.position, away);
-  player.velocity.addScaledVector(away, 700);
+  roarEffects(boss);
+  share({ k: 'roar', id: boss.netId });
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2;
     const spot = boss.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(boss.radius + 30));
     spawnEnemy('zipper', spot, { elite: null });
   }
+}
+
+/** The roar as everyone experiences it: a red shockwave that shoves their own Tode away. */
+function roarEffects(boss) {
+  play('roar');
+  shake = Math.max(shake, 14);
+  postfx.flash('#ff3b1f', 0.35);
+  effects.ring(boss.position, { radius: 320, color: '#ff3b1f', duration: 0.7, thickness: 0.2 });
+  directionTo(boss.position, player.position, away);
+  if (player.position.distanceTo(boss.position) < 400) player.velocity.addScaledVector(away, 700);
   hud.showCallout(`${boss.type.name.split(' ').pop()} is furious!`);
 }
 
@@ -697,8 +816,8 @@ function stingerRain(boss) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const distance = i === 0 ? 0 : 40 + Math.random() * 200;
-    const spot = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
-    effects.strike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: '#c070ff' });
+    const spot = targetFor(boss.position).clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
+    sharedStrike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: '#c070ff' });
   }
 }
 
@@ -708,7 +827,8 @@ function updateQueen(boss, delta) {
   const nextPhase = BOSS_PHASES[boss.kind]?.[ai.phase ?? 0];
   if (nextPhase && boss.hp / boss.maxHp < nextPhase) bossRoar(boss);
   const delayScale = (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1);
-  directionTo(boss.position, player.position, chase);
+  const target = targetFor(boss.position);
+  directionTo(boss.position, target, chase);
 
   switch (ai.mode) {
     case 'windup':
@@ -721,6 +841,7 @@ function updateQueen(boss, delta) {
         ai.timer = QUEEN.chargeDuration;
         boss.glow = 0;
         removeTelegraph(ai.telegraph);
+        share({ k: 'teleOff', id: boss.netId });
       }
       break;
     case 'charge': {
@@ -746,7 +867,7 @@ function updateQueen(boss, delta) {
     default:
       ai.mode = 'chase';
       ai.timer ??= QUEEN.attackDelay;
-      boss.faceTowards(player.position);
+      boss.faceTowards(target);
       moveEnemy(boss, chase.x * boss.speed, chase.y * boss.speed, delta);
       if (!boss.isFrozen) ai.timer -= delta;
       if (ai.timer <= 0) startQueenAttack(boss, enraged, delayScale);
@@ -771,7 +892,9 @@ function startQueenAttack(boss, enraged, delayScale) {
     ai.direction = chase.clone();
     boss.faceDirection(chase.x, chase.y);
     boss.glowColor.set(0xff3b1f);
-    ai.telegraph = addTelegraph(boss.position, ai.direction, QUEEN.chargeSpeed * QUEEN.chargeDuration, boss.radius * 1.6);
+    const length = QUEEN.chargeSpeed * QUEEN.chargeDuration;
+    ai.telegraph = addTelegraph(boss.position, ai.direction, length, boss.radius * 1.6);
+    share({ k: 'tele', id: boss.netId, o: [boss.position.x, boss.position.y], d: [ai.direction.x, ai.direction.y], l: length, w: boss.radius * 1.6 });
     play('charge');
   } else if (attack === 'rain') {
     stingerRain(boss);
@@ -817,6 +940,32 @@ function removeTelegraph(mesh) {
   mesh.material.dispose();
 }
 
+/** Guests: bees follow the host's snapshots; only contact with our own Tode is checked here. */
+function updateMirrors(delta) {
+  const follow = 1 - Math.exp(-12 * delta);
+  for (const enemy of [...enemies]) {
+    enemy.update(delta);
+    if (enemy.netTarget) enemy.position.lerp(enemy.netTarget, follow);
+    if (enemy.dying) {
+      if (enemy.isGone) removeEnemy(enemy);
+      continue;
+    }
+    updateShatter(enemy, delta);
+    if (!player.downed) checkContact(enemy);
+    if (phase === 'gameover') return;
+  }
+}
+
+function updateShatter(enemy, delta) {
+  if (!(enemy.shatterLeft > 0) || enemy.dying) return;
+  enemy.shatterLeft -= delta;
+  if (enemy.shatterLeft <= 0) {
+    particles.burst(enemy.position, { count: 14, colors: ICE, speed: 120, up: 90, size: 1.6, glow: true });
+    play('pop');
+    damageEnemy(enemy, player.stats.freezeDash, null, 0, 'frost');
+  }
+}
+
 function updateStatuses(enemy, delta) {
   if (enemy.burnLeft > 0) {
     enemy.burnTick -= delta;
@@ -826,17 +975,14 @@ function updateStatuses(enemy, delta) {
       damageEnemy(enemy, 1, null, 0, 'burn');
     }
   }
-  if (enemy.shatterLeft > 0 && !enemy.dying) {
-    enemy.shatterLeft -= delta;
-    if (enemy.shatterLeft <= 0) {
-      particles.burst(enemy.position, { count: 14, colors: ICE, speed: 120, up: 90, size: 1.6, glow: true });
-      play('pop');
-      damageEnemy(enemy, player.stats.freezeDash, null, 0, 'frost');
-    }
-  }
+  updateShatter(enemy, delta);
 }
 
 function updateEnemies(delta) {
+  if (isGuest()) {
+    updateMirrors(delta);
+    return;
+  }
   for (const enemy of [...enemies]) {
     enemy.update(delta);
     if (enemy.dying) {
@@ -902,6 +1048,15 @@ function fireSpit(origin, direction, damage, { child = false, hits } = {}) {
   });
   projectile.child = child;
   if (hits) hits.forEach((enemy) => projectile.hits.add(enemy));
+  projectiles.push(projectile);
+  scene.add(projectile.mesh);
+  share({ k: 'spit', o: [origin.x, origin.y], d: [direction.x, direction.y], s: projectile.speed, r: projectile.range, rad: projectile.radius });
+}
+
+/** A teammate's spit: it flies and splatters, but the damage is done on their side. */
+function visualSpit(origin, direction, speed, range, radius) {
+  const projectile = new Projectile(origin, direction, { speed, range, damage: 0, radius });
+  projectile.visual = true;
   projectiles.push(projectile);
   scene.add(projectile.mesh);
 }
@@ -973,6 +1128,11 @@ function updateProjectiles(delta) {
         !projectile.hits.has(enemy) &&
         distanceSqXY(enemy.position, projectile.position) < (enemy.radius + projectile.radius) ** 2
     );
+    if (target && projectile.visual) {
+      particles.burst(projectile.position, { count: 4, colors: SPIT_DROPS, speed: 50, up: 40, size: 1.2, height: 0 });
+      removeFrom(projectiles, projectile);
+      continue;
+    }
     if (target) {
       projectile.hits.add(target);
       damageEnemy(target, projectile.damage, projectile.direction, SPIT_KNOCKBACK, 'spit');
@@ -988,15 +1148,8 @@ function updateProjectiles(delta) {
 
 function splash(center, { radius, damage, knockback, color = SPLASH_COLOR, shakeAmount = SPLASH_SHAKE, burn = 0, slow = 0 }) {
   shake = Math.max(shake, shakeAmount);
-  play('splash');
-  particles.burst(center, { count: Math.round(radius / 3), colors: TEA_DROPS, speed: radius * 2.2, up: 110, size: 1.8, height: 3, ring: radius * 0.25 });
-  const ring = new THREE.Mesh(
-    new THREE.CircleGeometry(radius, 48),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, depthWrite: false })
-  );
-  ring.position.set(center.x, center.y, 0.25);
-  scene.add(ring);
-  splashEffects.push({ ring, age: 0 });
+  splashVisual(center, radius, color);
+  share({ k: 'splash', p: [center.x, center.y], r: radius, c: color });
 
   for (const enemy of [...enemies]) {
     if (enemy.dying) continue;
@@ -1006,6 +1159,19 @@ function splash(center, { radius, damage, knockback, color = SPLASH_COLOR, shake
     if (slow) enemy.applySlow(slow, 2.5);
     damageEnemy(enemy, damage, away, knockback, 'splash');
   }
+}
+
+/** The look and sound of a tea splash (used for teammates' splashes too). */
+function splashVisual(center, radius, color = SPLASH_COLOR) {
+  play('splash');
+  particles.burst(center, { count: Math.round(radius / 3), colors: TEA_DROPS, speed: radius * 2.2, up: 110, size: 1.8, height: 3, ring: radius * 0.25 });
+  const ring = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 48),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, depthWrite: false })
+  );
+  ring.position.set(center.x, center.y, 0.25);
+  scene.add(ring);
+  splashEffects.push({ ring, age: 0 });
 }
 
 function teaSplash() {
@@ -1027,7 +1193,7 @@ function teaSplash() {
       .sort((a, b) => distanceSqXY(a.position, player.position) - distanceSqXY(b.position, player.position))
       .slice(0, stats.splashBolts)
       .forEach((enemy, i) =>
-        effects.strike(enemy.position, { damage: Math.max(4, stats.splashDamage), radius: 30, delay: 0.05 * i })
+        sharedStrike(enemy.position, { damage: Math.max(4, stats.splashDamage), radius: 30, delay: 0.05 * i })
       );
   }
   // Volcano Pot: a lingering pool of lava.
@@ -1059,6 +1225,7 @@ function tryUltimate() {
   if (!player.ultimate || player.gauge < 100 || ultimateEffect) return;
   player.gauge = 0;
   ultimateEffect = startUltimate(player.ultimate, ctx);
+  share({ k: 'ult', id: player.ultimate, a: [ctx.aimGround.x, ctx.aimGround.y] });
 }
 
 function updateSplashEffects(delta) {
@@ -1146,7 +1313,7 @@ function updatePowers(delta) {
       const target = aliveEnemies()
         .filter((enemy) => enemy.position.distanceTo(player.position) < 340)
         .sort((a, b) => distanceSqXY(a.position, player.position) - distanceSqXY(b.position, player.position))[0];
-      if (target) effects.strike(target.position, { damage: stats.stormCloud, radius: 32, from: stormCloud.position.clone() });
+      if (target) sharedStrike(target.position, { damage: stats.stormCloud, radius: 32, from: stormCloud.position.clone() });
     }
   }
 
@@ -1204,14 +1371,16 @@ function updateCamera(delta) {
 
 // --- Weather ---
 function stormStrike() {
-  if (!PLAYING.has(phase)) return;
+  if (!PLAYING.has(phase) || isGuest()) return; // the host calls the weather's strikes
   const bees = aliveEnemies();
   const nearTode = Math.random() < 0.35 || !bees.length;
-  const base = nearTode ? player.position : bees[Math.floor(Math.random() * bees.length)].position;
+  const todes = standingTodes();
+  const tode = todes[Math.floor(Math.random() * todes.length)] ?? player;
+  const base = nearTode ? tode.position : bees[Math.floor(Math.random() * bees.length)].position;
   const angle = Math.random() * Math.PI * 2;
   const offset = nearTode ? 30 + Math.random() * 70 : Math.random() * 30;
   const spot = base.clone().add(new THREE.Vector3(Math.cos(angle) * offset, Math.sin(angle) * offset, 0));
-  effects.strike(spot, { damage: 8, radius: 45, delay: 0.9, hurtsPlayer: true });
+  sharedStrike(spot, { damage: 8, radius: 45, delay: 0.9, hurtsPlayer: true });
 }
 
 // --- Music ---
@@ -1240,13 +1409,25 @@ function setPhase(next, duration = 0) {
   updateMusic();
 }
 
-function startWave(number) {
+/** `weatherKind` comes from the host in co-op; otherwise it is rolled here. */
+function startWave(number, weatherKind) {
   wave = number;
   config = waveConfig(number);
-  spawnQueue = seeded(() => buildSpawnQueue(config));
+  if (coop) {
+    // More frogs, more bees: bigger swarms, tougher bees, faster spawning.
+    const extra = coop.size - 1;
+    config.count = Math.round(config.count * (1 + 0.6 * extra));
+    config.hpScale *= 1 + 0.12 * extra;
+    config.spawnInterval /= 1 + 0.5 * extra;
+    reviveIfDown();
+    hud.setWaiting(null);
+  }
+  spawnQueue = isGuest() ? [] : seeded(() => buildSpawnQueue(config));
   spawnTimer = 0;
 
-  weather.set(timeOfDay(number), seeded(() => rollWeather(number, config.isBoss)));
+  weatherKind ??= seeded(() => rollWeather(number, config.isBoss));
+  weather.set(timeOfDay(number), weatherKind);
+  if (coop?.host) share({ k: 'wave', n: number, wx: weatherKind });
   weather.setCosmic(ascension.tier === 4);
   hud.setWeather(weather.info);
 
@@ -1264,13 +1445,14 @@ function updateWave(delta) {
 
   if (phase === 'intro' && phaseTimer <= 0) {
     setPhase('fighting');
-    if (config.isBoss) {
+    if (config.isBoss && !isGuest()) {
       const boss = spawnEnemy(config.boss, farthestCorner(), { elite: null });
       if (boss) startBossIntro(boss);
     }
-  } else if (phase === 'fighting') {
+  } else if (phase === 'fighting' && !isGuest()) {
     spawnTimer -= delta;
-    if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < MAX_ALIVE_ENEMIES) {
+    const maxAlive = MAX_ALIVE_ENEMIES + (coop ? 12 * (coop.size - 1) : 0);
+    if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < maxAlive) {
       if (spawnEnemy(spawnQueue[0])) spawnQueue.shift();
       spawnTimer = config.spawnInterval;
     }
@@ -1283,6 +1465,7 @@ function updateWave(delta) {
 }
 
 function waveCleared() {
+  if (coop?.host) share({ k: 'cleared' });
   const bonus = WAVE_CLEAR_BONUS * wave;
   points += bonus;
   const heal = player.stats.waveHeal;
@@ -1297,6 +1480,13 @@ function waveCleared() {
 }
 
 function offerRewards() {
+  if (wave === FINAL_WAVE && coop) {
+    if (coop.host) {
+      share({ k: 'over', v: true });
+      endRun({ victory: true });
+    }
+    return;
+  }
   if (wave === FINAL_WAVE && !endless) {
     setPhase('victory');
     meta.victories++;
@@ -1401,11 +1591,23 @@ function power() {
 function afterReward() {
   const tier = ascension.tierFor(power());
   if (tier > ascension.tier) startAscension(tier);
-  else startWave(wave + 1);
+  else nextWave();
+}
+
+/** Solo: on to the next wave. Co-op: tell the host we're ready; it starts once everyone is. */
+function nextWave() {
+  if (!coop) {
+    startWave(wave + 1);
+    return;
+  }
+  setPhase('waiting');
+  if (coop.host) markReady(net.id);
+  else net.queue('host', { k: 'ready' });
 }
 
 // --- Boss entrance ---
 function startBossIntro(boss) {
+  if (coop?.host) share({ k: 'bossIntro', id: boss.netId });
   introBoss = boss;
   setPhase('bossIntro', BOSS_INTRO_TIME);
   music.play('boss', 4);
@@ -1505,8 +1707,439 @@ function updateAscending(delta) {
 
   if (phaseTimer <= 0) {
     cameraZoom = 1;
+    nextWave();
+  }
+}
+
+// --- Co-op ---------------------------------------------------------------------------
+const KINDS = ['drone', 'zipper', 'brute', 'stinger', 'queen', 'empress'];
+const MODS = Object.keys(ELITE_MODS);
+const COOP_TILES = [SOLO_TILES, 31, 35, 41]; // garden size by number of players
+const SNAPSHOT_RATE = 15; // host bee snapshots per second
+const STATE_RATE = 20; // own-Tode updates per second
+const READY_TIMEOUT = 40; // seconds the host waits for slow pickers
+let snapshotTimer = 0;
+let stateTimer = 0;
+let readySince = 0;
+let coopScore = 0;
+let pendingIntro = null;
+let coopMenuOpen = false;
+let lobbyError = null;
+
+const vec = ([x, y], z = 0) => new THREE.Vector3(x, y, z);
+
+/** Hooks for replaying a teammate's skills and ultimates: same visuals, no damage on our side. */
+function remoteCtx(remote, aim) {
+  const quietFx = {
+    flash: (color, amount) => postfx.flash(color, amount * 0.3),
+    pulse: ({ bloom = 0, warp = 0, aberration = 0 }) => postfx.pulse({ bloom: bloom * 0.4, warp: warp * 0.4, aberration: aberration * 0.4 }),
+  };
+  const visualEffects = {
+    addEffect: (effect) => effects.addEffect(effect),
+    bolt: (...args) => effects.bolt(...args),
+    ring: (...args) => effects.ring(...args),
+    warning: (...args) => effects.warning(...args),
+    strike: (position, options) => effects.strike(position, { ...options, hitsBees: false }),
+    pool: (position, options) => effects.pool(position, { ...options, dps: 0 }),
+    blast: (position, { radius, color, particleColors }) => {
+      effects.ring(position, { radius, color, duration: 0.35 });
+      if (particleColors) particles.burst(position, { count: 10, colors: particleColors, speed: radius * 2.5, up: 80, size: 1.5, height: 8 });
+    },
+    chain: () => {},
+  };
+  return {
+    ...ctx,
+    player: remote.puppet,
+    postfx: quietFx,
+    effects: visualEffects,
+    shake: (amount) => ctx.shake(amount * 0.3),
+    aliveEnemies: () => [],
+    damageEnemy: () => {},
+    hurtPlayer: () => {},
+    lightningHit: () => {},
+    fireSpit: () => {}, // their spits arrive as their own 'spit' messages
+    aimGround: aim,
+    onSkillCast: null,
+  };
+}
+
+function snapshot() {
+  const flags = (enemy) =>
+    (enemy.dying ? 1 : 0) |
+    (enemy.burnLeft > 0 ? 2 : 0) |
+    (enemy.slowLeft > 0 ? 4 : 0) |
+    (enemy.isFrozen ? 8 : 0) |
+    (enemy.glow > 0.3 ? 16 : 0) |
+    (enemy.ai.mode === 'charge' ? 32 : 0);
+  return {
+    k: 'snap',
+    sc: Math.floor(score),
+    w: wave,
+    left: spawnQueue.length + aliveEnemies().length,
+    e: enemies.map((enemy) => [
+      enemy.netId,
+      KINDS.indexOf(enemy.kind),
+      enemy.eliteId ? MODS.indexOf(enemy.eliteId) : -1,
+      Math.round(enemy.position.x),
+      Math.round(enemy.position.y),
+      Math.round(enemy.model.rotation.y * 100) / 100,
+      Math.ceil(enemy.hp),
+      enemy.maxHp,
+      flags(enemy),
+    ]),
+  };
+}
+
+function createMirror(id, kind, elite, x, y) {
+  const enemy = new Enemy(kind, { elite });
+  enemy.netId = id;
+  enemy.netTarget = new THREE.Vector3(x, y, 0);
+  enemy.position.set(x, y, 0);
+  enemy.glowColor.set(kind === 'stinger' ? 0xd18cff : 0xff3b1f);
+  // Burns and chills we cause are the host's business too.
+  enemy.onStatus = (type, a, b) => net.queue('host', { k: 'st', id, t: type, a, b });
+  enemies.push(enemy);
+  mirrors.set(id, enemy);
+  scene.add(enemy.group);
+  if (!enemy.type.boss) hud.attachHealthBar(enemy);
+  if (pendingIntro === id) {
+    pendingIntro = null;
+    startBossIntro(enemy);
+  }
+  return enemy;
+}
+
+function applySnapshot(snap) {
+  coopScore = snap.sc;
+  if (phase === 'fighting') hud.setWave(snap.w, snap.left);
+  const seen = new Set();
+  for (const [id, kind, mod, x, y, rotation, hp, maxHp, flags] of snap.e) {
+    seen.add(id);
+    let enemy = mirrors.get(id);
+    if (!enemy) {
+      if (flags & 1) continue;
+      enemy = createMirror(id, KINDS[kind], MODS[mod] ?? null, x, y);
+    }
+    enemy.netTarget.set(x, y, 0);
+    enemy.model.rotation.y = rotation;
+    enemy.maxHp = maxHp;
+    if (enemy.dying) continue;
+    enemy.hp = hp;
+    enemy.burnLeft = flags & 2 ? 0.3 : 0;
+    enemy.slowLeft = flags & 12 ? 0.3 : 0;
+    enemy.slow = flags & 8 ? 1 : 0.4;
+    enemy.glow = flags & 16 ? 1 : 0;
+    enemy.ai.mode = flags & 32 ? 'charge' : 'chase';
+    if (flags & 1) {
+      enemy.die();
+      hud.removeHealthBar(enemy);
+    }
+    if (enemy.type.boss && !enemy.dying) hud.setBoss(enemy);
+  }
+  for (const [id, enemy] of mirrors) {
+    if (seen.has(id) || enemy.dying) continue;
+    enemy.die();
+    hud.removeHealthBar(enemy);
+    if (enemy.ai.telegraph) removeTelegraph(enemy.ai.telegraph);
+  }
+}
+
+function hostApplyHit({ id, dm, kx, ky }) {
+  const enemy = enemies.find((e) => e.netId === id && !e.dying);
+  if (!enemy) return;
+  const force = Math.hypot(kx, ky);
+  damageEnemy(enemy, dm, force > 0 ? new THREE.Vector3(kx / force, ky / force, 0) : null, force, 'net');
+}
+
+/** Everything that arrives from teammates. */
+function handleNet(from, message) {
+  const remote = coop?.remotes.get(from);
+  const mirror = () => mirrors.get(message.id);
+  switch (message.k) {
+    case 'me':
+      remote?.applyState(message);
+      if (coop?.host && message.down) checkAllDown();
+      break;
+    case 'snap':
+      if (isGuest()) applySnapshot(message);
+      break;
+    case 'hit':
+      if (coop?.host) hostApplyHit(message);
+      break;
+    case 'st': {
+      const enemy = coop?.host && enemies.find((e) => e.netId === message.id);
+      if (enemy && message.t === 'burn') enemy.applyBurn(message.a, message.b);
+      if (enemy && message.t === 'slow') enemy.applySlow(message.a, message.b);
+      break;
+    }
+    case 'sting':
+      launchStinger(vec(message.o), vec(message.d), message.s);
+      break;
+    case 'strike':
+      effects.strike(vec(message.p), {
+        damage: message.dm,
+        radius: message.r,
+        delay: message.dl,
+        hurtsPlayer: message.h && !player.downed,
+        hitsBees: false,
+        color: message.c,
+        from: message.f && new THREE.Vector3(...message.f),
+      });
+      break;
+    case 'tele': {
+      const boss = mirror();
+      if (boss) boss.ai.telegraph = addTelegraph(vec(message.o), vec(message.d), message.l, message.w);
+      break;
+    }
+    case 'teleOff':
+      if (mirror()?.ai.telegraph) removeTelegraph(mirror().ai.telegraph);
+      break;
+    case 'roar':
+      if (mirror()) roarEffects(mirror());
+      break;
+    case 'boom': {
+      const position = vec(message.p);
+      effects.warning(position, { radius: 75, delay: 0.7, color: '#ff6a3d', onDone: () => explosionEffects(position) });
+      break;
+    }
+    case 'spit':
+      visualSpit(vec(message.o), vec(message.d), message.s, message.r, message.rad);
+      break;
+    case 'splash':
+      splashVisual(vec(message.p), message.r, message.c);
+      break;
+    case 'ult':
+      if (remote) {
+        remote.puppet.facing.copy(new THREE.Vector3(message.a[0], message.a[1], 0).sub(remote.position).setZ(0).normalize());
+        startUltimate(message.id, remoteCtx(remote, vec(message.a)));
+      }
+      break;
+    case 'skill':
+      if (remote) SKILLS[message.id]?.cast(remoteCtx(remote, vec(message.t)), vec(message.t), message.lv);
+      break;
+    case 'start':
+      startCoopRun(message.players);
+      break;
+    case 'wave':
+      if (isGuest()) {
+        if (['choosing', 'ultimate', 'skill'].includes(phase)) hud.hideMenu(); // the host moved on without us
+        startWave(message.n, message.wx);
+      }
+      break;
+    case 'cleared':
+      if (isGuest() && (phase === 'fighting' || phase === 'intro')) waveCleared();
+      break;
+    case 'ready':
+      if (coop?.host) markReady(from);
+      break;
+    case 'readyCount':
+      if (phase === 'waiting') hud.setWaiting(message.r, message.t);
+      break;
+    case 'bossIntro':
+      if (mirror()) startBossIntro(mirror());
+      else pendingIntro = message.id;
+      break;
+    case 'fin':
+      finisher(message.big);
+      break;
+    case 'bossDown':
+      bossDefeated(message.n, message.s);
+      break;
+    case 'over':
+      if (phase !== 'gameover') endRun({ victory: message.v });
+      break;
+  }
+}
+
+net.on((message) => {
+  if (message.t === 'relay') {
+    for (const item of message.d) handleNet(message.from, item);
+  } else if (message.t === 'joined' || message.t === 'players') {
+    if (!coop && hud.menu.classList.contains('lobby')) showRoom();
+    if (coop && message.t === 'players') dropMissingTeammates();
+  } else if (message.t === 'error') {
+    lobbyError = message.message;
+    if (!coop) showLobby();
+  } else if (message.t === 'closed' || message.t === 'disconnected') {
+    const reason = message.reason ?? 'Lost the connection to the co-op server.';
+    if (coop) {
+      leaveCoop();
+      goToTitle();
+      hud.showBanner('Co-op ended', reason, 3);
+    } else if (hud.menu.classList.contains('lobby')) {
+      lobbyError = reason;
+      showLobby();
+    }
+  }
+});
+
+function showLobby() {
+  hud.showLobby({ view: 'start', name: playerName(), error: lobbyError });
+  lobbyError = null;
+}
+
+function showRoom() {
+  const players = net.players.map((p) => ({ ...p, isHost: p.id === net.hostId }));
+  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost });
+}
+
+async function lobbyConnect(action) {
+  const name = (hud.menu.querySelector('#coop-name')?.value ?? playerName()).trim() || 'Frog';
+  const code = (hud.menu.querySelector('#coop-code')?.value ?? '').trim().toUpperCase();
+  if (action === 'join' && code.length !== 4) {
+    lobbyError = 'Room codes have 4 letters.';
+    showLobby();
+    return;
+  }
+  savePlayerName(name);
+  hud.showLobby({ view: 'connecting' });
+  try {
+    if (action === 'create') await net.create(name);
+    else await net.join(code, name);
+  } catch (error) {
+    lobbyError = error.message;
+    showLobby();
+  }
+}
+
+/** Host: everybody in the room starts a run in a garden sized for the group. */
+function hostStartCoop() {
+  if (!net.isHost) return;
+  net.start();
+  const players = net.players.map(({ id, name, color }) => ({ id, name, color }));
+  net.relay('all', [{ k: 'start', players }]);
+  startCoopRun(players);
+}
+
+function startCoopRun(players) {
+  leaveCoop({ keepConnection: true });
+  coop = { host: net.isHost, remotes: new Map(), ready: new Set(), size: players.length };
+  for (const info of players) {
+    if (info.id === net.id) continue;
+    const remote = new RemoteTode(info, { scene, particles, effects, hud });
+    coop.remotes.set(info.id, remote);
+    remote.load();
+  }
+  buildWorld(COOP_TILES[Math.min(players.length, 4) - 1]);
+  startRun({ coop: true });
+}
+
+function dropMissingTeammates() {
+  const present = new Set(net.players.map((p) => p.id));
+  for (const [id, remote] of coop.remotes) {
+    if (present.has(id)) continue;
+    remote.dispose();
+    coop.remotes.delete(id);
+    hud.showCallout(`${remote.name} left`);
+  }
+  if (coop.host && phase === 'waiting') markReady(null);
+  if (coop.host) checkAllDown();
+}
+
+/** Ends co-op locally: teammates vanish and the garden goes back to solo size on the next run. */
+function leaveCoop({ keepConnection = false } = {}) {
+  if (coop) {
+    for (const remote of coop.remotes.values()) remote.dispose();
+    coop = null;
+  }
+  mirrors.clear();
+  pendingIntro = null;
+  coopMenuOpen = false;
+  hud.setWaiting(null);
+  if (!keepConnection && net.inRoom) net.leave();
+}
+
+/** Host: count who is ready for the next wave; start it when everyone is (or after a while). */
+function markReady(id) {
+  if (id !== null) coop.ready.add(id);
+  if (coop.ready.size === 1 && id !== null) readySince = clock.elapsedTime;
+  const everyone = [net.id, ...coop.remotes.keys()];
+  const ready = everyone.filter((pid) => coop.ready.has(pid)).length;
+  share({ k: 'readyCount', r: ready, t: everyone.length });
+  if (phase === 'waiting') hud.setWaiting(ready, everyone.length);
+  if (ready === everyone.length && coop.ready.has(net.id)) {
+    coop.ready.clear();
     startWave(wave + 1);
   }
+}
+
+/** In co-op a fallen Tode is only down: they watch a teammate and get back up next wave. */
+function playerDown() {
+  player.downed = true;
+  player.group.visible = false;
+  play('gameOver');
+  particles.burst(player.position, { count: 24, colors: ['#3fae4a', '#2b8a3a', '#c8f77a'], speed: 120, up: 120, size: 2.2 });
+  hud.showBanner("You're down!", 'Your friends fight on. You rise again next wave.', 3);
+  sendState();
+  if (coop.host) checkAllDown();
+}
+
+function reviveIfDown() {
+  if (!player.downed) return;
+  player.downed = false;
+  player.group.visible = true;
+  player.hp = Math.ceil(player.stats.maxHp / 2);
+  player.invulnerableLeft = 2;
+  updateHealth();
+  effects.ring(player.position, { radius: 120, color: '#ffffff', duration: 0.6 });
+  particles.burst(player.position, { count: 30, colors: PETALS, speed: 160, up: 140, size: 1.8, glow: true });
+  play('revive');
+}
+
+/** Host: when every Tode is down, the run is over for everyone. */
+function checkAllDown() {
+  if (!coop?.host || phase === 'gameover') return;
+  const anyoneStanding = !player.downed || [...coop.remotes.values()].some((remote) => remote.alive || !remote.seen);
+  if (anyoneStanding) return;
+  share({ k: 'over', v: false });
+  endRun();
+}
+
+/** While down, the camera follows a teammate who is still fighting. */
+function spectate(delta) {
+  const buddy = [...coop.remotes.values()].find((remote) => remote.alive && remote.seen);
+  if (buddy) player.position.lerp(buddy.position, 1 - Math.exp(-5 * delta));
+}
+
+function sendState() {
+  if (!coop) return;
+  share({
+    k: 'me',
+    x: Math.round(player.position.x),
+    y: Math.round(player.position.y),
+    f: Math.round(Math.atan2(player.facing.y, player.facing.x) * 100) / 100,
+    z: Math.round((player.model.position.z - player.groundOffset) * 10) / 10,
+    hp: player.hp,
+    mh: player.stats.maxHp,
+    tier: ascension.tier,
+    down: Boolean(player.downed),
+    sh: player.shield ? 1 : 0,
+  });
+}
+
+/** Once per frame: teammates' puppets, our own state, the host's bee snapshots, then send. */
+function updateCoop(realDelta, delta) {
+  if (!coop) return;
+  for (const remote of coop.remotes.values()) remote.update(delta);
+  if (player.downed && PLAYING.has(phase)) spectate(realDelta);
+
+  stateTimer -= realDelta;
+  if (stateTimer <= 0) {
+    stateTimer = 1 / STATE_RATE;
+    sendState();
+  }
+  if (coop.host) {
+    snapshotTimer -= realDelta;
+    if (snapshotTimer <= 0 && PLAYING.has(phase)) {
+      snapshotTimer = 1 / SNAPSHOT_RATE;
+      share(snapshot());
+    }
+    if (phase === 'waiting' && coop.ready.size && clock.elapsedTime - readySince > READY_TIMEOUT) {
+      coop.ready = new Set([net.id, ...coop.remotes.keys()]);
+      markReady(null);
+    }
+  }
+  net.flush();
 }
 
 // --- Game flow ---
@@ -1528,13 +2161,17 @@ function clearWorld() {
   hud.clearWorldLabels();
 }
 
-function startRun({ daily = false } = {}) {
+function startRun({ daily = false, coop: coopRun = false } = {}) {
+  if (!coopRun && coop) leaveCoop();
+  if (!coopRun && MAP_TILES !== SOLO_TILES) buildWorld(SOLO_TILES);
   // The Daily Brew rolls waves, weather and offers from today's seed, the same for everyone.
   if (daily) startDaily();
   else stopDaily();
   submitted = false;
   clearWorld();
   player.reset();
+  player.downed = false;
+  coopScore = 0;
   ascension.setTier(0);
   divinity.setTier(0);
   skills.reset();
@@ -1574,11 +2211,19 @@ function startRun({ daily = false } = {}) {
   hud.setCombo(0);
   updateScore();
   updateHealth();
-  startWave(1);
+  // In co-op the host starts the waves; guests wait for its first 'wave' message.
+  if (isGuest()) {
+    setPhase('waiting');
+    hud.setWave(1, 0);
+  } else {
+    startWave(1);
+  }
 }
 
 function endRun({ victory = false } = {}) {
   setPhase('gameover');
+  hud.setWaiting(null);
+  coopMenuOpen = false;
   combo = 0;
   hud.setCombo(0);
   gameOverTime = clock.elapsedTime;
@@ -1669,6 +2314,11 @@ function goToTitle() {
 
 function pause() {
   if (!PLAYING.has(phase)) return;
+  if (coop) {
+    coopMenuOpen = true;
+    showPauseMenu();
+    return;
+  }
   pausedFrom = phase;
   pausedPhaseTimer = phaseTimer;
   setPhase('paused');
@@ -1691,10 +2341,16 @@ function showPauseMenu() {
     form: TIERS[ascension.tier].name,
     sound: soundSettings(),
     autoCast: settings.autoCast,
+    coop: Boolean(coop),
   });
 }
 
 function resume() {
+  if (coopMenuOpen) {
+    coopMenuOpen = false;
+    hud.hideMenu();
+    return;
+  }
   if (phase !== 'paused') return;
   hud.hideMenu();
   muffleMusic(false);
@@ -1710,7 +2366,22 @@ function toggleMute() {
 }
 
 const MENU_ACTIONS = {
-  start: () => (phase === 'title' || phase === 'gameover') && startRun(),
+  start: () => {
+    if (phase !== 'title' && phase !== 'gameover') return;
+    if (coop && net.inRoom) {
+      if (net.isHost) hostStartCoop(); // everyone plays again
+      return;
+    }
+    startRun();
+  },
+  coop: () => (net.inRoom ? showRoom() : showLobby()),
+  'coop-create': () => lobbyConnect('create'),
+  'coop-join': () => lobbyConnect('join'),
+  'coop-start': () => hostStartCoop(),
+  'coop-leave': () => {
+    net.leave();
+    showLobby();
+  },
   daily: () => (phase === 'title' || phase === 'gameover') && startRun({ daily: true }),
   leaderboard: ({ board }) => showLeaderboard(board ?? 'all'),
   submit: ({ name }) => submitRun(name ?? ''),
@@ -1719,7 +2390,11 @@ const MENU_ACTIONS = {
     if (buy(id)) play('pick');
     hud.showPantry();
   },
-  title: () => (phase === 'title' ? hud.showTitle(bestScore) : goToTitle()),
+  title: () => {
+    if (coop || net.inRoom) leaveCoop();
+    if (phase === 'title') hud.showTitle(bestScore);
+    else goToTitle();
+  },
   brew: ({ index }) => chooseBrew(Number(index)),
   ultimate: ({ index }) => chooseUltimate(Number(index)),
   skill: ({ index }) => chooseSkill(Number(index)),
@@ -1762,7 +2437,7 @@ window.addEventListener('keydown', unlockAudio);
 music.start();
 
 // Pause automatically when the player switches away.
-window.addEventListener('blur', () => autoPause && pause());
+window.addEventListener('blur', () => autoPause && !coop && pause());
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -1778,6 +2453,12 @@ const moveDirection = new THREE.Vector3();
 function updateGame(delta) {
   timeAlive += delta;
   updateWave(delta);
+  if (player.downed) {
+    updateEnemies(delta);
+    updateEnemyProjectiles(delta);
+    updateScore();
+    return;
+  }
 
   input.moveAxis(moveAxis);
   moveDirection.copy(SCREEN_RIGHT).multiplyScalar(moveAxis.x).addScaledVector(SCREEN_UP, moveAxis.y);
@@ -1834,7 +2515,7 @@ function frame(realDelta, render = true) {
   const delta = phase === 'paused' ? realDelta : realDelta * timeScale(realDelta);
   if (PLAYING.has(phase)) {
     updateGame(delta);
-    if (input.wasPressed('Escape', 'KeyP')) pause();
+    if (input.wasPressed('Escape', 'KeyP')) (coopMenuOpen ? resume() : pause());
   } else if (phase === 'paused') {
     if (input.wasPressed('Escape', 'KeyP')) resume();
   } else if (phase === 'bossIntro') {
@@ -1863,6 +2544,7 @@ function frame(realDelta, render = true) {
     divinity.update(delta);
     ascension.update(delta);
   }
+  updateCoop(realDelta, delta);
   postfx.setTargets(ascension.postfxTargets());
   updateCamera(phase === 'paused' ? 0 : realDelta);
   if (render) postfx.render(realDelta);
@@ -1918,6 +2600,10 @@ if (import.meta.env.DEV) {
     chooseUltimate,
     skills,
     learn: (id) => skills.learn(id),
+    hurt: (amount) => hurtPlayer(amount),
+    get coop() {
+      return coop;
+    },
     settings,
     killAll: () => aliveEnemies().forEach((enemy) => damageEnemy(enemy, 9999)),
     skipSpawns: () => spawnQueue.splice(0),

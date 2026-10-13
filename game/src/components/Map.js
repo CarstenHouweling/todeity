@@ -1,8 +1,16 @@
 import * as THREE from 'three';
 
 export const TILE_SIZE = 30;
-export const MAP_TILES = 25;
-export const MAP_HALF_SIZE = (TILE_SIZE * MAP_TILES) / 2;
+export const SOLO_TILES = 25;
+// The garden grows for co-op. These are live bindings: importers always see the current size.
+export let MAP_TILES = SOLO_TILES;
+export let MAP_HALF_SIZE = (TILE_SIZE * MAP_TILES) / 2;
+
+/** Resizes the garden (an odd number of tiles keeps a tile centred on the origin). Rebuild the world after. */
+export function setMapTiles(tiles) {
+  MAP_TILES = tiles;
+  MAP_HALF_SIZE = (TILE_SIZE * tiles) / 2;
+}
 
 const OUTER_SIZE = 6000;
 const LAWN_TEXTURE_SIZE = 2048;

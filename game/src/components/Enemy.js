@@ -113,6 +113,7 @@ export class Enemy {
 
     this.group = new THREE.Group();
     this.elite = elite && ELITE_MODS[elite];
+    this.eliteId = elite;
     const size = elite === 'giant' ? 1.6 : elite ? 1.2 : 1;
     const model = SkeletonUtils.clone(template.scene);
     model.scale.setScalar(type.scale * size);
@@ -244,12 +245,14 @@ export class Enemy {
 
   applyBurn(dps, duration) {
     if (this.dying || dps <= 0) return;
+    this.onStatus?.('burn', dps, duration); // co-op: forward to the host, who owns the bees
     this.burnDps = Math.max(this.burnDps, dps);
     this.burnLeft = Math.max(this.burnLeft, duration);
   }
 
   applySlow(amount, duration) {
     if (this.dying || amount <= 0) return;
+    this.onStatus?.('slow', amount, duration);
     // Bosses resist being frozen solid.
     const capped = this.type.boss ? Math.min(amount, 0.5) : amount;
     this.slow = Math.max(this.slowLeft > 0 ? this.slow : 0, capped);

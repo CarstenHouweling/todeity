@@ -545,5 +545,6 @@ export class SkillBook {
     const skill = SKILLS[slot.id];
     slot.cooldownLeft = skill.cooldown(slot.level);
     skill.cast(this.ctx, target, slot.level);
+    this.ctx.onSkillCast?.(slot.id, slot.level, target); // co-op: show it to teammates
   }
 }

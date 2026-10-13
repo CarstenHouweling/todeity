@@ -43,6 +43,7 @@ export class Hud {
     this.top = element('top-center', this.root);
     this.wave = element('wave', this.top);
     this.weather = element('weather', this.top);
+    this.waiting = element('waiting', this.top);
     this.boss = element('boss-bar', this.top);
     this.bossName = element('boss-name', this.boss);
     this.bossFill = element('boss-fill', element('boss-track', this.boss));
@@ -96,6 +97,7 @@ export class Hud {
     });
     this.menu.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (event.target.dataset.form === 'coop') return;
       this.onAction('submit', { name: this.menu.querySelector('#player-name')?.value ?? '' });
     });
 
@@ -212,6 +214,68 @@ export class Hud {
     this.banner.classList.add('show');
   }
 
+  /** "Waiting for teammates" between co-op waves; `null` hides it. */
+  setWaiting(ready, total) {
+    this.waiting.textContent = ready === null ? '' : `⏳ Waiting for teammates… ${ready}/${total} ready`;
+  }
+
+  // --- Co-op name tags ---------------------------------------------------------------
+
+  attachNameTag(name, color) {
+    const tag = element('name-tag', this.worldLayer);
+    const label = element('name-tag-name', tag);
+    label.textContent = name;
+    label.style.color = color;
+    const bar = element('name-tag-bar', tag);
+    return { tag, fill: element('name-tag-fill', bar) };
+  }
+
+  updateNameTag({ tag, fill }, position, visible, hp, maxHp) {
+    const shown = visible && this.place(tag, position, 42);
+    tag.style.display = shown ? '' : 'none';
+    if (shown) fill.style.width = `${(Math.max(0, hp) / Math.max(1, maxHp)) * 100}%`;
+  }
+
+  removeNameTag({ tag }) {
+    tag.remove();
+  }
+
+  /**
+   * The co-op lobby. `view` is 'start' (create or join), 'room' (in a room) or 'connecting'.
+   */
+  showLobby({ view, code, players = [], isHost, error, name }) {
+    const errorLine = error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : '';
+    let body;
+    if (view === 'connecting') {
+      body = '<p class="sub">Connecting…</p>';
+    } else if (view === 'room') {
+      const list = players
+        .map((p) => `<li style="--player:${p.color}"><span class="dot"></span>${escapeHtml(p.name)}${p.isHost ? ' <small>host</small>' : ''}</li>`)
+        .join('');
+      const start = isHost
+        ? `<button class="menu-button primary" data-action="coop-start">▶ Start co-op run</button>`
+        : '<p class="sub">Waiting for the host to start…</p>';
+      body = `
+        <p class="sub">Share this room code with your friends:</p>
+        <div class="room-code">${code}</div>
+        <ul class="lobby-players">${list}</ul>
+        <p class="sub">The garden grows and more bees come with every extra frog (up to 4).</p>
+        <div class="menu-buttons">${start}<button class="menu-button" data-action="coop-leave">Leave</button></div>`;
+    } else {
+      body = `
+        <form class="lobby-form" data-form="coop">
+          <input id="coop-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
+          <button class="menu-button primary" type="button" data-action="coop-create">✨ Create room</button>
+        </form>
+        <form class="lobby-form" data-form="coop">
+          <input id="coop-code" maxlength="4" placeholder="CODE" autocomplete="off" />
+          <button class="menu-button" type="button" data-action="coop-join">🚪 Join room</button>
+        </form>
+        <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>`;
+    }
+    this.showMenu('lobby', `<div class="panel"><h2>👥 Co-op</h2>${errorLine}${body}</div>`);
+  }
+
   setCombo(count) {
     this.combo.textContent = count >= 3 ? `${count} combo` : '';
     this.combo.classList.toggle('hot', count >= 15);
@@ -310,6 +374,7 @@ export class Hud {
         <div class="menu-buttons">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
           <button class="menu-button" data-action="daily">📅 Daily Brew</button>
+          <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
           <button class="menu-button" data-action="pantry">🍃 Tode's Pantry <small>${meta.leaves} leaves</small></button>
         </div>
@@ -443,7 +508,7 @@ export class Hud {
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, autoCast }) {
+  showPause({ build, ultimate, form, sound, autoCast, coop }) {
     const brews = build.length
       ? build
           .map(
@@ -457,7 +522,8 @@ export class Hud {
       'pause',
       `
       <div class="panel">
-        <h2>Paused</h2>
+        <h2>${coop ? 'Menu' : 'Paused'}</h2>
+        ${coop ? '<p class="sub">The run keeps going for your teammates while this menu is open.</p>' : ''}
         <p class="sub">${form}</p>
         ${ult}
         <div class="build">${brews}</div>
@@ -466,8 +532,8 @@ export class Hud {
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>
-          <button class="menu-button" data-action="restart">↻ Restart run</button>
-          <button class="menu-button" data-action="title">⌂ Quit to title</button>
+          ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}
+          <button class="menu-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
         </div>
       </div>`
     );

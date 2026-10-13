@@ -11,7 +11,8 @@ function seededRandom(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const random = seededRandom(20261013);
+const SEED = 20261013;
+let random = seededRandom(SEED);
 const range = (min, max) => min + random() * (max - min);
 const pick = (items) => items[Math.floor(random() * items.length)];
 
@@ -249,7 +250,7 @@ export const PATH = [
 
 const POND = { x: 195, y: 175, radius: 62 };
 const TEA_TABLE = { x: -95, y: 175 };
-const HIVE_OFFSET = MAP_HALF_SIZE + 38;
+const hiveOffset = () => MAP_HALF_SIZE + 38;
 const CORNER_GAP = 80; // fence opening at each corner, where the bees come in
 
 // Garden props Tode and the bees bump into: [kind, x, y, collision radius, scale]
@@ -470,6 +471,7 @@ function createButterflies() {
  * `update(time)` for the ambient animation.
  */
 export function createEnvironment() {
+  random = seededRandom(SEED); // the same garden every time it is (re)built
   const group = new THREE.Group();
   const obstacles = [];
   const circle = (x, y, radius) => obstacles.push({ x, y, radius });
@@ -478,8 +480,8 @@ export function createEnvironment() {
   group.add(createFence());
   const hives = [-1, 1].flatMap((sx) =>
     [-1, 1].map((sy) => ({
-      x: sx * HIVE_OFFSET,
-      y: sy * HIVE_OFFSET,
+      x: sx * hiveOffset(),
+      y: sy * hiveOffset(),
       rotation: Math.atan2(-sx, sy),
     }))
   );

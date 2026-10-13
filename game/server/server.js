@@ -1,8 +1,9 @@
-// Todeity game server: serves the built game (../dist) and the leaderboard API.
-// No dependencies, so it runs on any Node 18+ host (Azure App Service, a VM, locally).
+// Todeity game server: serves the built game (../dist), the leaderboard API and the co-op relay.
+// Runs on any Node 18+ host (Azure App Service, a VM, locally). Its only dependency is `ws`.
 //
 //   GET  /api/scores?board=all|daily&date=YYYY-MM-DD&limit=10
 //   POST /api/scores  { name, score, wave, tier, kills, time, victory, daily }
+//   WS   /ws          co-op rooms (see "Co-op relay" below)
 //
 // Scores are kept in a JSON file in DATA_DIR (default ./data; on Azure App Service use /home/data,
 // which survives restarts and deploys).
@@ -12,6 +13,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -176,9 +178,116 @@ async function serveStatic(res, pathname) {
   }
 }
 
+// --- Co-op relay -------------------------------------------------------------------
+// Rooms have a 4-letter code and up to 4 players. The server only forwards messages; the host's
+// browser runs the bees and the waves.
+//
+// client → server: { t: 'create', name } | { t: 'join', code, name } | { t: 'relay', to: 'all'|'host'|id, d }
+// server → client: { t: 'joined', code, id, hostId } | { t: 'players', players, hostId, started }
+//                  { t: 'relay', from, d } | { t: 'error', message } | { t: 'closed', reason }
+
+const MAX_PLAYERS = 4;
+const COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f'];
+const rooms = new Map();
+let nextClientId = 1;
+
+function makeCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, to avoid confusion with 1 and 0
+  let code;
+  do code = Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+  while (rooms.has(code));
+  return code;
+}
+
+const sendTo = (ws, message) => ws.readyState === 1 && ws.send(JSON.stringify(message));
+
+function broadcastPlayers(room) {
+  const players = [...room.clients.values()].map(({ id, name, color }) => ({ id, name, color }));
+  for (const client of room.clients.values()) sendTo(client.ws, { t: 'players', players, hostId: room.hostId, started: room.started });
+}
+
+function leaveRoom(client) {
+  const room = client.room;
+  if (!room) return;
+  room.clients.delete(client.id);
+  client.room = null;
+  if (client.id === room.hostId || room.clients.size === 0) {
+    for (const other of room.clients.values()) {
+      sendTo(other.ws, { t: 'closed', reason: 'The host left the game.' });
+      other.room = null;
+    }
+    rooms.delete(room.code);
+  } else {
+    broadcastPlayers(room);
+  }
+}
+
+function joinRoom(client, room, name) {
+  const used = new Set([...room.clients.values()].map((c) => c.color));
+  client.name = String(name ?? '').replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 16) || 'Frog';
+  client.color = COLORS.find((color) => !used.has(color));
+  client.room = room;
+  room.clients.set(client.id, client);
+  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId });
+  broadcastPlayers(room);
+}
+
+function handleSocketMessage(client, raw) {
+  let message;
+  try {
+    message = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (message.t === 'create') {
+    leaveRoom(client);
+    const room = { code: makeCode(), hostId: client.id, clients: new Map(), started: false };
+    rooms.set(room.code, room);
+    joinRoom(client, room, message.name);
+  } else if (message.t === 'join') {
+    const room = rooms.get(String(message.code ?? '').toUpperCase().trim());
+    if (!room) return sendTo(client.ws, { t: 'error', message: 'No room with that code.' });
+    if (room.started) return sendTo(client.ws, { t: 'error', message: 'That run has already started.' });
+    if (room.clients.size >= MAX_PLAYERS) return sendTo(client.ws, { t: 'error', message: 'That room is full.' });
+    leaveRoom(client);
+    joinRoom(client, room, message.name);
+  } else if (message.t === 'leave') {
+    leaveRoom(client);
+  } else if (message.t === 'start' && client.room?.hostId === client.id) {
+    client.room.started = true;
+    broadcastPlayers(client.room);
+  } else if (message.t === 'relay' && client.room) {
+    const { room } = client;
+    const out = JSON.stringify({ t: 'relay', from: client.id, d: message.d });
+    for (const other of room.clients.values()) {
+      if (other === client) continue;
+      const wanted = message.to === 'all' || (message.to === 'host' ? other.id === room.hostId : other.id === message.to);
+      if (wanted && other.ws.readyState === 1) other.ws.send(out);
+    }
+  }
+}
+
+const sockets = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+sockets.on('connection', (ws) => {
+  const client = { id: nextClientId++, ws, room: null };
+  ws.isAlive = true;
+  ws.on('pong', () => (ws.isAlive = true));
+  ws.on('message', (raw) => handleSocketMessage(client, raw));
+  ws.on('close', () => leaveRoom(client));
+});
+
+// Drop connections that stopped answering (closed laptops, lost Wi-Fi).
+setInterval(() => {
+  for (const ws of sockets.clients) {
+    if (!ws.isAlive) ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 15_000);
+
 await loadScores();
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/api/scores') return await handleScores(req, res, url);
@@ -188,4 +297,11 @@ createServer(async (req, res) => {
     console.error(error);
     send(res, 500, { error: 'Something went wrong.' });
   }
-}).listen(PORT, () => console.log(`Todeity server on http://localhost:${PORT}`));
+});
+
+server.on('upgrade', (req, socket, head) => {
+  if (new URL(req.url, 'http://localhost').pathname !== '/ws') return socket.destroy();
+  sockets.handleUpgrade(req, socket, head, (ws) => sockets.emit('connection', ws, req));
+});
+
+server.listen(PORT, () => console.log(`Todeity server on http://localhost:${PORT}`));

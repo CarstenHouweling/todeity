@@ -64,6 +64,27 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   and Tode says a story line after each run. **Leaderboard** (all-time and a seeded **Daily Brew**) via
   `game/server`. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
 
+## Co-op multiplayer (2–4 players)
+
+Title screen → 👥 Co-op → create a room (4-letter code) or join one; the host starts the run. Needs the server
+(`npm run server` in development; the Vite dev server proxies `/ws`).
+
+- **Authority split.** The host's browser runs the bees, waves, bosses and weather and sends snapshots (15/s).
+  Every player runs their *own* Tode locally (movement, abilities, damage) and streams its state (20/s).
+  Guests forward their hits (`k: 'hit'`) and statuses (`k: 'st'`) to the host, which applies them.
+- **Replication by events.** Spits, splashes, skills and ultimates are sent as events and replayed on the other
+  screens as visuals only (`remoteCtx()` in main.js gives a context whose damage hooks do nothing). Shared hazards
+  (stingers, storm strikes, boss rain, explosions) are simulated by everyone, each checking hits on their own Tode.
+- **Flow.** After a wave each player picks their own rewards; the host waits until everyone is ready (or 40 s).
+  A fallen Tode is *downed*: it spectates a teammate and gets back up at the next wave. The run ends when everyone
+  is down. The garden grows (25 → 31 → 35 → 41 tiles), bees get more numerous and tougher per extra player, and
+  bigger maps get extra spawn points on the edges.
+- **Code.** `components/Net.js` (WebSocket client, batched messages), `components/RemoteTode.js` (teammate
+  puppets with their own ascension visuals and name tags), the "Co-op" section in `main.js` (snapshots, mirrors,
+  message handling, lobby), and the relay in `server/server.js`.
+- **Limits.** Browsers pause background tabs, so the host must keep the game visible. No joining a run that has
+  started. Knockback from a guest's skills (tornado pull, tongue) only shows on their own screen.
+
 ## Code map (`game/src`)
 
 | File | Responsibility |
@@ -78,6 +99,7 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
+| `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
 | `components/Weather.js` | Time of day per wave, weather (clear, Tea Rain, Gale, Thunderstorm) with gameplay modifiers, rain/leaves/fireflies. |
@@ -124,6 +146,8 @@ game.ultimate('teapot')   // own an ultimate with a full gauge
 game.setTier(4)           // jump to an ascension tier
 game.setWeather('night', 'storm')
 game.learn('comet')       // learn (or level up) a skill
+game.hurt(99)             // hurt Tode (test downed / game over)
+game.coop                 // co-op state (remotes, host flag)
 game.settings.autoCast = false
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
@@ -138,9 +162,6 @@ in 4–5. Runs take about 6–8 minutes.
 
 ## Ideas / roadmap
 
-- **Co-op multiplayer (planned next):** 2–4 players, host-authoritative (the host's browser simulates bees/waves,
-  others send inputs and receive snapshots) through a WebSocket relay in `game/server`; the map grows and more bees
-  spawn per player. Needs main.js refactored from one player to N players.
 - Deploy to Azure (see above), record a gameplay video for the submission post.
 - More variety: more bee types, more brews, keepsakes, a second arena or biome, room/door choices like Hades.
 - The music mix has not been checked by ear; volumes in `Music.js`/`Sound.js` may need tuning.
