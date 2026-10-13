@@ -231,7 +231,8 @@ export class Hud {
       'title-screen',
       `
       <div class="panel">
-        <h1>Tode's Teatime Tussle</h1>
+        <h1>Todeity</h1>
+        <p class="subtitle">Rise of the Tea God</p>
         <p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
         Brew mighty powers, rise from frog to god, and topple the Empress of the hive.</p>
         <div class="controls">

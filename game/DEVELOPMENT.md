@@ -1,4 +1,4 @@
-# Tode's Teatime Tussle: development notes
+# Todeity: Rise of the Tea God — development notes
 
 Handoff document for anyone (human or AI agent) continuing this project. Read this first.
 

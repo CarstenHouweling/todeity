@@ -389,6 +389,20 @@ canvas.game {
   color: #e9ffd9;
 }
 
+.title-screen h1 {
+  margin-bottom: 0;
+}
+
+.title-screen .subtitle {
+  margin: 0 0 16px;
+  font-size: clamp(18px, 3.5vw, 28px);
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #ffe680;
+  text-shadow: 0 0 12px rgba(255, 180, 40, 0.8), 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
 .title-screen .story {
   font-size: 18px;
   line-height: 1.5;
