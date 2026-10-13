@@ -162,7 +162,7 @@ class Strike extends Effect {
     ctx.shake(5);
     ctx.postfx.flash('#dfe8ff', 0.18);
 
-    for (const enemy of ctx.aliveEnemies()) {
+    for (const enemy of this.options.hitsBees === false ? [] : ctx.aliveEnemies()) {
       const distance = enemy.position.distanceTo(this.position);
       if (distance > radius + enemy.radius * 0.6) continue;
       const away = enemy.position.clone().sub(this.position).setZ(0).normalize();
@@ -174,6 +174,30 @@ class Strike extends Effect {
 
   dispose() {
     super.dispose();
+  }
+}
+
+/** A pulsing warning circle; calls `onDone` when time is up (e.g. an exploding elite bee). */
+class Warning extends Effect {
+  constructor(effects, position, { radius, delay, color = '#ff4040', onDone }) {
+    super(effects);
+    Object.assign(this, { delay, onDone });
+    this.disc = this.add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), glowMaterial(color, 0.25)));
+    this.edge = this.add(new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), glowMaterial(color, 0.8)));
+    for (const mesh of [this.disc, this.edge]) {
+      mesh.scale.setScalar(radius);
+      mesh.position.set(position.x, position.y, 0.7);
+    }
+  }
+
+  update(delta) {
+    this.age += delta;
+    const t = this.age / this.delay;
+    // Blink faster as the moment approaches.
+    this.disc.material.opacity = 0.15 + 0.25 * Math.abs(Math.sin(this.age * (8 + t * 30)));
+    if (t < 1) return true;
+    this.onDone?.();
+    return false;
   }
 }
 
@@ -236,6 +260,10 @@ export class Effects {
 
   pool(position, options) {
     return this.addEffect(new Pool(this, position, options));
+  }
+
+  warning(position, options) {
+    return this.addEffect(new Warning(this, position, options));
   }
 
   /** Damages every bee within `radius` and shows a ring of the given colour. */

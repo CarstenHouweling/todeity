@@ -186,6 +186,14 @@ const SOUNDS = {
   victory: () => notes([523, 659, 784, 1047, 784, 1047], { step: 0.1, duration: 0.22, volume: 0.15 }),
   gameOver: () => notes([392, 330, 262, 196], { step: 0.18, duration: 0.35, volume: 0.13 }),
   click: () => tone({ frequency: 660, duration: 0.05, volume: 0.06 }),
+  streak: () => {
+    notes([659, 880, 1319], { type: 'square', step: 0.05, duration: 0.2, volume: 0.06 });
+    noise({ duration: 0.3, volume: 0.12, filter: 'highpass', frequency: 3000 });
+  },
+  roar: () => {
+    tone({ type: 'sawtooth', frequency: 70, to: 140, duration: 1.1, volume: 0.15 });
+    noise({ duration: 1.2, volume: 0.3, filter: 'lowpass', frequency: 700, to: 200 });
+  },
 };
 
 // Minimum seconds between two plays of the same sound, so big fights don't get too loud.

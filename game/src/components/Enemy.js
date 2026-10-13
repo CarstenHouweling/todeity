@@ -51,6 +51,15 @@ export const ENEMY_TYPES = {
   },
 };
 
+/** Elite modifiers: tougher bees with a twist, worth more points. */
+export const ELITE_MODS = {
+  shielded: { name: 'Shielded', icon: '🛡️', color: '#6fb8ff' }, // takes half damage
+  explosive: { name: 'Explosive', icon: '💥', color: '#ff6a3d' }, // explodes when it dies
+  splitting: { name: 'Splitting', icon: '🧬', color: '#7ed957' }, // splits into two Zippers
+  swift: { name: 'Swift', icon: '⚡', color: '#ffe14d' }, // much faster
+  giant: { name: 'Giant', icon: '🗿', color: '#c98a5a' }, // huge and very tough
+};
+
 const FLY_ANIMATION = 'CharacterArmature|Fast_Flying';
 const DEATH_ANIMATION = 'CharacterArmature|Death';
 const HIT_FLASH_DURATION = 0.12; // seconds
@@ -96,15 +105,17 @@ export async function loadEnemyModel() {
 }
 
 export class Enemy {
-  constructor(kind = 'drone', { hpScale = 1, speedScale = 1 } = {}) {
+  constructor(kind = 'drone', { hpScale = 1, speedScale = 1, elite = null } = {}) {
     if (!template) throw new Error('Call loadEnemyModel() first');
     const type = ENEMY_TYPES[kind];
     this.kind = kind;
     this.type = type;
 
     this.group = new THREE.Group();
+    this.elite = elite && ELITE_MODS[elite];
+    const size = elite === 'giant' ? 1.6 : elite ? 1.2 : 1;
     const model = SkeletonUtils.clone(template.scene);
-    model.scale.setScalar(type.scale);
+    model.scale.setScalar(type.scale * size);
     model.rotation.x = Math.PI / 2;
 
     // Own materials per enemy, so a hit flash only lights up the one that got hit.
@@ -129,10 +140,23 @@ export class Enemy {
 
     this.model = model;
     this.group.add(model);
-    this.radius = radiusByType[kind] ??= computeFootprintRadius(this.group);
+    // Cached per kind at normal size (the first bee of a kind may be an enlarged elite).
+    this.radius = (radiusByType[kind] ??= computeFootprintRadius(this.group) / size) * size;
 
-    this.hp = this.maxHp = Math.max(1, Math.round(BASE_HP * type.hp * hpScale));
-    this.speed = BASE_SPEED * type.speed * speedScale;
+    const eliteHp = elite === 'giant' ? 4 : elite ? 2.5 : 1;
+    this.hp = this.maxHp = Math.max(1, Math.round(BASE_HP * type.hp * hpScale * eliteHp));
+    this.speed = BASE_SPEED * type.speed * speedScale * (elite === 'swift' ? 1.6 : 1);
+    this.score = type.score * (elite ? 3 : 1);
+    if (this.elite) {
+      // A glowing ring under elite bees, in the colour of their modifier.
+      this.eliteRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.75, 1, 32),
+        new THREE.MeshBasicMaterial({ color: this.elite.color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      this.eliteRing.scale.setScalar(this.radius * 1.3);
+      this.eliteRing.position.z = 0.8;
+      this.group.add(this.eliteRing);
+    }
     this.damage = type.damage;
     this.knockback = new THREE.Vector3();
     this.flashLeft = 0;
@@ -235,6 +259,7 @@ export class Enemy {
   /** Returns true when this hit killed the enemy. */
   takeDamage(amount, direction, force) {
     if (this.dying) return false;
+    if (this.elite === ELITE_MODS.shielded) amount = Math.ceil(amount / 2);
     this.hp -= amount;
     this.flashLeft = HIT_FLASH_DURATION;
     if (direction) this.knockback.addScaledVector(direction, force * (this.type.knockback ?? 1));
@@ -262,6 +287,10 @@ export class Enemy {
     this.mixer.update(this.isFrozen ? 0 : delta * this.speedFactor);
     this.knockback.multiplyScalar(Math.exp(-KNOCKBACK_DAMPING * delta));
 
+    if (this.eliteRing) {
+      this.eliteRing.material.opacity = 0.45 + 0.3 * Math.sin(this.age * 6);
+      this.eliteRing.rotation.z += delta;
+    }
     this.flashLeft = Math.max(0, this.flashLeft - delta);
     for (const material of this.materials) {
       const emissive = material.emissive.copy(material.userData.baseEmissive);

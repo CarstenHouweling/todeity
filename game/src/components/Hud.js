@@ -47,6 +47,10 @@ export class Hud {
     this.boss.hidden = true;
 
     this.banner = element('banner', this.root);
+    this.callout = element('callout', this.root);
+    this.combo = element('combo', this.root);
+    this.bossIntro = element('boss-intro', document.body);
+    this.bossIntro.hidden = true;
 
     this.bar = element('ability-bar', this.root);
     this.slots = {};
@@ -202,6 +206,33 @@ export class Hud {
     this.banner.classList.add('show');
   }
 
+  setCombo(count) {
+    this.combo.textContent = count >= 3 ? `${count} combo` : '';
+    this.combo.classList.toggle('hot', count >= 15);
+    this.combo.classList.toggle('divine', count >= 40);
+  }
+
+  /** A big kill-streak shout ("Brewtal!"). */
+  showCallout(text) {
+    this.callout.textContent = text;
+    this.callout.classList.remove('show');
+    void this.callout.offsetWidth;
+    this.callout.classList.add('show');
+  }
+
+  /** Letterboxed name card for a boss entrance. */
+  showBossIntro(name, epithet) {
+    this.bossIntro.innerHTML = `<div class="letterbox top"></div><div class="letterbox bottom"></div>
+      <div class="boss-card"><div class="boss-card-name">${name}</div><div class="boss-card-epithet">${epithet}</div></div>`;
+    this.bossIntro.hidden = false;
+    this.bossIntro.classList.remove('leaving');
+  }
+
+  hideBossIntro() {
+    this.bossIntro.classList.add('leaving');
+    setTimeout(() => (this.bossIntro.hidden = true), 500);
+  }
+
   flashHurt() {
     this.hurtFlash.classList.remove('active');
     void this.hurtFlash.offsetWidth;
@@ -216,7 +247,12 @@ export class Hud {
   }
 
   attachHealthBar(enemy) {
-    const bar = element('health-bar', this.worldLayer);
+    const bar = element(enemy.elite ? 'health-bar elite' : 'health-bar', this.worldLayer);
+    if (enemy.elite) {
+      const label = element('elite-label', bar);
+      label.textContent = `${enemy.elite.icon} ${enemy.elite.name}`;
+      label.style.color = enemy.elite.color;
+    }
     enemy.healthBar = { bar, fill: element('health-fill', bar) };
   }
 
@@ -442,7 +478,7 @@ export class Hud {
     for (const enemy of enemies) {
       if (!enemy.healthBar) continue;
       const { bar, fill } = enemy.healthBar;
-      const visible = !enemy.dying && enemy.hp < enemy.maxHp && this.place(bar, enemy.position, enemy.height + 8);
+      const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite) && this.place(bar, enemy.position, enemy.height + 8);
       bar.style.display = visible ? '' : 'none';
       if (visible) fill.style.width = `${(Math.max(0, enemy.hp) / enemy.maxHp) * 100}%`;
     }

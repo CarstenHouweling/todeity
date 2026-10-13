@@ -3,7 +3,7 @@ import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { Player } from './components/Player.js';
-import { Enemy, loadEnemyModel } from './components/Enemy.js';
+import { ELITE_MODS, Enemy, loadEnemyModel } from './components/Enemy.js';
 import { Projectile, PROJECTILE_HEIGHT } from './components/Projectile.js';
 import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
@@ -67,6 +67,29 @@ const SPLASH_SHAKE = 5;
 const BOSS_DEATH_SHAKE = 18;
 const SHAKE_DECAY = 12;
 const RESTART_DELAY = 0.8; // seconds before Game Over accepts a restart
+
+// Finishers and combos
+const COMBO_WINDOW = 2.2; // seconds between kills to keep a combo going
+const COMBO_BONUS = 0.02; // extra score per combo step (capped at 50)
+const STREAKS = new Map([
+  [5, 'Steeped!'],
+  [10, 'Brewtal!'],
+  [15, 'Tea-rrific!'],
+  [25, 'Unbrewlievable!'],
+  [40, 'Tea-pocalypse!'],
+  [60, 'Divine Brew!'],
+  [100, 'Godlike!'],
+]);
+const HIT_STOP_DAMAGE = 12; // hits this strong freeze the action for a moment
+
+// Bosses
+const BOSS_INTRO_TIME = 2.6;
+const BOSS_EPITHETS = { queen: 'Matriarch of the Hive', empress: 'Sovereign of a Thousand Stings' };
+// Health fractions where a boss roars and gets new attacks. The Queen is the first wall, so she has one.
+const BOSS_PHASES = { queen: [0.5], empress: [0.66, 0.33] };
+
+// Elite bees
+const ELITE_FROM_WAVE = 6;
 
 // Brew mechanics
 const SPLIT_ANGLE = 0.7; // radians between the pieces of a Geyser Spit
@@ -188,6 +211,15 @@ let splashCooldownLeft = 0;
 let ultimateEffect = null;
 let shake = 0;
 let cameraZoom = 1;
+let zoomPunch = 0; // brief camera push-in for finishers
+const cameraPan = new THREE.Vector3(); // camera offset toward a boss during its entrance
+let slowMotionLeft = 0;
+let slowMotionScale = 1;
+let hitStopLeft = 0;
+let lastHitStop = 0;
+let combo = 0;
+let comboTimer = 0;
+let introBoss = null;
 let ascendingTo = 0;
 
 function safeStorage(op, key, value) {
@@ -341,8 +373,16 @@ function farthestCorner() {
   return [...SPAWN_CORNERS].sort((a, b) => distanceSqXY(b, player.position) - distanceSqXY(a, player.position))[0];
 }
 
-function spawnEnemy(kind, at) {
-  const enemy = new Enemy(kind, { hpScale: config.hpScale, speedScale: config.speedScale });
+function rollElite(kind) {
+  if (ENEMY_TYPES_BOSS.has(kind) || wave < ELITE_FROM_WAVE) return null;
+  if (Math.random() > 0.06 + wave * 0.006) return null;
+  const mods = Object.keys(ELITE_MODS);
+  return mods[Math.floor(Math.random() * mods.length)];
+}
+const ENEMY_TYPES_BOSS = new Set(['queen', 'empress']);
+
+function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
+  const enemy = new Enemy(kind, { hpScale: config.hpScale, speedScale: config.speedScale, elite });
   const spot = at ?? freeCorner(enemy.radius);
   if (!spot || (at && enemyBlocker(enemy)(spot))) {
     enemy.dispose();
@@ -374,6 +414,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
 
   const killed = enemy.takeDamage(damage, direction, force);
   if (source !== 'burn') play('hit');
+  if (damage >= HIT_STOP_DAMAGE) hitStop(0.045);
   hud.damageNumber(enemy.position, damage, enemy.height + 4, DAMAGE_STYLES[source] ?? '');
   if (source !== 'ultimate') addGauge(damage * GAUGE_PER_DAMAGE);
   if (killed) onEnemyKilled(enemy);
@@ -381,8 +422,16 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
 
 function onEnemyKilled(enemy) {
   kills++;
-  points += enemy.type.score;
+  combo++;
+  comboTimer = COMBO_WINDOW;
+  points += Math.round(enemy.score * (1 + Math.min(combo, 50) * COMBO_BONUS));
+  const streak = STREAKS.get(combo);
+  if (streak) {
+    hud.showCallout(streak);
+    play('streak');
+  }
   play('pop');
+  if (enemy.elite) eliteDeath(enemy);
   particles.burst(enemy.position, {
     count: enemy.type.boss ? 70 : 14,
     colors: BEE_FLUFF,
@@ -400,6 +449,9 @@ function onEnemyKilled(enemy) {
     healPlayer(1);
   }
 
+  const lastOfWave = phase === 'fighting' && !spawnQueue.length && aliveEnemies().length === 0;
+  if (enemy.type.boss || lastOfWave) finisher(enemy.type.boss);
+
   if (enemy.type.boss) {
     bossKills++;
     hud.setBoss(null);
@@ -414,6 +466,61 @@ function onEnemyKilled(enemy) {
 const chase = new THREE.Vector3();
 const away = new THREE.Vector3();
 
+/** Slow motion and a camera push-in on the last bee of a wave (bigger for bosses). */
+function finisher(big) {
+  slowMotion(big ? 1.8 : 0.9, big ? 0.15 : 0.3);
+  zoomPunch = big ? 0.35 : 0.2;
+  postfx.pulse({ bloom: big ? 1.2 : 0.6, aberration: big ? 1 : 0.5 });
+  play('boom');
+}
+
+function slowMotion(seconds, scale) {
+  slowMotionLeft = Math.max(slowMotionLeft, seconds);
+  slowMotionScale = Math.min(slowMotionLeft > seconds ? slowMotionScale : 1, scale);
+}
+
+function hitStop(seconds) {
+  if (clock.elapsedTime - lastHitStop < 0.25) return;
+  lastHitStop = clock.elapsedTime;
+  hitStopLeft = Math.max(hitStopLeft, seconds);
+}
+
+/** How fast game time runs this frame: hit-stops freeze, slow motion eases back to normal. */
+function timeScale(delta) {
+  if (hitStopLeft > 0) {
+    hitStopLeft -= delta;
+    return 0.05;
+  }
+  if (slowMotionLeft > 0) {
+    slowMotionLeft -= delta;
+    const easeOut = Math.min(1, slowMotionLeft / 0.4);
+    return THREE.MathUtils.lerp(1, slowMotionScale, easeOut);
+  }
+  return 1;
+}
+
+function eliteDeath(enemy) {
+  const position = enemy.position.clone();
+  if (enemy.elite === ELITE_MODS.explosive) {
+    effects.warning(position, {
+      radius: 75,
+      delay: 0.7,
+      color: '#ff6a3d',
+      onDone: () => {
+        play('boom');
+        shake = Math.max(shake, 8);
+        particles.burst(position, { count: 30, colors: FIRE, speed: 220, up: 140, size: 2.2, glow: true });
+        effects.blast(position, { radius: 75, damage: 6, knockback: 300, color: '#ff6a3d', source: 'burn' });
+        if (player.position.distanceTo(position) < 75 + player.radius * 0.5) hurtPlayer(1);
+      },
+    });
+  } else if (enemy.elite === ELITE_MODS.splitting) {
+    for (const angle of [0, Math.PI]) {
+      const offset = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(enemy.radius + 12);
+      spawnEnemy('zipper', position.clone().add(offset), { elite: null });
+    }
+  }
+}
 function updateHealth() {
   hud.setHealth(player.hp, player.stats.maxHp, player.shield);
 }
@@ -460,6 +567,7 @@ function hurtPlayer(amount, enemy = null) {
     effects.ring(player.position, { radius: 60, color: '#ff9ec7', duration: 0.4 });
   } else {
     shake = Math.max(shake, HIT_SHAKE);
+    hitStop(0.08);
     play('hurt');
     hud.flashHurt();
     addGauge(GAUGE_PER_HIT);
@@ -562,9 +670,41 @@ function fireStinger(enemy, direction, speed) {
   play('sting');
 }
 
+/** At set health thresholds the boss roars, shoves Tode back, calls guards and learns stinger rain. */
+function bossRoar(boss) {
+  boss.ai.phase = (boss.ai.phase ?? 0) + 1;
+  boss.ai.rain = true;
+  play('roar');
+  shake = Math.max(shake, 14);
+  postfx.flash('#ff3b1f', 0.35);
+  effects.ring(boss.position, { radius: 320, color: '#ff3b1f', duration: 0.7, thickness: 0.2 });
+  directionTo(boss.position, player.position, away);
+  player.velocity.addScaledVector(away, 700);
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2;
+    const spot = boss.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(boss.radius + 30));
+    spawnEnemy('zipper', spot, { elite: null });
+  }
+  hud.showCallout(`${boss.type.name.split(' ').pop()} is furious!`);
+}
+
+/** Stingers rain down around Tode; red circles show where. */
+function stingerRain(boss) {
+  play('nova');
+  const count = boss.kind === 'empress' ? 12 : 6;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = i === 0 ? 0 : 40 + Math.random() * 200;
+    const spot = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
+    effects.strike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: '#c070ff' });
+  }
+}
+
 function updateQueen(boss, delta) {
   const { ai } = boss;
   const enraged = boss.hp < boss.maxHp / 2;
+  const nextPhase = BOSS_PHASES[boss.kind]?.[ai.phase ?? 0];
+  if (nextPhase && boss.hp / boss.maxHp < nextPhase) bossRoar(boss);
   const delayScale = (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1);
   directionTo(boss.position, player.position, chase);
 
@@ -616,7 +756,9 @@ function startQueenAttack(boss, enraged, delayScale) {
   const { ai } = boss;
   const empress = boss.kind === 'empress';
   const minions = aliveEnemies().length - 1;
-  const attacks = ['charge', 'nova', minions < QUEEN.maxMinions ? 'summon' : 'charge'].filter((a) => a !== ai.last);
+  const attacks = ['charge', 'nova', minions < QUEEN.maxMinions ? 'summon' : 'charge', ...(ai.rain ? ['rain'] : [])].filter(
+    (a) => a !== ai.last
+  );
   const attack = attacks[Math.floor(Math.random() * attacks.length)];
   ai.last = attack;
   ai.timer = QUEEN.attackDelay * delayScale;
@@ -629,6 +771,8 @@ function startQueenAttack(boss, enraged, delayScale) {
     boss.glowColor.set(0xff3b1f);
     ai.telegraph = addTelegraph(boss.position, ai.direction, QUEEN.chargeSpeed * QUEEN.chargeDuration, boss.radius * 1.6);
     play('charge');
+  } else if (attack === 'rain') {
+    stingerRain(boss);
   } else if (attack === 'nova') {
     const count = (enraged ? QUEEN.enragedNovaCount : QUEEN.novaCount) + (empress ? 8 : 0);
     const offset = Math.random() * Math.PI;
@@ -1047,10 +1191,12 @@ function updateAim() {
 function updateCamera(delta) {
   shake *= Math.exp(-SHAKE_DECAY * delta);
   if (shake < 0.05) shake = 0;
+  zoomPunch *= Math.exp(-2.5 * delta);
+  const zoom = cameraZoom * (1 - zoomPunch);
   camera.position.set(
-    CAMERA_OFFSET.x * cameraZoom + (Math.random() - 0.5) * shake,
-    CAMERA_OFFSET.y * cameraZoom + (Math.random() - 0.5) * shake,
-    CAMERA_OFFSET.z * cameraZoom + (Math.random() - 0.5) * shake
+    CAMERA_OFFSET.x * zoom + cameraPan.x + (Math.random() - 0.5) * shake,
+    CAMERA_OFFSET.y * zoom + cameraPan.y + (Math.random() - 0.5) * shake,
+    CAMERA_OFFSET.z * zoom + (Math.random() - 0.5) * shake
   );
 }
 
@@ -1068,7 +1214,7 @@ function stormStrike() {
 
 // --- Music ---
 function updateMusic() {
-  if (!PLAYING.has(phase) && phase !== 'ascending') {
+  if (!PLAYING.has(phase) && phase !== 'ascending' && phase !== 'bossIntro') {
     music.play('garden', 0);
     return;
   }
@@ -1116,7 +1262,10 @@ function updateWave(delta) {
 
   if (phase === 'intro' && phaseTimer <= 0) {
     setPhase('fighting');
-    if (config.isBoss) spawnEnemy(config.boss, farthestCorner());
+    if (config.isBoss) {
+      const boss = spawnEnemy(config.boss, farthestCorner(), { elite: null });
+      if (boss) startBossIntro(boss);
+    }
   } else if (phase === 'fighting') {
     spawnTimer -= delta;
     if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < MAX_ALIVE_ENEMIES) {
@@ -1253,6 +1402,42 @@ function afterReward() {
   else startWave(wave + 1);
 }
 
+// --- Boss entrance ---
+function startBossIntro(boss) {
+  introBoss = boss;
+  setPhase('bossIntro', BOSS_INTRO_TIME);
+  music.play('boss', 4);
+  hud.showBossIntro(boss.type.name, BOSS_EPITHETS[boss.kind] ?? '');
+  hud.setBoss(boss);
+}
+
+function updateBossIntro(delta) {
+  const elapsed = BOSS_INTRO_TIME - phaseTimer;
+  phaseTimer -= delta;
+  introBoss.update(delta);
+  introBoss.faceTowards(player.position);
+
+  // Pan over to the boss, hold, then swing back.
+  const toBoss = introBoss.position.clone().sub(player.position).setZ(0);
+  const pan = elapsed < 0.8 ? elapsed / 0.8 : phaseTimer < 0.6 ? Math.max(0, phaseTimer / 0.6) : 1;
+  cameraPan.copy(toBoss).multiplyScalar(0.5 - 0.5 * Math.cos(pan * Math.PI));
+  cameraZoom = 1 - 0.25 * Math.sin(Math.min(1, elapsed / BOSS_INTRO_TIME) * Math.PI);
+
+  if (elapsed >= 1.2 && !introBoss.ai.roared) {
+    introBoss.ai.roared = true;
+    play('roar');
+    shake = 12;
+    effects.ring(introBoss.position, { radius: 220, color: '#ffb000', duration: 0.6, thickness: 0.2 });
+  }
+  if (phaseTimer <= 0) {
+    cameraPan.set(0, 0, 0);
+    cameraZoom = 1;
+    hud.hideBossIntro();
+    introBoss = null;
+    setPhase('fighting');
+  }
+}
+
 // --- Ascension cut-scene ---
 const TRANSFORM_AT = 1.3; // seconds into the cut-scene
 
@@ -1376,6 +1561,11 @@ function startRun() {
   splashCooldownLeft = 0;
   shake = 0;
   cameraZoom = 1;
+  zoomPunch = 0;
+  cameraPan.set(0, 0, 0);
+  slowMotionLeft = hitStopLeft = 0;
+  combo = comboTimer = 0;
+  hud.setCombo(0);
   updateScore();
   updateHealth();
   startWave(1);
@@ -1563,6 +1753,10 @@ function updateGame(delta) {
     if (player.stats.landingSplash > 0) kettleLanding();
   }
 
+  comboTimer -= delta;
+  if (comboTimer <= 0) combo = 0;
+  hud.setCombo(combo);
+
   updatePowers(delta);
   skills.update(delta, settings.autoCast);
   updateProjectiles(delta);
@@ -1589,14 +1783,18 @@ function splashWorthIt() {
   return inReach.length >= AUTO_SPLASH_CROWD || biting;
 }
 
-function frame(delta, render = true) {
+function frame(realDelta, render = true) {
+  // Game time can run slower than real time (slow motion, hit-stop); menus and the camera use real time.
+  const delta = phase === 'paused' ? realDelta : realDelta * timeScale(realDelta);
   if (PLAYING.has(phase)) {
     updateGame(delta);
     if (input.wasPressed('Escape', 'KeyP')) pause();
   } else if (phase === 'paused') {
     if (input.wasPressed('Escape', 'KeyP')) resume();
+  } else if (phase === 'bossIntro') {
+    updateBossIntro(realDelta);
   } else if (phase === 'ascending') {
-    updateAscending(delta);
+    updateAscending(realDelta);
   } else if (phase === 'choosing') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseBrew(i));
     if (input.wasPressed('KeyR')) reroll();
@@ -1620,8 +1818,8 @@ function frame(delta, render = true) {
     ascension.update(delta);
   }
   postfx.setTargets(ascension.postfxTargets());
-  updateCamera(phase === 'paused' ? 0 : delta);
-  if (render) postfx.render(delta);
+  updateCamera(phase === 'paused' ? 0 : realDelta);
+  if (render) postfx.render(realDelta);
   hud.update(delta, enemies);
   input.endFrame();
 }
