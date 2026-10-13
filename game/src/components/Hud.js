@@ -305,6 +305,23 @@ export class Hud {
     this.bossIntro.classList.remove('leaving');
   }
 
+  /** Letterboxed story cut-scene with subtitles. */
+  showStory() {
+    this.bossIntro.innerHTML = `<div class="letterbox top"></div><div class="letterbox bottom"></div>
+      <div class="story-line"></div><div class="story-skip">Click or press any key to skip</div>`;
+    this.bossIntro.hidden = false;
+    this.bossIntro.classList.remove('leaving');
+  }
+
+  setStoryLine(text) {
+    const line = this.bossIntro.querySelector('.story-line');
+    if (!line) return;
+    line.textContent = text;
+    line.classList.remove('show');
+    void line.offsetWidth;
+    line.classList.add('show');
+  }
+
   hideBossIntro() {
     this.bossIntro.classList.add('leaving');
     setTimeout(() => (this.bossIntro.hidden = true), 500);

@@ -1365,3 +1365,38 @@ body.touch .ability-bar {
   padding-top: 5vh;
   background: linear-gradient(rgba(10, 30, 15, 0.7), rgba(10, 30, 15, 0.15) 60%, rgba(10, 30, 15, 0));
 }
+
+/* Story cut-scene */
+.story-line {
+  position: absolute;
+  left: 50%;
+  bottom: 15vh;
+  transform: translateX(-50%);
+  max-width: 86vw;
+  font-size: clamp(22px, 4vw, 40px);
+  font-weight: 800;
+  font-style: italic;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.6), 0 0 18px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+}
+
+.story-line.show {
+  animation: story-line 2.2s ease-out forwards;
+}
+
+@keyframes story-line {
+  0% { opacity: 0; transform: translate(-50%, 12px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; }
+  100% { opacity: 0.85; }
+}
+
+.story-skip {
+  position: absolute;
+  right: 20px;
+  bottom: calc(11vh + 10px);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}

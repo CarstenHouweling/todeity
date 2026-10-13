@@ -99,6 +99,17 @@ const BOSS_PHASES = { queen: [0.5], empress: [0.66, 0.33] };
 // Elite bees
 const ELITE_FROM_WAVE = 6;
 
+// Divinity makes Tode's spit stronger and more radiant: [color, glow] per ascension tier.
+const TIER_DAMAGE_BONUS = 0.06; // +6% damage per tier
+const SPIT_LOOKS = [
+  [0x9be33a, 0x3f7a0c],
+  [0xb8e34a, 0x6a8a10],
+  [0xffd23f, 0xb07a00],
+  [0xfff0a0, 0xffb000],
+  [0xffffff, 0xff9ee8],
+];
+const SPIT_TRAILS = [null, null, ['#ffe680', '#ffc93c'], ['#fff3c4', '#ffd36b', '#9fd8ff'], ['#ffffff', '#ffd6f5', '#c8b0ff']];
+
 // Brew mechanics
 const SPLIT_ANGLE = 0.7; // radians between the pieces of a Geyser Spit
 const ORBIT_RADIUS = 40;
@@ -484,7 +495,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   if (enemy.dying) return;
   // A teammate's hit forwarded to the host is already final; local hits get Tode's multipliers.
   const fromTeammate = source === 'net';
-  let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier;
+  let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
   if (!fromTeammate && player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
   damage = Math.max(1, Math.round(damage));
 
@@ -1043,13 +1054,17 @@ function spit() {
 function fireSpit(origin, direction, damage, { child = false, hits } = {}) {
   const { stats } = player;
   const range = stats.spitRange * (weather.info.spitRange ?? 1);
+  const [color, emissive] = SPIT_LOOKS[ascension.tier];
   const projectile = new Projectile(origin, direction, {
     speed: stats.spitSpeed,
     range: child ? range * 0.45 : range,
     damage,
     pierce: child ? 0 : stats.spitPierce,
-    radius: child ? 2.5 : 3.5,
+    radius: (child ? 2.5 : 3.5) * (1 + 0.08 * ascension.tier),
+    color,
+    emissive,
   });
+  projectile.trail = SPIT_TRAILS[ascension.tier];
   projectile.child = child;
   if (hits) hits.forEach((enemy) => projectile.hits.add(enemy));
   projectiles.push(projectile);
@@ -1126,6 +1141,19 @@ function onSpitHit(target, projectile) {
 function updateProjectiles(delta) {
   for (const projectile of [...projectiles]) {
     projectile.update(delta);
+    if (projectile.trail && Math.random() < 0.6) {
+      particles.burst(projectile.position.clone().setZ(0), {
+        count: 1,
+        colors: projectile.trail,
+        speed: 8,
+        up: 0,
+        gravity: 0,
+        height: projectile.position.z,
+        size: 1.4,
+        life: 0.3,
+        glow: true,
+      });
+    }
     const target = enemies.find(
       (enemy) =>
         !enemy.dying &&
@@ -1395,6 +1423,7 @@ function updateCamera(delta) {
   if (shake < 0.05) shake = 0;
   zoomPunch *= Math.exp(-2.5 * delta);
 
+  if (phase === 'story') return; // the cut-scene drives the camera
   // Title screen: a slow cinematic orbit around Tode.
   if (phase === 'title' || phase === 'loading') {
     orbiting = true;
@@ -1651,6 +1680,91 @@ function nextWave() {
   setPhase('waiting');
   if (coop.host) markReady(net.id);
   else net.queue('host', { k: 'ready' });
+}
+
+// --- Story cut-scene (first run only) ---
+const STORY_TIME = 9.5;
+const STORY_LINES = [
+  [0.3, 'A quiet morning in the garden.'],
+  [2.6, 'The kettle sings. The tea is nearly perfect…'],
+  [4.9, '…and then, the buzzing begins.'],
+  [7.4, 'Not. On. My. Watch.'],
+];
+let storyTime = 0;
+let storyLine = 0;
+let storyBees = [];
+
+function startStory() {
+  stopDaily();
+  setPhase('story');
+  storyTime = 0;
+  storyLine = 0;
+  orbiting = true;
+  hud.hideMenu();
+  hud.showStory();
+  ascension.setTier(0);
+  // A few bees burst out of the far hive (visual only, not part of the wave).
+  const hive = spawnPoints()[3]; // across the pond: a clear view of the swarm
+  storyBees = [0, 1, 2, 3].map((i) => {
+    const bee = new Enemy('drone');
+    bee.position.copy(hive).add(new THREE.Vector3(i * 14 - 20, -i * 10, 0));
+    scene.add(bee.group);
+    return bee;
+  });
+}
+
+function updateStory(delta) {
+  storyTime += delta;
+  const t = storyTime;
+  while (storyLine < STORY_LINES.length && t >= STORY_LINES[storyLine][0]) hud.setStoryLine(STORY_LINES[storyLine++][1]);
+
+  const hive = spawnPoints()[3]; // across the pond: a clear view of the swarm
+  const tode = player.position;
+  if (t < 4.7) {
+    // Close-up: a slow push in on Tode.
+    const angle = -0.9 + t * 0.08;
+    const distance = 150 - t * 12;
+    camera.position.set(Math.cos(angle) * distance, Math.sin(angle) * distance, 45);
+    camera.lookAt(tode.x, tode.y, tode.z + 12);
+  } else if (t < 7.2) {
+    // The swarm: look toward the hive as the bees pour out.
+    const toHive = hive.clone().sub(tode).setZ(0);
+    const k = Math.min(1, (t - 4.7) / 0.8);
+    const from = new THREE.Vector3(60, -60, 50);
+    const to = toHive.clone().multiplyScalar(0.35).add(new THREE.Vector3(60, -60, 70));
+    camera.position.lerpVectors(from, to, k * k * (3 - 2 * k));
+    camera.lookAt(tode.x + toHive.x * 0.75, tode.y + toHive.y * 0.75, 20);
+    for (const bee of storyBees) {
+      bee.update(delta);
+      const step = tode.clone().sub(bee.position).setZ(0).normalize().multiplyScalar(110 * delta);
+      bee.position.add(step);
+      bee.faceTowards(tode);
+    }
+  } else {
+    // Back to Tode, who powers up.
+    const k = Math.min(1, (t - 7.2) / 0.6);
+    camera.position.set(80 - k * 20, -80 + k * 20, 40 - k * 8);
+    camera.lookAt(tode.x, tode.y, tode.z + 14);
+    if (!storyBees.flared && t > 7.5) {
+      storyBees.flared = true;
+      play('ascend');
+      shake = 10;
+      postfx.flash('#ffe9a0', 0.6);
+      postfx.pulse({ bloom: 1.2, aberration: 0.8 });
+      effects.ring(tode, { radius: 160, color: '#ffe680', duration: 0.7, thickness: 0.25 });
+      particles.burst(tode, { count: 60, colors: ['#ffffff', '#ffe680', '#ffc93c'], speed: 240, up: 160, size: 2.2, glow: true });
+    }
+  }
+  if (t >= STORY_TIME) endStory();
+}
+
+function endStory() {
+  for (const bee of storyBees) bee.dispose();
+  storyBees = [];
+  hud.hideBossIntro();
+  meta.seenStory = true;
+  saveMeta();
+  startRun();
 }
 
 // --- Boss entrance ---
@@ -2450,7 +2564,8 @@ const MENU_ACTIONS = {
       if (net.isHost) hostStartCoop(); // everyone plays again
       return;
     }
-    startRun();
+    if (!meta.seenStory) startStory();
+    else startRun();
   },
   coop: () => (net.inRoom ? showRoom() : showLobby()),
   'coop-create': () => lobbyConnect('create'),
@@ -2608,8 +2723,12 @@ function frame(realDelta, render = true) {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
   } else if (phase === 'skill') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
+  } else if (phase === 'story') {
+    updateStory(realDelta);
+    if (storyTime > 0.5 && (input.pressed.size > 0 || input.primaryDown)) endStory();
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
-    startRun();
+    if (phase === 'title' && !meta.seenStory) startStory();
+    else startRun();
   }
   if (input.wasPressed('KeyM')) toggleMute();
   if (input.wasPressed('KeyC')) takePhoto();
