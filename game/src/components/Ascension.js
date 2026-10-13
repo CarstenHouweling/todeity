@@ -64,7 +64,11 @@ const auraFragment = /* glsl */ `
   varying vec3 vView;
   varying vec3 vLocal;
   void main() {
-    float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 1.6);
+    // pow() of a slightly negative base is NaN on some GPUs, and bloom smears NaN pixels into flickering
+    // black boxes, so keep the base in [0, 1] (and avoid normalizing a zero-length normal).
+    vec3 normal = length(vNormal) > 0.0001 ? normalize(vNormal) : normalize(vView);
+    float facing = clamp(abs(dot(normal, normalize(vView))), 0.0, 1.0);
+    float rim = pow(1.0 - facing, 1.6);
     float h = clamp(vLocal.z / height, 0.0, 1.0);
     float angle = atan(vLocal.y, vLocal.x);
     float tongues = 0.6 + 0.4 * sin(angle * 5.0 + time * 9.0 - h * 8.0) * sin(angle * 3.0 - time * 6.0);

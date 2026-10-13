@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
+import { buildBee } from './BeeModels.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
@@ -49,6 +51,47 @@ export const ENEMY_TYPES = {
     boss: true,
     attackDelayScale: 0.7,
   },
+  // Sage Mountain's boss: armoured, fast, and fond of charging.
+  shogun: {
+    name: 'Hornet Shogun',
+    scale: 15,
+    hp: 38,
+    speed: 0.65,
+    damage: 2,
+    score: 1400,
+    tint: '#b8322a',
+    knockback: 0.05,
+    boss: true,
+    attackDelayScale: 0.85,
+  },
+  // The Sky Citadel's boss: rings of light and feathered volleys.
+  seraph: {
+    name: 'Seraph Queen',
+    scale: 16,
+    hp: 46,
+    speed: 0.6,
+    damage: 2,
+    score: 1800,
+    tint: '#fff1b8',
+    knockback: 0.05,
+    boss: true,
+    attackDelayScale: 0.8,
+  },
+  // The lord of the Underworld: the true final boss.
+  beezebub: {
+    name: 'Bee-zebub',
+    scale: 23,
+    hp: 120,
+    speed: 0.58,
+    damage: 2,
+    score: 3000,
+    tint: '#2a0606',
+    emissive: '#4a0800',
+    knockback: 0.02,
+    boss: true,
+    attackDelayScale: 0.6,
+    hellfire: true,
+  },
 };
 
 /** Elite modifiers: tougher bees with a twist, worth more points. */
@@ -73,6 +116,7 @@ const CROWN_LIFT = 7.5; // world units above the head bone
 
 const loader = new GLTFLoader();
 const radiusByType = {};
+const HITBOX_PER_SCALE = 2.56; // the garden bee's footprint radius per unit of `scale`
 
 function createCrown() {
   const gold = new THREE.MeshStandardMaterial({
@@ -98,10 +142,91 @@ function createCrown() {
   crown.traverse((child) => (child.castShadow = true));
   return crown;
 }
+/** Curved demon horns, modelled Y-up like the crown, with glowing tips. */
+function createHorns() {
+  const horn = new THREE.MeshStandardMaterial({ color: '#1a0a08', emissive: '#ff2a00', emissiveIntensity: 0.2, roughness: 0.3, metalness: 0.4 });
+  const tip = new THREE.MeshBasicMaterial({ color: '#ff6a1a' });
+  const horns = new THREE.Group();
+  for (const side of [-1, 1]) {
+    let x = side * 4;
+    let y = 0;
+    let angle = side * 0.55; // splayed outward, curling back up
+    let radius = 2.6;
+    for (let i = 0; i < 6; i++) {
+      const length = 3.6;
+      const segment = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.78, radius, length + 0.4, 10), i === 5 ? tip : horn);
+      segment.position.set(x + Math.sin(angle) * length * 0.5, y + Math.cos(angle) * length * 0.5, 0);
+      segment.rotation.z = -angle;
+      horns.add(segment);
+      x += Math.sin(angle) * length;
+      y += Math.cos(angle) * length;
+      angle -= side * 0.28;
+      radius *= 0.8;
+    }
+  }
+  horns.rotation.x = Math.PI / 2;
+  horns.traverse((child) => (child.castShadow = true));
+  return horns;
+}
+
 let template = null;
+let graphicsLevel = 0;
+let baseColors = null; // vertex colours of the merged bee, before tinting
+const geometryByType = {};
+
+/** Bees spawned from now on use this graphics level (see Graphics.js). */
+export function setEnemyGraphics(level) {
+  graphicsLevel = level;
+}
 
 export async function loadEnemyModel() {
   template = await loader.loadAsync('/models/enemy.glb');
+  mergeBeeParts(template.scene);
+}
+
+/**
+ * The bee model comes as 7 skinned meshes that differ only in colour. Merged into one mesh with vertex colours,
+ * a bee costs 1 draw call (+1 for its shadow) and 1 skeleton update instead of 7 each.
+ */
+function mergeBeeParts(root) {
+  const parts = [];
+  root.traverse((child) => child.isSkinnedMesh && parts.push(child));
+  if (parts.length < 2) return;
+  const geometries = parts.map((part) => {
+    const geometry = part.geometry.clone();
+    const { count } = geometry.attributes.position;
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) part.material.color.toArray(colors, i * 3);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return geometry;
+  });
+  const geometry = mergeGeometries(geometries);
+  if (!geometry) return; // incompatible parts: keep the original meshes
+  const [first] = parts;
+  const material = first.material.clone();
+  material.color.set(0xffffff);
+  material.vertexColors = true;
+  const bee = new THREE.SkinnedMesh(geometry, material);
+  bee.name = 'Bee';
+  first.parent.add(bee);
+  bee.bind(first.skeleton, first.bindMatrix);
+  for (const part of parts) part.removeFromParent();
+  baseColors = geometry.attributes.color.array.slice();
+}
+
+/** The merged bee geometry recoloured toward a type's tint (shared by every bee of that type). */
+function beeGeometry(kind, geometry) {
+  const tint = ENEMY_TYPES[kind].tint;
+  if (!tint || !baseColors) return geometry;
+  if (!geometryByType[kind]) {
+    const tinted = geometry.clone();
+    const color = new THREE.Color();
+    const target = new THREE.Color(tint);
+    const colors = tinted.attributes.color.array;
+    for (let i = 0; i < colors.length; i += 3) color.fromArray(baseColors, i).lerp(target, 0.55).toArray(colors, i);
+    geometryByType[kind] = tinted;
+  }
+  return geometryByType[kind];
 }
 
 export class Enemy {
@@ -115,24 +240,34 @@ export class Enemy {
     this.elite = elite && ELITE_MODS[elite];
     this.eliteId = elite;
     const size = elite === 'giant' ? 1.6 : elite ? 1.2 : 1;
-    const model = SkeletonUtils.clone(template.scene);
-    model.scale.setScalar(type.scale * size);
-    model.rotation.x = Math.PI / 2;
-
     // Own materials per enemy, so a hit flash only lights up the one that got hit.
-    const tint = type.tint && new THREE.Color(type.tint);
     this.materials = [];
-    model.traverse((child) => {
-      if (!child.isMesh) return;
-      child.castShadow = true;
-      child.frustumCulled = false; // skinned bounds don't follow the animation
-      child.material = child.material.clone();
-      if (tint) child.material.color.lerp(tint, 0.55);
-      if (child.material.emissive) {
-        child.material.userData.baseEmissive = child.material.emissive.clone();
-        this.materials.push(child.material);
-      }
-    });
+    let model;
+    if (graphicsLevel > 0) {
+      // A new species for every arena after the garden (see BeeModels.js).
+      this.rig = buildBee(kind, graphicsLevel);
+      model = this.rig.root;
+      model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
+      this.materials.push(...this.rig.materials);
+    } else {
+      model = SkeletonUtils.clone(template.scene);
+      model.scale.setScalar(type.scale * size);
+      const tint = type.tint && new THREE.Color(type.tint);
+      model.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.frustumCulled = false; // skinned bounds don't follow the animation
+        child.material = child.material.clone();
+        if (child.material.vertexColors) child.geometry = beeGeometry(kind, child.geometry);
+        else if (tint) child.material.color.lerp(tint, 0.55);
+        if (child.material.emissive) this.materials.push(child.material);
+      });
+    }
+    model.rotation.x = Math.PI / 2;
+    for (const material of this.materials) {
+      if (type.emissive) material.emissive.set(type.emissive);
+      material.userData.baseEmissive = material.emissive.clone();
+    }
 
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
@@ -141,8 +276,11 @@ export class Enemy {
 
     this.model = model;
     this.group.add(model);
-    // Cached per kind at normal size (the first bee of a kind may be an enlarged elite).
-    this.radius = (radiusByType[kind] ??= computeFootprintRadius(this.group) / size) * size;
+    // Cached per kind at normal size (the first bee of a kind may be an enlarged elite). The arena species keep
+    // the garden bee's hitbox, so balance doesn't change with the looks.
+    this.radius = this.rig
+      ? HITBOX_PER_SCALE * type.scale * size
+      : (radiusByType[kind] ??= computeFootprintRadius(this.group) / size) * size;
 
     const eliteHp = elite === 'giant' ? 4 : elite ? 2.5 : 1;
     this.hp = this.maxHp = Math.max(1, Math.round(BASE_HP * type.hp * hpScale * eliteHp));
@@ -180,8 +318,9 @@ export class Enemy {
     this.ai = {};
 
     this.mixer = new THREE.AnimationMixer(model);
-    const flyClip = THREE.AnimationClip.findByName(template.animations, FLY_ANIMATION);
-    const deathClip = THREE.AnimationClip.findByName(template.animations, DEATH_ANIMATION);
+    const clips = this.rig ? [] : template.animations;
+    const flyClip = THREE.AnimationClip.findByName(clips, FLY_ANIMATION);
+    const deathClip = THREE.AnimationClip.findByName(clips, DEATH_ANIMATION);
     if (flyClip) {
       this.flyAction = this.mixer.clipAction(flyClip);
       this.flyAction.time = Math.random() * flyClip.duration;
@@ -194,20 +333,20 @@ export class Enemy {
       this.deathAction.clampWhenFinished = true;
     }
 
-    // Fit the crown to the animated pose, not the rest pose.
-    if (type.boss) {
+    // Fit the crown to the animated pose, not the rest pose. (Arena species wear their own regalia.)
+    if (type.boss && !this.rig) {
       this.mixer.update(0);
       this.addCrown();
     }
   }
 
-  /** Puts a crown on the head bone, so it follows the flying animation. */
+  /** Puts a crown (or Bee-zebub's horns) on the head bone, so it follows the flying animation. */
   addCrown() {
     const head = this.model.getObjectByName('Head');
     if (!head) return;
     this.group.updateMatrixWorld(true);
     const top = head.getWorldPosition(new THREE.Vector3());
-    const crown = createCrown();
+    const crown = this.type.hellfire ? createHorns() : createCrown();
     const size = this.type.scale / ENEMY_TYPES.queen.scale;
     crown.scale.setScalar(size);
     crown.position.set(top.x, top.y, top.z + CROWN_LIFT * size);
@@ -287,7 +426,8 @@ export class Enemy {
     this.burnLeft = Math.max(0, this.burnLeft - delta);
     if (this.burnLeft === 0) this.burnDps = 0;
     // Frozen bees stop flapping.
-    this.mixer.update(this.isFrozen ? 0 : delta * this.speedFactor);
+    if (this.rig) this.rig.animate(this.age, delta, this);
+    else this.mixer.update(this.isFrozen ? 0 : delta * this.speedFactor);
     this.knockback.multiplyScalar(Math.exp(-KNOCKBACK_DAMPING * delta));
 
     if (this.eliteRing) {
@@ -313,7 +453,16 @@ export class Enemy {
 
   dispose() {
     this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.model);
     this.group.removeFromParent();
+    this.group.traverse((child) => {
+      // Each cloned skeleton owns a bone texture on the GPU; the bee geometry is shared and stays.
+      if (child.isSkinnedMesh) child.skeleton.dispose();
+      else if (child.isMesh && !child.userData.shared && !child.userData.keepGeometry) {
+        child.geometry.dispose(); // crown and elite ring
+        child.material.dispose();
+      }
+    });
     for (const material of this.materials) material.dispose();
   }
 }

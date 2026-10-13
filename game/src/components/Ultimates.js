@@ -24,6 +24,12 @@ export const ULTIMATES = {
     icon: '🫖',
     text: 'A colossal teapot crashes down where you aim, flattening everything.',
   },
+  summon: {
+    id: 'summon',
+    name: 'Summoning: Great Tode',
+    icon: '🐸',
+    text: 'Slam a summoning seal: a colossal battle toad bursts from the smoke, stomps, tongue-lashes the swarm and body-slams it.',
+  },
 };
 
 const TEA = ['#c98a2b', '#e7b45a', '#f3d29a', '#ffffff'];
@@ -301,7 +307,231 @@ class GrandTeapotDrop {
   }
 }
 
-const EFFECTS = { beam: SteepingBeam, storm: ThunderTeaStorm, teapot: GrandTeapotDrop };
+// --- Summoning: Great Tode ---------------------------------------------------------
+
+const SUMMON_SCALE = 6.5; // times Tode's size
+const SUMMON_STOMP_RADIUS = 210;
+const SUMMON_STOMP_DAMAGE = 25;
+const SUMMON_TONGUE_LENGTH = 420;
+const SUMMON_TONGUE_DAMAGE = 22;
+const SUMMON_SLAM_RADIUS = 300;
+const SUMMON_SLAM_DAMAGE = 40;
+const SMOKE = ['#ffffff', '#e8e4dc', '#cfc8bc'];
+// Timeline (seconds): seal, appear, three tongue sweeps, a body slam, vanish.
+const SUMMON = { appear: 0.6, sweeps: [1.4, 2.4, 3.4], sweepTime: 0.75, jump: 4.5, slam: 5.2, vanish: 6.4, end: 7 };
+
+class GreatTodeSummon {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.age = 0;
+    const limit = MAP_HALF_SIZE - 90;
+    // The toad lands a little ahead of Tode, toward the aim.
+    const toward = ctx.aimGround.clone().sub(ctx.player.position).setZ(0);
+    const ahead = Math.min(140, toward.length());
+    this.center = ctx.player.position.clone().addScaledVector(toward.normalize(), ahead).setZ(0);
+    this.center.x = THREE.MathUtils.clamp(this.center.x, -limit, limit);
+    this.center.y = THREE.MathUtils.clamp(this.center.y, -limit, limit);
+    this.facing = Math.atan2(toward.y, toward.x) || 0;
+    this.hits = new Set();
+
+    // The summoning seal on the ground.
+    this.seal = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.RingGeometry(150, 162, 96), additive('#ffb02e', 0.9));
+    const inner = new THREE.Mesh(new THREE.RingGeometry(96, 102, 96), additive('#ffd36b', 0.8));
+    this.seal.add(ring, inner);
+    for (let i = 0; i < 8; i++) {
+      const spoke = new THREE.Mesh(new THREE.PlaneGeometry(56, 5), additive('#ffd36b', 0.8));
+      const angle = (i / 8) * Math.PI * 2;
+      spoke.position.set(Math.cos(angle) * 128, Math.sin(angle) * 128, 0);
+      spoke.rotation.z = angle;
+      this.seal.add(spoke);
+    }
+    this.seal.position.set(this.center.x, this.center.y, 0.8);
+    this.seal.scale.setScalar(0.01);
+    ctx.scene.add(this.seal);
+    ctx.play('charge');
+    ctx.shake(6);
+  }
+
+  /** A copy of Tode many times his size, with battle-worn reddish skin. */
+  createToad() {
+    const { ctx } = this;
+    const toad = new THREE.Group();
+    const model = ctx.player.model.clone();
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      child.material = child.material.clone();
+      child.material.color.lerp(new THREE.Color('#d0704a'), 0.45);
+      child.material.emissive?.set('#2a0a00');
+      child.castShadow = true;
+    });
+    model.scale.multiplyScalar(SUMMON_SCALE);
+    model.position.z = (model.position.z / ctx.player.model.scale.x) * model.scale.x; // feet on the ground
+    model.rotation.y = Math.atan2(Math.cos(this.facing), -Math.sin(this.facing));
+    model.visible = true;
+    toad.add(model);
+    const box = new THREE.Box3().setFromObject(model);
+    this.height = box.max.z - box.min.z;
+    // The tongue: a pivot at the mouth, extended along +X.
+    this.tongue = new THREE.Group();
+    const tongueGeometry = new THREE.CylinderGeometry(9, 14, 1, 14).rotateZ(-Math.PI / 2).translate(0.5, 0, 0);
+    this.tongueMesh = new THREE.Mesh(tongueGeometry, new THREE.MeshStandardMaterial({ color: '#ff7a9a', emissive: '#6a1020', roughness: 0.35 }));
+    this.tongueTip = new THREE.Mesh(new THREE.SphereGeometry(22, 20, 14), this.tongueMesh.material);
+    this.tongue.add(this.tongueMesh, this.tongueTip);
+    this.tongue.position.z = this.height * 0.35;
+    this.tongue.visible = false;
+    toad.add(this.tongue);
+    toad.position.copy(this.center);
+    return toad;
+  }
+
+  puff(count, size = 6) {
+    const { ctx, center } = this;
+    ctx.particles.burst(center, { count, colors: SMOKE, speed: 260, up: 160, size, height: 20, life: 1.1, gravity: -40 });
+  }
+
+  update(delta) {
+    const { ctx } = this;
+    this.age += delta;
+    const t = this.age;
+
+    // The seal spins open.
+    this.seal.scale.setScalar(Math.min(1, t / 0.45));
+    this.seal.rotation.z += delta * 2.5;
+    this.seal.children.forEach((child) => (child.material.opacity = Math.max(0, 0.9 - Math.max(0, t - 1.2) * 0.8)));
+
+    if (!this.toad && t >= SUMMON.appear) this.appear();
+    if (!this.toad) return true;
+
+    // Breathing, then the attacks.
+    const model = this.toad.children[0];
+    const breathe = 1 + 0.03 * Math.sin(t * 3);
+    model.scale.set(breathe, breathe, 1 / breathe).multiplyScalar(this.baseScale);
+
+    const sweep = SUMMON.sweeps.findIndex((start) => t >= start && t < start + SUMMON.sweepTime);
+    if (sweep >= 0) this.updateTongue(sweep, (t - SUMMON.sweeps[sweep]) / SUMMON.sweepTime);
+    else this.tongue.visible = false;
+
+    if (t >= SUMMON.jump && t < SUMMON.slam) {
+      const k = (t - SUMMON.jump) / (SUMMON.slam - SUMMON.jump);
+      this.toad.position.z = Math.sin(k * Math.PI) * 220 * (1 - k * 0.3);
+      if (k > 0.85) this.toad.position.z *= (1 - k) / 0.15;
+    } else if (t >= SUMMON.slam && !this.slammed) {
+      this.toad.position.z = 0;
+      this.slam();
+    }
+
+    if (t >= SUMMON.vanish && !this.vanished) {
+      this.vanished = true;
+      this.puff(70, 8);
+      ctx.play('pop');
+      this.toad.visible = false;
+    }
+    return t < SUMMON.end;
+  }
+
+  appear() {
+    const { ctx, center } = this;
+    this.toad = this.createToad();
+    this.baseScale = this.toad.children[0].scale.x;
+    ctx.scene.add(this.toad);
+    this.puff(110, 9);
+    ctx.play('boom');
+    ctx.shake(28);
+    ctx.postfx.flash('#fff1d0', 0.55);
+    ctx.postfx.pulse({ bloom: 1.2, aberration: 0.9, warp: 0.6 });
+    ctx.effects.ring(center, { radius: SUMMON_STOMP_RADIUS * 1.2, color: '#ffe1a0', duration: 0.7, thickness: 0.22 });
+    this.hitAround(SUMMON_STOMP_RADIUS, SUMMON_STOMP_DAMAGE, 600);
+  }
+
+  /** Each sweep turns toward the thickest crowd of bees, then lashes across it. */
+  updateTongue(index, k) {
+    const { ctx, center } = this;
+    if (this.sweep !== index) {
+      this.sweep = index;
+      this.hits.clear();
+      const bees = ctx.aliveEnemies();
+      let best = this.facing;
+      let bestCount = -1;
+      for (let a = 0; a < 16; a++) {
+        const angle = (a / 16) * Math.PI * 2;
+        const count = bees.filter((bee) => {
+          const dx = bee.position.x - center.x;
+          const dy = bee.position.y - center.y;
+          const d = Math.hypot(dx, dy);
+          return d < SUMMON_TONGUE_LENGTH && Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle))) < 0.9;
+        }).length;
+        if (count > bestCount) [best, bestCount] = [angle, count];
+      }
+      this.sweepCenter = best;
+      this.sweepSide = index % 2 ? -1 : 1;
+      this.toad.children[0].rotation.y = Math.atan2(Math.cos(best), -Math.sin(best));
+      ctx.play('dash');
+    }
+    // Out, across, back in.
+    const reach = Math.sin(Math.min(1, k * 1.4) * Math.PI * 0.5) * (k > 0.8 ? (1 - k) / 0.2 : 1);
+    const angle = this.sweepCenter + this.sweepSide * (k * 2 - 1) * 0.9;
+    const length = SUMMON_TONGUE_LENGTH * reach;
+    this.tongue.visible = true;
+    this.tongue.rotation.z = angle;
+    this.tongueMesh.scale.set(Math.max(1, length), 1, 1);
+    this.tongueTip.position.x = length;
+
+    // Bees near the tongue get slapped once per sweep.
+    const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
+    const swing = new THREE.Vector3(-direction.y, direction.x, 0).multiplyScalar(this.sweepSide);
+    const damage = Math.round(SUMMON_TONGUE_DAMAGE * ctx.player.stats.ultimatePower);
+    for (const enemy of ctx.aliveEnemies()) {
+      if (this.hits.has(enemy)) continue;
+      const offset = enemy.position.clone().sub(center).setZ(0);
+      const along = offset.dot(direction);
+      if (along < 0 || along > length + 20) continue;
+      const across = Math.abs(offset.x * direction.y - offset.y * direction.x);
+      if (across > 30 + enemy.radius) continue;
+      this.hits.add(enemy);
+      ctx.damageEnemy(enemy, damage, swing, 700, 'ultimate');
+    }
+  }
+
+  slam() {
+    const { ctx, center } = this;
+    this.slammed = true;
+    ctx.play('boom');
+    ctx.shake(32);
+    ctx.postfx.flash('#fff1d0', 0.7);
+    ctx.postfx.pulse({ bloom: 1.5, aberration: 1.2, warp: 1 });
+    ctx.effects.ring(center, { radius: SUMMON_SLAM_RADIUS * 1.2, color: '#ffffff', duration: 0.8, thickness: 0.2 });
+    ctx.effects.ring(center, { radius: SUMMON_SLAM_RADIUS * 0.8, color: '#ffb02e', duration: 0.5 });
+    ctx.particles.burst(center, { count: 90, colors: TEA, speed: 460, up: 260, size: 3.2, height: 6, life: 0.9 });
+    ctx.effects.pool(center, { radius: 170, dps: 5, duration: 4, color: '#c98a2b', opacity: 0.45, particleColors: ['#ffffff', '#f3d29a'] });
+    this.hitAround(SUMMON_SLAM_RADIUS, SUMMON_SLAM_DAMAGE, 800);
+  }
+
+  hitAround(radius, damage, force) {
+    const { ctx, center } = this;
+    const amount = Math.round(damage * ctx.player.stats.ultimatePower);
+    for (const enemy of ctx.aliveEnemies()) {
+      const away = enemy.position.clone().sub(center).setZ(0);
+      if (away.length() > radius + enemy.radius * 0.5) continue;
+      ctx.damageEnemy(enemy, amount, away.normalize(), force, 'ultimate');
+    }
+  }
+
+  dispose() {
+    disposeTree(this.seal);
+    if (this.toad) {
+      this.toad.removeFromParent();
+      // The model shares geometry with Tode; only the copies made here are freed.
+      this.toad.traverse((child) => {
+        if (!child.isMesh) return;
+        child.material.dispose();
+        if (child.parent === this.toad || child.parent === this.tongue) child.geometry.dispose();
+      });
+    }
+  }
+}
+
+const EFFECTS = { beam: SteepingBeam, storm: ThunderTeaStorm, teapot: GrandTeapotDrop, summon: GreatTodeSummon };
 
 /** Fires an ultimate. `ctx` provides the game hooks (see main.js). */
 export function startUltimate(id, ctx) {

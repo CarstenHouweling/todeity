@@ -9,7 +9,7 @@
 
 export const BLENDS = {
   green: { name: 'Green Tea', color: '#7ed957', icon: '🍵', focus: 'Spit' },
-  ember: { name: 'Ember Black', color: '#ff7a2f', icon: '🔥', focus: 'Splash & fire' },
+  ember: { name: 'Ember Black', color: '#ff7a2f', icon: '🔥', focus: 'Tea bombs & fire' },
   mint: { name: 'Frost Mint', color: '#5fe3d0', icon: '🌿', focus: 'Speed & frost' },
   chamomile: { name: 'Chamomile', color: '#ffd84d', icon: '🌼', focus: 'Life' },
   storm: { name: 'Storm Oolong', color: '#a3a8ff', icon: '⚡', focus: 'Lightning' },
@@ -65,29 +65,29 @@ const BREWS = [
     },
   },
 
-  // --- Ember Black: tea splash and fire --------------------------------------
+  // --- Ember Black: tea bombs and fire --------------------------------------
   {
     id: 'boiling', blend: 'ember', name: 'Boiling Point', icon: '🌡️', maxLevel: 5,
     values: [2, 3, 5],
-    text: (v) => `Tea splash deals +${v} damage.`,
+    text: (v) => `Tea bombs deal +${v} damage.`,
     apply: ({ stats }, v) => (stats.splashDamage += v),
   },
   {
     id: 'earlgrey', blend: 'ember', name: 'Earl Grey Wave', icon: '🫖', maxLevel: 3,
     values: [0.2, 0.3, 0.4],
-    text: (v) => `Tea splash radius +${percent(v)}.`,
+    text: (v) => `Tea bomb blast radius +${percent(v)}.`,
     apply: ({ stats }, v) => (stats.splashRadius *= 1 + v),
   },
   {
     id: 'quicksteep', blend: 'ember', name: 'Quick Steep', icon: '⏱️', maxLevel: 3,
     values: [0.2, 0.28, 0.36],
-    text: (v) => `Tea splash recharges ${percent(v)} faster.`,
+    text: (v) => `Tea bombs recharge ${percent(v)} faster.`,
     apply: ({ stats }, v) => (stats.splashCooldown *= 1 - v),
   },
   {
     id: 'scorch', blend: 'ember', name: 'Scorching Tea', icon: '♨️', maxLevel: 3,
     values: [1, 1.5, 2],
-    text: (v) => `Tea splash sets bees on fire: ${v} damage per second.`,
+    text: (v) => `Tea bombs set bees on fire: ${v} damage per second.`,
     apply: ({ stats }, v) => (stats.splashBurn += v),
   },
   {
@@ -137,7 +137,7 @@ const BREWS = [
   {
     id: 'coldbrew', blend: 'mint', name: 'Cold Brew Splash', icon: '🧊', maxLevel: 2,
     values: [0.35, 0.45, 0.6],
-    text: (v) => `Tea splash chills bees, slowing them by ${percent(v)}.`,
+    text: (v) => `Tea bombs chill bees, slowing them by ${percent(v)}.`,
     apply: ({ stats }, v) => (stats.splashSlow = Math.min(0.9, stats.splashSlow + v)),
   },
 
@@ -189,7 +189,7 @@ const BREWS = [
   {
     id: 'thundersplash', blend: 'storm', name: 'Thunder Splash', icon: '🌩️', maxLevel: 2,
     values: [3, 4, 6],
-    text: (v) => `Tea splash calls down ${v} lightning bolts on nearby bees.`,
+    text: (v) => `Tea bombs call down ${v} lightning bolts on nearby bees.`,
     apply: ({ stats }, v) => (stats.splashBolts += v),
   },
   {
@@ -261,7 +261,7 @@ const LEGENDARIES = [
   },
   {
     id: 'volcano', blend: 'ember', name: 'Volcano Pot', icon: '🌋',
-    text: 'Tea splash leaves a pool of lava that burns bees.',
+    text: 'Tea bombs leave a pool of lava that burns bees.',
     apply: ({ stats }) => (stats.lavaPool = 4),
   },
   {

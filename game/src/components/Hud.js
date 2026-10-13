@@ -10,7 +10,7 @@ import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
   { id: 'dash', key: 'Shift', name: 'Hop dash', icon: '💨' },
-  { id: 'splash', key: 'Space', name: 'Tea splash', icon: '🍵' },
+  { id: 'splash', key: 'Space', name: 'Tea bomb', icon: '💥' },
   ...SKILL_KEY_LABELS.map((key, i) => ({ id: `skill${i}`, key, name: 'Skill', icon: '✨' })),
   { id: 'ultimate', key: 'R', name: 'Ultimate', icon: '✨' },
 ];
@@ -22,6 +22,27 @@ function element(className, parent, tag = 'div') {
   node.className = className;
   parent?.append(node);
   return node;
+}
+
+// The HUD updates every frame; writing an unchanged value still makes the browser redo style and layout.
+function setText(node, text) {
+  text = String(text);
+  if (node.textContent !== text) node.textContent = text;
+}
+
+// Remembers what was written: the browser normalises style values ("100.0%" reads back as "100%").
+const writtenStyles = new WeakMap();
+
+function setStyle(node, property, value) {
+  let written = writtenStyles.get(node);
+  if (!written) writtenStyles.set(node, (written = {}));
+  if (written[property] === value) return;
+  written[property] = value;
+  node.style[property] = value;
+}
+
+function setProp(node, property, value) {
+  if (node[property] !== value) node[property] = value;
 }
 
 const blendLabel = (id) => `${BLENDS[id].icon} ${BLENDS[id].name}`;
@@ -52,11 +73,28 @@ export class Hud {
 
     this.banner = element('banner', this.root);
     this.callout = element('callout', this.root);
+    // Beam clash: a prompt and a tug-of-war meter (Tode's gold against the boss's red).
+    this.clash = element('clash', this.root);
+    this.clash.hidden = true;
+    this.clashLabel = element('clash-label', this.clash);
+    const meter = element('clash-meter', this.clash);
+    this.clashFill = element('clash-fill', meter);
     this.toasts = element('toasts', document.body);
     this.tip = element('tip', this.root);
     this.combo = element('combo', this.root);
     this.bossIntro = element('boss-intro', document.body);
     this.bossIntro.hidden = true;
+
+    // Experience: tea leaves fill the bar; each level offers an infusion (see Infusions.js).
+    this.xpBar = element('xp-bar', this.root);
+    this.xpFill = element('xp-fill', this.xpBar);
+    this.xpLevel = element('xp-level', this.xpBar);
+    this.infusions = element('infusions', this.root);
+    this.infusions.hidden = true;
+    this.infusions.addEventListener('click', (event) => {
+      const target = event.target.closest('[data-action]');
+      if (target) this.onAction(target.dataset.action, target.dataset);
+    });
 
     this.bar = element('ability-bar', this.root);
     this.slots = {};
@@ -120,7 +158,7 @@ export class Hud {
   }
 
   setScore(score, best) {
-    this.score.textContent = `Score: ${score}   Best: ${best}`;
+    setText(this.score, `Score: ${score}   Best: ${best}`);
   }
 
   setHealth(hp, maxHp, shield = false) {
@@ -146,7 +184,7 @@ export class Hud {
   }
 
   setWave(wave, beesLeft) {
-    this.wave.textContent = beesLeft > 0 ? `Wave ${wave} · ${beesLeft} bees left` : `Wave ${wave}`;
+    setText(this.wave, beesLeft > 0 ? `Wave ${wave} · ${beesLeft} bees left` : `Wave ${wave}`);
   }
 
   setWeather(info) {
@@ -155,35 +193,41 @@ export class Hud {
   }
 
   setBoss(enemy) {
-    this.boss.hidden = !enemy;
+    setProp(this.boss, 'hidden', !enemy);
     if (!enemy) return;
-    this.bossName.textContent = enemy.type.name;
-    this.bossFill.style.width = `${(Math.max(0, enemy.hp) / enemy.maxHp) * 100}%`;
+    setText(this.bossName, enemy.type.name);
+    setStyle(this.bossFill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
   }
 
   setCooldown(id, left, total) {
     const { slot, cover, timer } = this.slots[id];
     const fraction = total > 0 ? THREE.MathUtils.clamp(left / total, 0, 1) : 0;
-    cover.style.transform = `scaleY(${fraction})`;
-    timer.textContent = left > 0.3 ? Math.ceil(left).toString() : '';
-    slot.classList.toggle('ready', left <= 0);
+    setStyle(cover, 'transform', `scaleY(${fraction.toFixed(3)})`);
+    setText(timer, left > 0.3 ? Math.ceil(left) : '');
+    if (slot.classList.contains('ready') !== left <= 0) slot.classList.toggle('ready', left <= 0);
   }
 
   setDashCharges(charges, max) {
-    this.slots.dash.badge.textContent = max > 1 ? charges : '';
+    this.setCharges('dash', charges, max);
+  }
+
+  setCharges(id, charges, max) {
+    setText(this.slots[id].badge, max > 1 ? charges : '');
   }
 
   /** `gauge` is 0–100. Hidden until an ultimate is chosen. */
   setUltimate(id, gauge) {
     const { slot, icon, cover, timer } = this.slots.ultimate;
-    slot.hidden = !id;
+    setProp(slot, 'hidden', !id);
     if (!id) return;
-    icon.textContent = ULTIMATES[id].icon;
-    slot.title = ULTIMATES[id].name;
-    cover.style.transform = `scaleY(${1 - gauge / 100})`;
-    timer.textContent = gauge < 100 ? `${Math.floor(gauge)}%` : '';
-    slot.classList.toggle('ready', gauge >= 100);
-    slot.classList.toggle('charging', gauge < 100);
+    setText(icon, ULTIMATES[id].icon);
+    setProp(slot, 'title', ULTIMATES[id].name);
+    setStyle(cover, 'transform', `scaleY(${(1 - gauge / 100).toFixed(3)})`);
+    setText(timer, gauge < 100 ? `${Math.floor(gauge)}%` : '');
+    if (slot.classList.contains('ready') !== gauge >= 100) {
+      slot.classList.toggle('ready', gauge >= 100);
+      slot.classList.toggle('charging', gauge < 100);
+    }
   }
 
   /** Learned skills: [{ id, level, cooldownLeft }]; `auto` shows they cast themselves. */
@@ -191,13 +235,14 @@ export class Hud {
     SKILL_KEY_LABELS.forEach((key, i) => {
       const slot = slots[i];
       const ui = this.slots[`skill${i}`];
-      ui.slot.hidden = !slot;
+      setProp(ui.slot, 'hidden', !slot);
       if (!slot) return;
       const skill = SKILLS[slot.id];
-      ui.icon.textContent = skill.icon;
-      ui.slot.title = `${skill.name} (level ${slot.level})`;
-      ui.badge.textContent = slot.level > 1 ? slot.level : '';
-      ui.slot.querySelector('.ability-key').textContent = auto ? 'auto' : key;
+      setText(ui.icon, skill.icon);
+      setProp(ui.slot, 'title', `${skill.name} (level ${slot.level})`);
+      setText(ui.badge, slot.level > 1 ? slot.level : '');
+      ui.keyLabel ??= ui.slot.querySelector('.ability-key');
+      setText(ui.keyLabel, auto ? 'auto' : key);
       this.setCooldown(`skill${i}`, slot.cooldownLeft, skill.cooldown(slot.level));
     });
   }
@@ -301,8 +346,43 @@ export class Hud {
     setTimeout(() => toast.remove(), 4800);
   }
 
+  setXp(fraction, level) {
+    setStyle(this.xpFill, 'width', `${(Math.min(1, fraction) * 100).toFixed(1)}%`);
+    setText(this.xpLevel, `Lv ${level}`);
+  }
+
+  /** A compact, non-blocking level-up pick: [{ icon, name, text, rare }]. */
+  showInfusions(options, level, touch) {
+    const cards = options
+      .map(
+        (option, index) => `<button class="infusion${option.rare ? ' rare' : ''}" data-action="infuse" data-index="${index}">
+          <span class="infusion-key">${touch ? '' : index + 1}</span><span class="infusion-icon">${option.icon}</span>
+          <b>${option.name}</b><small>${option.text}</small></button>`
+      )
+      .join('');
+    this.infusions.innerHTML = `<div class="infusions-title">Level ${level}! Infuse your tea</div><div class="infusions-cards">${cards}</div>`;
+    this.infusions.hidden = false;
+  }
+
+  hideInfusions() {
+    this.infusions.hidden = true;
+  }
+
+  /** `progress` 0–1: how far Tode has pushed the clash toward the boss. */
+  showClash(progress, label) {
+    this.clash.hidden = false;
+    setText(this.clashLabel, label);
+    setStyle(this.clashFill, 'width', `${(progress * 100).toFixed(1)}%`);
+  }
+
+  hideClash() {
+    this.clash.hidden = true;
+  }
+
   setCombo(count) {
-    this.combo.textContent = count >= 3 ? `${count} combo` : '';
+    if (this.shownCombo === count) return;
+    this.shownCombo = count;
+    setText(this.combo, count >= 3 ? `${count} combo` : '');
     this.combo.classList.toggle('hot', count >= 15);
     this.combo.classList.toggle('divine', count >= 40);
   }
@@ -408,7 +488,7 @@ ${
           <span><b>Drag left side</b> move</span>
           <span>Tode <b>aims &amp; spits</b> by himself</span>
           <span><b>💨</b> hop dash</span>
-          <span><b>🍵</b> tea splash</span>
+          <span><b>💥</b> tea bomb</span>
           <span><b>✨</b> ultimate</span>
         </div>`
             : `<div class="controls">
@@ -416,7 +496,7 @@ ${
           <span><b>Mouse</b> aim</span>
           <span><b>Hold LMB</b> spit</span>
           <span><b>Shift / RMB</b> hop dash</span>
-          <span><b>Space</b> tea splash</span>
+          <span><b>Space</b> tea bomb</span>
           <span><b>R</b> ultimate</span>
           <span><b>Q/E/F</b> skills (or auto)</span>
           <span><b>Esc</b> pause</span>
@@ -666,7 +746,7 @@ ${
       'game-over victory',
       `
       <h1>The End</h1>
-      <p>Tode, God of Tea, finishes his cup in peace.</p>
+      <p>From the garden to the Underworld and back: Tode, God of Tea, finishes his cup in peace.</p>
       <div class="credits">
         <p><b>Todeity: Rise of the Tea God</b></p>
         <p>Made with Three.js and an AI coding agent, grown from the JetBrains Academy course</p>
@@ -699,8 +779,8 @@ ${
       if (!enemy.healthBar) continue;
       const { bar, fill } = enemy.healthBar;
       const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite) && this.place(bar, enemy.position, enemy.height + 8);
-      bar.style.display = visible ? '' : 'none';
-      if (visible) fill.style.width = `${(Math.max(0, enemy.hp) / enemy.maxHp) * 100}%`;
+      setStyle(bar, 'display', visible ? '' : 'none');
+      if (visible) setStyle(fill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
     }
 
     this.damageNumbers = this.damageNumbers.filter((label) => {

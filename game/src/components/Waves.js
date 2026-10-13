@@ -1,13 +1,18 @@
-/** Every BOSS_EVERY-th wave is a boss wave: Queen Buzzbelle, and the Empress from the final wave on. */
+/**
+ * Every BOSS_EVERY-th wave is a boss wave: Queen Buzzbelle, the Empress at wave 20, and after her the fall into
+ * the Underworld for the true finale against Bee-zebub (wave 21, and his boss waves in endless mode).
+ */
 export const BOSS_EVERY = 5;
-export const FINAL_WAVE = 20;
+export const FINAL_WAVE = 20; // the Empress
+export const HELL_WAVE = 21; // Bee-zebub: beating him wins the run
 
 export function waveConfig(wave) {
-  const isBoss = wave % BOSS_EVERY === 0;
+  const isBoss = wave % BOSS_EVERY === 0 || wave === HELL_WAVE;
   return {
     wave,
     isBoss,
-    boss: wave >= FINAL_WAVE ? 'empress' : 'queen',
+    // Every arena has its own boss.
+    boss: wave >= HELL_WAVE ? 'beezebub' : wave >= FINAL_WAVE ? 'empress' : wave === 15 ? 'seraph' : wave === 10 ? 'shogun' : 'queen',
     count: isBoss ? 4 + wave : Math.min(60, 5 + Math.round(wave * 2.6)),
     // Bees toughen up faster later on, to keep pace with a powered-up Tode.
     hpScale: 1 + 0.15 * (wave - 1) + 0.014 * (wave - 1) ** 2,

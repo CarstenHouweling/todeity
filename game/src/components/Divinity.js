@@ -53,6 +53,7 @@ function restyle(original, geometry, surface = material) {
 
 function restyleSingle(original, geometry, surface = material) {
   const mesh = new THREE.Mesh(geometry, surface);
+  mesh.userData.prop = true;
   mesh.position.copy(original.position);
   mesh.rotation.copy(original.rotation);
   mesh.scale.copy(original.scale);

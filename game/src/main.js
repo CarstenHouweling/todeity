@@ -3,7 +3,7 @@ import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { Player } from './components/Player.js';
-import { ELITE_MODS, Enemy, loadEnemyModel } from './components/Enemy.js';
+import { ELITE_MODS, Enemy, loadEnemyModel, setEnemyGraphics } from './components/Enemy.js';
 import { Projectile, PROJECTILE_HEIGHT } from './components/Projectile.js';
 import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
@@ -12,7 +12,7 @@ import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
 import { BLENDS, brewById, describe, rollBrews } from './components/PowerUps.js';
-import { buildSpawnQueue, FINAL_WAVE, waveConfig } from './components/Waves.js';
+import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
 import { muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
@@ -30,6 +30,11 @@ import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
+import { Bullets } from './components/Bullets.js';
+import { Leaves } from './components/Leaves.js';
+import { leavesForLevel, rollInfusions } from './components/Infusions.js';
+import { ARENAS, arenaForWave } from './components/Arenas.js';
+import { applyRenderer } from './components/Graphics.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
 THREE.Cache.enabled = true;
@@ -59,9 +64,9 @@ const QUEEN = {
 
 // Combat feel
 const SPIT_KNOCKBACK = 90;
-const DASH_KNOCKBACK = 150;
+const DASH_KNOCKBACK = 260;
 const AIM_ASSIST_ANGLE = THREE.MathUtils.degToRad(14); // spit snaps to an enemy this close to the cursor direction
-const LANDING_SPLASH_RADIUS = 50;
+const LANDING_SPLASH_RADIUS = 70;
 const SPLASH_EFFECT_DURATION = 0.45; // seconds
 const SPLASH_COLOR = 0xd9a441; // hot tea
 const TEA_DROPS = ['#c98a2b', '#e7b45a', '#f3d29a'];
@@ -93,9 +98,17 @@ const HIT_STOP_DAMAGE = 12; // hits this strong freeze the action for a moment
 
 // Bosses
 const BOSS_INTRO_TIME = 2.6;
-const BOSS_EPITHETS = { queen: 'Matriarch of the Hive', empress: 'Sovereign of a Thousand Stings' };
+const BOSS_EPITHETS = {
+  queen: 'Matriarch of the Hive',
+  shogun: 'Blade of the Mountain Hive',
+  seraph: 'Light Above the Clouds',
+  empress: 'Sovereign of a Thousand Stings',
+  beezebub: 'Lord of the Hive Below',
+};
 // Health fractions where a boss roars and gets new attacks. The Queen is the first wall, so she has one.
-const BOSS_PHASES = { queen: [0.5], empress: [0.66, 0.33] };
+const BOSS_PHASES = { queen: [0.5], shogun: [0.5], seraph: [0.6, 0.3], empress: [0.66, 0.33], beezebub: [0.66, 0.33] };
+// Bee-zebub's Brimstone Ring: a wall of fire that spreads from him; hop-dash through it.
+const BRIMSTONE = { speed: 190, band: 11, height: 34, windup: 1 };
 
 // Elite bees
 const ELITE_FROM_WAVE = 6;
@@ -125,7 +138,6 @@ const GAUGE_PER_DAMAGE = 0.8; // % per point of damage dealt
 const GAUGE_PER_HIT = 12; // % for getting hit
 const ULTIMATE_WAVE = 2; // the ultimate is chosen after clearing this wave
 const SKILL_WAVES = [3, 7, 11, 15]; // a skill (or skill upgrade) is chosen after these waves
-const AUTO_SPLASH_CROWD = 3; // auto-cast: tea splash when this many bees are in reach
 
 // Score
 const SCORE_PER_SECOND = 0.1;
@@ -176,6 +188,7 @@ let environment = null;
 let divinity = null;
 
 function buildWorld(tiles) {
+  disposeArenas();
   if (map) {
     for (const root of [map, environment.group, divinity.root]) {
       root.removeFromParent();
@@ -198,6 +211,32 @@ function buildWorld(tiles) {
   if (houses[0]) map.add(houses[0].house);
 }
 let houses = []; // footprints of loaded houses: { rect }
+
+// --- Arenas: a new playing field every 5 waves (see Arenas.js) ---
+let arena = ARENAS[0];
+const builtArenas = new Map(); // arena id → { group, obstacles, update }
+const propCache = new Map(); // arena id → meshes tagged as props (they fade near Tode)
+
+function disposeArenas() {
+  for (const built of builtArenas.values()) {
+    built.group.removeFromParent();
+    built.group.traverse((child) => {
+      child.geometry?.dispose();
+      for (const material of [child.material].flat()) {
+        if (!material) continue;
+        for (const value of Object.values(material)) if (value?.isTexture && value !== scene.environment) value.dispose();
+        material.dispose();
+      }
+    });
+  }
+  builtArenas.clear();
+  propCache.clear();
+}
+
+/** What Tode and the bees bump into in the current arena. */
+const arenaObstacles = () => (arena.id === 'garden' ? environment.obstacles : builtArenas.get(arena.id)?.obstacles ?? []);
+const arenaWalls = () => (arena.id === 'garden' ? houses : []);
+
 buildWorld(SOLO_TILES);
 
 const player = new Player();
@@ -220,7 +259,8 @@ scene.add(particles.mesh);
 const clock = new THREE.Clock();
 const enemies = [];
 const projectiles = [];
-const enemyProjectiles = [];
+const bullets = new Bullets(scene); // enemy bullets (see Bullets.js)
+const leaves = new Leaves(scene); // experience (see Leaves.js)
 const splashEffects = [];
 const telegraphs = [];
 const brewLevels = new Map(); // brew id → level
@@ -280,7 +320,10 @@ const TIPS = {
   brew: () => 'Brews from two different Blends unlock Duo brews. Two from one Blend unlock a Legendary.',
   ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press R!'),
   skill: () => 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
-  dash: () => (touch.enabled ? 'Tap 💨 to hop-dash through danger.' : 'Shift or right-click to hop-dash: you can\'t be hurt mid-hop.'),
+  dash: () =>
+    touch.enabled
+      ? 'Tap 💨 to hop-dash right through bees: it hurts them, not you.'
+      : 'Shift or right-click to hop-dash right through bees: it hurts them, not you.',
 };
 
 function tip(id) {
@@ -363,12 +406,12 @@ function distanceSqXY(a, b) {
   return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 }
 
-/** Houses, trees, rocks, the pond, the tea table… */
+/**
+ * Only walls (Tode's house) block anything. Trees, rocks, statues and ponds never do: bees fly over them, shots
+ * fly over them and Tode walks through them (they fade so they never hide him). Nothing can get stuck.
+ */
 function hitsObstacle(position, radius) {
-  return (
-    houses.some(({ rect }) => circleIntersectsRect(position, radius, rect)) ||
-    environment.obstacles.some((o) => distanceSqXY(position, o) < (o.radius + radius) ** 2)
-  );
+  return arenaWalls().some(({ rect }) => circleIntersectsRect(position, radius, rect));
 }
 
 /** Overlapping is only blocked when it gets worse, so stuck characters can always separate. */
@@ -392,8 +435,131 @@ function isBlockedForPlayer(position, radius = player.radius) {
   return !isInsideMap(position, radius) || hitsObstacle(position, radius);
 }
 
+const PLAYER_STEP = 6; // max distance per collision sub-step, so a fast dash can't skip through a wall
+
+/** Pushes a circle out of walls and back inside the map (moving first and resolving after never sticks). */
+function pushOut(position, radius) {
+  for (const { rect } of arenaWalls()) {
+    const closestX = THREE.MathUtils.clamp(position.x, rect.minX, rect.maxX);
+    const closestY = THREE.MathUtils.clamp(position.y, rect.minY, rect.maxY);
+    const dx = position.x - closestX;
+    const dy = position.y - closestY;
+    const distanceSq = dx * dx + dy * dy;
+    if (distanceSq >= radius * radius) continue;
+    if (distanceSq > 1e-6) {
+      const distance = Math.sqrt(distanceSq);
+      position.x = closestX + (dx / distance) * radius;
+      position.y = closestY + (dy / distance) * radius;
+    } else {
+      // The centre is inside the house: leave through the nearest wall.
+      const exits = [
+        [position.x - rect.minX, -1, 0],
+        [rect.maxX - position.x, 1, 0],
+        [position.y - rect.minY, 0, -1],
+        [rect.maxY - position.y, 0, 1],
+      ];
+      const [depth, ex, ey] = exits.reduce((best, exit) => (exit[0] < best[0] ? exit : best));
+      position.x += ex * (depth + radius);
+      position.y += ey * (depth + radius);
+    }
+  }
+  const limit = MAP_HALF_SIZE - radius;
+  position.x = THREE.MathUtils.clamp(position.x, -limit, limit);
+  position.y = THREE.MathUtils.clamp(position.y, -limit, limit);
+}
+
 function movePlayer(dx, dy) {
-  slide(player.position, dx, dy, (position) => isBlockedForPlayer(position));
+  const { position } = player;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / PLAYER_STEP));
+  for (let i = 0; i < steps; i++) {
+    position.x += dx / steps;
+    position.y += dy / steps;
+    pushOut(position, player.radius);
+  }
+}
+
+// --- Zones: water to swim through, a rift that speeds Tode up, lava that burns -----------
+const ZONE_SPEED = { water: 0.72, rift: 1.35, lava: 0.85 };
+let zoneTimer = 0;
+let lavaTimer = 0;
+
+/** The zone Tode stands in (the centrepiece of each arena), or null. */
+function zoneAt(position) {
+  return arenaObstacles().find((o) => o.zone && distanceSqXY(position, o) < o.radius ** 2)?.zone ?? null;
+}
+
+function updateZone(delta) {
+  const zone = player.isDashing ? null : zoneAt(player.position);
+  player.speedFactor = ZONE_SPEED[zone] ?? 1;
+  if (!zone) {
+    lavaTimer = 0;
+    return;
+  }
+  const moving = player.velocity.lengthSq() > 400;
+  zoneTimer -= delta;
+  if (zoneTimer <= 0) {
+    zoneTimer = moving ? 0.22 : 0.6;
+    const colors = { water: ['#d9f2ff', '#8fd3ff'], rift: ['#9ff4ff', '#ffffff', '#c8a8ff'], lava: FIRE }[zone];
+    effects.ring(player.position, { radius: 26, color: colors[0], duration: 0.5 });
+    particles.burst(player.position, { count: 5, colors, speed: 50, up: 60, size: 1.6, height: 1, glow: zone !== 'water' });
+  }
+  if (zone === 'lava') {
+    lavaTimer += delta;
+    if (lavaTimer >= 0.9) {
+      lavaTimer = 0;
+      if (hurtPlayer(1)) hud.showCallout('Hot! Hot! Hot!');
+    }
+  }
+}
+
+// --- Props fade when Tode is near or behind them, so they never hide him ------------------
+const PROP_FADE = 0.28;
+const TOWARD_CAMERA = new THREE.Vector3(1, -1, 0).normalize();
+
+function arenaProps() {
+  if (!propCache.has(arena.id)) {
+    const root = arena.id === 'garden' ? environment.group : builtArenas.get(arena.id)?.group;
+    const props = [];
+    root?.traverse((child) => {
+      if (!child.isMesh || child.isInstancedMesh || !child.userData.prop) return;
+      child.geometry.computeBoundingSphere();
+      child.userData.reach = child.geometry.boundingSphere.radius * child.scale.x;
+      props.push(child);
+    });
+    propCache.set(arena.id, props);
+  }
+  return propCache.get(arena.id);
+}
+
+const toProp = new THREE.Vector3();
+function updatePropFade(delta) {
+  const ease = 1 - Math.exp(-10 * delta);
+  for (const prop of arenaProps()) {
+    if (!prop.visible) continue;
+    toProp.subVectors(prop.position, player.position).setZ(0);
+    const reach = prop.userData.reach;
+    const along = toProp.dot(TOWARD_CAMERA);
+    const across = Math.abs(toProp.x * TOWARD_CAMERA.y - toProp.y * TOWARD_CAMERA.x);
+    const hiding = toProp.length() < reach * 0.7 + 20 || (along > 0 && along < reach * 2 && across < reach * 0.8 + 10);
+    const target = hiding && PLAYING.has(phase) ? PROP_FADE : 1;
+    const current = prop.userData.opacity ?? 1;
+    if (target === 1 && current === 1) continue;
+    const opacity = Math.abs(target - current) < 0.02 ? target : current + (target - current) * ease;
+    prop.userData.opacity = opacity;
+    if (opacity < 1 && !prop.userData.solidMaterial) {
+      prop.userData.solidMaterial = prop.material;
+      prop.material = prop.material.clone();
+      prop.material.transparent = true;
+      prop.material.depthWrite = false;
+    }
+    if (opacity >= 1 && prop.userData.solidMaterial) {
+      prop.material.dispose();
+      prop.material = prop.userData.solidMaterial;
+      prop.userData.solidMaterial = null;
+    } else if (prop.userData.solidMaterial) {
+      prop.material.opacity = opacity;
+    }
+  }
 }
 
 /** Every Tode still standing: the local one and, in co-op, the teammates. */
@@ -418,10 +584,10 @@ function targetFor(position) {
 }
 
 function enemyBlocker(enemy) {
+  const todes = standingTodes();
   return (position) =>
     !isInsideMap(position, enemy.radius) ||
-    hitsObstacle(position, enemy.radius) ||
-    standingTodes().some((tode) => closingIn(enemy.position, position, enemy.radius, tode.position, player.radius)) ||
+    todes.some((tode) => closingIn(enemy.position, position, enemy.radius, tode.position, player.radius)) ||
     enemies.some(
       (other) =>
         other !== enemy && !other.dying && closingIn(enemy.position, position, enemy.radius, other.position, other.radius)
@@ -490,7 +656,7 @@ function rollElite(kind) {
   const mods = Object.keys(ELITE_MODS);
   return mods[Math.floor(Math.random() * mods.length)];
 }
-const ENEMY_TYPES_BOSS = new Set(['queen', 'empress']);
+const ENEMY_TYPES_BOSS = new Set(['queen', 'shogun', 'seraph', 'empress', 'beezebub']);
 
 function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   const enemy = new Enemy(kind, { hpScale: config.hpScale, speedScale: config.speedScale, elite });
@@ -532,6 +698,8 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   const fromTeammate = source === 'net';
   let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
   if (!fromTeammate && player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
+  const crit = !fromTeammate && source !== 'burn' && source !== 'ultimate' && Math.random() < player.stats.critChance;
+  if (crit) damage *= 2;
   damage = Math.max(1, Math.round(damage));
 
   if (isGuest()) {
@@ -540,12 +708,13 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   const killed = enemy.takeDamage(damage, direction, force);
   if (source !== 'burn' && !fromTeammate) play('hit');
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate) hitStop(0.045);
-  hud.damageNumber(enemy.position, damage, enemy.height + 4, DAMAGE_STYLES[source] ?? '');
+  hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
   if (source !== 'ultimate' && !fromTeammate) addGauge(damage * GAUGE_PER_DAMAGE);
   if (killed) onEnemyKilled(enemy);
 }
 
 function onEnemyKilled(enemy) {
+  dropLeaves(enemy);
   kills++;
   combo++;
   comboTimer = COMBO_WINDOW;
@@ -590,7 +759,8 @@ function onEnemyKilled(enemy) {
 }
 
 function bossDefeated(name, score) {
-  achieve(name.includes('Empress') ? 'empress' : 'queen');
+  const achievement = name.includes('Empress') ? 'empress' : name.includes('zebub') ? 'beezebub' : name.includes('Buzzbelle') ? 'queen' : null;
+  if (achievement) achieve(achievement);
   bossKills++;
   hud.setBoss(null);
   shake = BOSS_DEATH_SHAKE;
@@ -628,12 +798,13 @@ function timeScale(delta) {
     hitStopLeft -= delta;
     return 0.05;
   }
+  const choosing = infusionOffer && !coop && PLAYING.has(phase) ? INFUSION_SLOWDOWN : 1;
   if (slowMotionLeft > 0) {
     slowMotionLeft -= delta;
     const easeOut = Math.min(1, slowMotionLeft / 0.4);
-    return THREE.MathUtils.lerp(1, slowMotionScale, easeOut);
+    return Math.min(choosing, THREE.MathUtils.lerp(1, slowMotionScale, easeOut));
   }
-  return 1;
+  return choosing;
 }
 
 /** What everyone sees and feels when an explosive bee goes off (damage to bees is the host's job). */
@@ -767,7 +938,7 @@ function checkContact(enemy) {
       enemy.shatterLeft = FREEZE_SHATTER_DELAY;
       particles.burst(enemy.position, { count: 8, colors: ICE, speed: 60, up: 50, size: 1.4, glow: true });
     }
-    if (dashDamage > 0) damageEnemy(enemy, dashDamage, player.dash.direction, DASH_KNOCKBACK, 'burn');
+    if (dashDamage > 0) damageEnemy(enemy, dashDamage, player.dash.direction, DASH_KNOCKBACK, 'dash');
     return;
   }
   const charging = enemy.type.boss && enemy.ai.mode === 'charge';
@@ -806,23 +977,49 @@ function updateStinger(enemy, delta) {
   if (enemy.attackTimer <= 0) {
     enemy.glow = 0;
     enemy.attackTimer = ranged.cooldown * (0.8 + Math.random() * 0.4);
-    if (distance < ranged.distance + 150) fireStinger(enemy, chase, ranged.speed);
+    if (distance < ranged.distance + 150) stingerVolley(enemy, ranged.speed);
     if (Math.random() < 0.3) enemy.strafeSign *= -1;
   }
 }
 
-function fireStinger(enemy, direction, speed) {
-  const origin = enemy.position.clone().addScaledVector(direction, enemy.radius * 0.8);
-  launchStinger(origin, direction, speed);
-  share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed });
+// Ranged bees shoot harder patterns in every arena: [bullets per volley, spread in radians, speed factor].
+const STINGER_PATTERNS = { garden: [1, 0, 1], mountain: [3, 0.35, 1], sky: [5, 0.75, 0.8], cosmos: [3, 0.22, 1.1], hell: [5, 0.55, 1.1] };
+
+function stingerVolley(enemy, speed) {
+  const [count, spread, pace] = STINGER_PATTERNS[arena.id] ?? STINGER_PATTERNS.garden;
+  const angle = Math.atan2(chase.y, chase.x);
+  fireFan(enemy, angle, count + (enemy.elite ? 2 : 0), spread * (enemy.elite ? 1.3 : 1), speed * pace);
+  // In the Tournament every third volley is a ring as well.
+  enemy.volleys = (enemy.volleys ?? 0) + 1;
+  if (arena.id === 'cosmos' && enemy.volleys % 3 === 0) fireRing(enemy, 10, speed * 0.55, angle);
 }
 
-/** Every player simulates the stingers themselves and only checks hits on their own Tode. */
-function launchStinger(origin, direction, speed) {
-  const stinger = new Projectile(origin, direction, { ...STINGER, speed });
-  enemyProjectiles.push(stinger);
-  scene.add(stinger.mesh);
-  play('sting');
+function fireStinger(enemy, direction, speed, quiet = false) {
+  const origin = enemy.position.clone().addScaledVector(direction, enemy.radius * 0.8);
+  launchStinger(origin, direction, speed, quiet);
+  share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed, q: quiet });
+}
+
+/** Every player simulates the bullets themselves and only checks hits on their own Tode. */
+function launchStinger(origin, direction, speed, quiet = false) {
+  bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range: STINGER.range * 1.6, color: arena.bullet ?? '#c070ff' });
+  if (!quiet) play('sting');
+}
+
+const fanDirection = new THREE.Vector3();
+/** Bullet-hell patterns: `count` bullets spread over `spread` radians around `angle`. */
+function fireFan(enemy, angle, count, spread, speed) {
+  for (let i = 0; i < count; i++) {
+    const a = angle + (count > 1 ? (i / (count - 1) - 0.5) * spread : 0);
+    fireStinger(enemy, fanDirection.set(Math.cos(a), Math.sin(a), 0), speed, i > 0);
+  }
+}
+
+function fireRing(enemy, count, speed, offset = 0) {
+  for (let i = 0; i < count; i++) {
+    const a = offset + (i / count) * Math.PI * 2;
+    fireStinger(enemy, fanDirection.set(Math.cos(a), Math.sin(a), 0), speed, i > 0);
+  }
 }
 
 /** A lightning strike everyone sees; only the one who calls it deals damage to bees. */
@@ -846,10 +1043,129 @@ function bossRoar(boss) {
   boss.ai.rain = true;
   roarEffects(boss);
   share({ k: 'roar', id: boss.netId });
+  const hellish = boss.type.hellfire;
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2;
     const spot = boss.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(boss.radius + 30));
-    spawnEnemy('zipper', spot, { elite: null });
+    spawnEnemy(hellish ? 'stinger' : 'zipper', spot, { elite: hellish ? 'swift' : null });
+  }
+  // The gods' bosses answer with a beam: a clash of wills (solo only; it pauses the world).
+  if (!coop && (boss.kind === 'empress' || hellish) && !player.downed) startClash(boss);
+}
+
+// --- Beam clash: Tode's beam against the boss's, mash to push it back ----------------
+const CLASH = { time: 4.5, push: 0.05, bossPush: 0.17, winDamage: 0.1 };
+const clash = { boss: null, progress: 0.5, time: 0, beams: null };
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+function clashBeam(color, radius) {
+  const beam = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.45, radius * 0.45, 1, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const glow = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 20, 1, true), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
+  beam.add(core, glow);
+  scene.add(beam);
+  return beam;
+}
+
+/** Stretches a beam between two points (at chest height). */
+function placeBeam(beam, from, to, wobble) {
+  const a = from.clone().setZ(22);
+  const b = to.clone().setZ(22);
+  const direction = b.clone().sub(a);
+  const length = Math.max(1, direction.length());
+  beam.position.copy(a).add(b).multiplyScalar(0.5);
+  beam.quaternion.setFromUnitVectors(Y_AXIS, direction.normalize());
+  beam.scale.set(wobble, length, wobble);
+}
+
+function startClash(boss) {
+  Object.assign(clash, { boss, progress: 0.5, time: 0 });
+  clash.beams = {
+    tode: clashBeam('#ffd36b', 16),
+    boss: clashBeam(boss.type.hellfire ? '#ff2a00' : '#c070ff', 20),
+    orb: new THREE.Mesh(new THREE.SphereGeometry(22, 24, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })),
+  };
+  scene.add(clash.beams.orb);
+  setPhase('clash');
+  play('beam');
+  play('roar');
+  shake = 18;
+  postfx.shatter(0.6, 0.6);
+  postfx.flash('#ffffff', 0.5);
+  hud.showCallout('BEAM CLASH!');
+}
+
+function updateClash(delta) {
+  const { boss, beams } = clash;
+  clash.time += delta;
+  const mashes = ['Space', 'MouseLeft', 'MouseRight', 'KeyR', 'KeyE', 'KeyQ', 'KeyF', 'ShiftLeft', 'ShiftRight'].filter((code) => input.wasPressed(code)).length;
+  clash.progress += mashes * CLASH.push - delta * (CLASH.bossPush + 0.05 * (boss.ai.phase ?? 0));
+  clash.progress = THREE.MathUtils.clamp(clash.progress, 0, 1);
+  if (mashes) {
+    play('zap');
+    shake = Math.max(shake, 6);
+    postfx.pulse({ aberration: 0.4, warp: 0.3 });
+  }
+
+  const tode = player.position;
+  player.aimAt(boss.position);
+  boss.faceTowards(tode);
+  boss.glow = 1;
+  boss.update(delta);
+  const point = tode.clone().lerp(boss.position, 0.15 + clash.progress * 0.7);
+  const wobble = 1 + 0.15 * Math.sin(clash.time * 40);
+  placeBeam(beams.tode, tode, point, wobble);
+  placeBeam(beams.boss, boss.position, point, 1 + 0.15 * Math.sin(clash.time * 37 + 1));
+  beams.orb.position.copy(point).setZ(22);
+  beams.orb.scale.setScalar(1 + 0.3 * Math.sin(clash.time * 30) + mashes * 0.3);
+  particles.burst(point.clone().setZ(22), { count: 4, colors: ['#ffffff', '#ffd36b', boss.type.hellfire ? '#ff4a10' : '#c070ff'], speed: 260, up: 120, size: 2.2, glow: true, height: 0 });
+  cameraPan.lerp(boss.position.clone().sub(tode).setZ(0).multiplyScalar(0.45), 1 - Math.exp(-4 * delta));
+  cameraZoom += (0.85 - cameraZoom) * (1 - Math.exp(-3 * delta));
+  shake = Math.max(shake, 2.5);
+  postfx.pulse({ warp: 0.35, aberration: 0.35 });
+  hud.showClash(clash.progress, touch.enabled ? 'TAP! TAP! TAP!' : 'MASH SPACE!');
+
+  if (clash.progress >= 1) endClash(true);
+  else if (clash.progress <= 0) endClash(false);
+  else if (clash.time >= CLASH.time) endClash(clash.progress >= 0.5);
+}
+
+function endClash(won) {
+  const { boss, beams } = clash;
+  for (const mesh of [beams.tode, beams.boss, beams.orb]) {
+    mesh.removeFromParent();
+    mesh.traverse((child) => {
+      child.geometry?.dispose();
+      child.material?.dispose();
+    });
+  }
+  clash.beams = null;
+  hud.hideClash();
+  cameraPan.set(0, 0, 0);
+  cameraZoom = 1;
+  boss.glow = 0;
+  setPhase('fighting');
+  if (won) {
+    // Tode's beam drives straight through: reality cracks.
+    damageEnemy(boss, Math.round(boss.maxHp * CLASH.winDamage), null, 0, 'ultimate');
+    postfx.shatter(1, 1);
+    postfx.flash('#fff1d0', 0.8);
+    postfx.pulse({ bloom: 1.5, warp: 1.2, aberration: 1.2 });
+    effects.ring(boss.position, { radius: 360, color: '#ffd36b', duration: 0.9, thickness: 0.2 });
+    particles.burst(boss.position, { count: 90, colors: ['#ffffff', '#ffd36b', '#ffb02e'], speed: 380, up: 240, size: 3, glow: true, height: boss.height * 0.5 });
+    slowMotion(1.2, 0.2);
+    shake = 30;
+    play('boom');
+    hud.showCallout('OVERPOWERED!');
+  } else {
+    player.invulnerableLeft = 0;
+    hurtPlayer(1);
+    directionTo(boss.position, player.position, away);
+    player.velocity.addScaledVector(away, 900);
+    postfx.flash(boss.type.hellfire ? '#ff3b1f' : '#c070ff', 0.6);
+    shake = 22;
+    play('boom');
+    hud.showCallout('Overwhelmed…');
   }
 }
 
@@ -858,6 +1174,13 @@ function roarEffects(boss) {
   play('roar');
   shake = Math.max(shake, 14);
   postfx.flash('#ff3b1f', 0.35);
+  if (boss.type.hellfire) {
+    // Bee-zebub grows into his true form, and the Underworld answers.
+    boss.group.scale.multiplyScalar(1.12);
+    postfx.pulse({ warp: 1.2, aberration: 1.2, bloom: 1 });
+    particles.burst(boss.position, { count: 80, colors: FIRE, speed: 300, up: 200, size: 3, glow: true, height: boss.height * 0.5 });
+    effects.ring(boss.position, { radius: 420, color: '#ff6a00', duration: 0.9, thickness: 0.15 });
+  }
   effects.ring(boss.position, { radius: 320, color: '#ff3b1f', duration: 0.7, thickness: 0.2 });
   directionTo(boss.position, player.position, away);
   if (player.position.distanceTo(boss.position) < 400) player.velocity.addScaledVector(away, 700);
@@ -867,13 +1190,87 @@ function roarEffects(boss) {
 /** Stingers rain down around Tode; red circles show where. */
 function stingerRain(boss) {
   play('nova');
-  const count = boss.kind === 'empress' ? 12 : 6;
+  const hellish = boss.type.hellfire;
+  const count = hellish ? 14 : boss.kind === 'empress' ? 12 : 6;
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const distance = i === 0 ? 0 : 40 + Math.random() * 200;
     const spot = targetFor(boss.position).clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
-    sharedStrike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: '#c070ff' });
+    sharedStrike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: hellish ? '#ff4a10' : '#c070ff' });
   }
+}
+
+// --- Bee-zebub's hellfire ---------------------------------------------------------
+const fireRings = [];
+const FIRE_WALL_MATERIAL = new THREE.ShaderMaterial({
+  uniforms: { time: { value: 0 } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform float time;
+    varying vec2 vUv;
+    void main() {
+      float flicker = 0.6 + 0.4 * sin(vUv.x * 160.0 + time * 9.0) * sin(vUv.x * 57.0 - time * 13.0);
+      float height = 1.0 - vUv.y;
+      float alpha = pow(height, 1.6) * (0.55 + 0.45 * flicker);
+      vec3 color = mix(vec3(1.0, 0.25, 0.02), vec3(1.0, 0.85, 0.35), height * height);
+      gl_FragColor = vec4(color, alpha * 0.9);
+    }`,
+  transparent: true,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+});
+const FIRE_WALL_GEOMETRY = new THREE.CylinderGeometry(1, 1, 1, 96, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+
+/** A ring of fire spreading from `origin`; everyone simulates it and only checks their own Tode. */
+function launchFireRing(origin, speed = BRIMSTONE.speed) {
+  const wall = new THREE.Mesh(FIRE_WALL_GEOMETRY, FIRE_WALL_MATERIAL);
+  wall.position.set(origin.x, origin.y, 0);
+  wall.scale.set(1, 1, BRIMSTONE.height);
+  wall.frustumCulled = false;
+  scene.add(wall);
+  fireRings.push({ wall, origin: origin.clone().setZ(0), radius: 10, speed, hit: false });
+  play('nova');
+  shake = Math.max(shake, 6);
+}
+
+function updateFireRings(delta) {
+  FIRE_WALL_MATERIAL.uniforms.time.value += delta;
+  for (const ring of [...fireRings]) {
+    ring.radius += ring.speed * delta;
+    ring.wall.scale.set(ring.radius, ring.radius, BRIMSTONE.height);
+    // Embers along the wall.
+    for (let i = 0; i < 4; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      particles.burst(ring.origin.clone().add(new THREE.Vector3(Math.cos(angle) * ring.radius, Math.sin(angle) * ring.radius, 0)), { count: 1, colors: FIRE, speed: 10, up: 70, gravity: -30, size: 2.4, glow: true, height: 4 });
+    }
+    // Only a hop-dash (or any other invulnerability) gets Tode through unharmed.
+    const distance = Math.sqrt(distanceSqXY(player.position, ring.origin));
+    if (!ring.hit && Math.abs(distance - ring.radius) < BRIMSTONE.band + player.radius * 0.5 && !player.downed && PLAYING.has(phase)) {
+      if (hurtPlayer(1)) ring.hit = true;
+      else if (player.isDashing) {
+        ring.hit = true;
+        hud.showCallout('Through the fire!');
+      }
+    }
+    if (ring.radius > MAP_HALF_SIZE * 2.4) removeFireRing(ring);
+  }
+}
+
+function removeFireRing(ring) {
+  fireRings.splice(fireRings.indexOf(ring), 1);
+  ring.wall.removeFromParent();
+}
+
+/** Flames lick up around Bee-zebub. */
+function hellfireAura(boss) {
+  if (Math.random() > 0.7) return;
+  particles.burst(boss.position, { count: 2, colors: FIRE, ring: boss.radius * 0.7, speed: 12, up: 70, gravity: -50, size: 2.8, glow: true, height: boss.height * 0.25, life: 0.7 });
 }
 
 function updateQueen(boss, delta) {
@@ -912,23 +1309,91 @@ function updateQueen(boss, delta) {
       break;
     }
     case 'spiral':
-      // The Empress's Royal Spiral: two arms of stingers sweeping round.
+      // Royal Spiral (two arms) and the Cross (four arms, turning the other way): bullets sweeping round.
       ai.timer -= delta;
       ai.spiralTick -= delta;
       boss.glow = 0.4 + 0.3 * Math.sin(ai.timer * 20);
       moveEnemy(boss, 0, 0, delta);
       while (ai.spiralTick <= 0) {
-        ai.spiralTick += 0.1;
-        ai.spiralAngle += 0.38;
-        for (const offset of [0, Math.PI]) {
-          const angle = ai.spiralAngle + offset;
-          fireStinger(boss, new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0), 160);
+        const arms = ai.arms ?? 2;
+        ai.spiralTick += arms > 2 ? 0.13 : 0.1;
+        ai.spiralAngle += arms > 2 ? -0.24 : 0.38;
+        for (let arm = 0; arm < arms; arm++) {
+          const angle = ai.spiralAngle + (arm / arms) * Math.PI * 2;
+          fireStinger(boss, fanDirection.set(Math.cos(angle), Math.sin(angle), 0), 160, arm > 0);
         }
       }
       if (ai.timer <= 0) {
         boss.glow = 0;
         ai.mode = 'chase';
         ai.timer = QUEEN.attackDelay * delayScale;
+      }
+      break;
+    case 'volley':
+      // A stream of aimed fans.
+      ai.timer -= delta;
+      boss.glow = 0.5;
+      moveEnemy(boss, chase.x * boss.speed * 0.4, chase.y * boss.speed * 0.4, delta);
+      if (ai.timer <= 0) {
+        ai.timer = 0.16;
+        fireFan(boss, Math.atan2(chase.y, chase.x) + (Math.random() - 0.5) * 0.15, 3 + (ai.phase ?? 0), 0.3, 300);
+        if (--ai.shotsLeft <= 0) {
+          boss.glow = 0;
+          ai.mode = 'chase';
+          ai.timer = QUEEN.attackDelay * delayScale;
+        }
+      }
+      break;
+    case 'halo':
+      // Slow, dense rings of bullets to weave through, each one twisted a little.
+      ai.timer -= delta;
+      boss.glow = 0.6;
+      moveEnemy(boss, 0, 0, delta);
+      if (ai.timer <= 0) {
+        ai.timer = 0.45;
+        ai.haloTwist = (ai.haloTwist ?? 0) + 0.11;
+        fireRing(boss, 18 + 4 * (ai.phase ?? 0), 105, ai.haloTwist);
+        play('nova');
+        if (--ai.ringsLeft <= 0) {
+          boss.glow = 0;
+          ai.mode = 'chase';
+          ai.timer = QUEEN.attackDelay * delayScale;
+        }
+      }
+      break;
+    case 'brimstone':
+      // Gathers hellfire, then lets the rings go one after another.
+      ai.timer -= delta;
+      moveEnemy(boss, 0, 0, delta);
+      boss.glow = 0.5 + 0.5 * Math.sin(ai.timer * 24);
+      if (ai.timer > 0) {
+        particles.burst(boss.position, { count: 3, colors: FIRE, ring: 140, speed: -260, up: 20, size: 2.2, glow: true, height: 10 });
+      } else if (ai.ringsLeft > 0) {
+        ai.ringsLeft--;
+        ai.timer = 0.75;
+        launchFireRing(boss.position);
+        share({ k: 'fring', o: [boss.position.x, boss.position.y] });
+      } else {
+        boss.glow = 0;
+        ai.mode = 'recover';
+        ai.timer = QUEEN.chargeRecover;
+      }
+      break;
+    case 'pillars':
+      // Hellfire pillars chase Tode.
+      ai.timer -= delta;
+      boss.glow = 0.4;
+      moveEnemy(boss, 0, 0, delta);
+      if (ai.timer <= 0) {
+        ai.timer = 0.32;
+        ai.pillarsLeft--;
+        const spot = targetFor(boss.position).clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0));
+        sharedStrike(spot, { damage: 0, radius: 44, delay: 0.75, hurtsPlayer: true, hitsBees: false, color: '#ff4a10', from: spot.clone().setZ(500) });
+        if (ai.pillarsLeft <= 0) {
+          boss.glow = 0;
+          ai.mode = 'chase';
+          ai.timer = QUEEN.attackDelay * delayScale;
+        }
       }
       break;
     case 'recover':
@@ -953,14 +1418,19 @@ function updateQueen(boss, delta) {
 function startQueenAttack(boss, enraged, delayScale) {
   const { ai } = boss;
   const empress = boss.kind === 'empress';
+  const hellish = boss.type.hellfire;
   const minions = aliveEnemies().length - 1;
-  const attacks = [
-    'charge',
-    'nova',
-    minions < QUEEN.maxMinions ? 'summon' : 'charge',
-    ...(ai.rain ? ['rain'] : []),
-    ...(empress ? ['spiral'] : []),
-  ].filter((a) => a !== ai.last);
+  const phaseNo = ai.phase ?? 0;
+  const summon = minions < QUEEN.maxMinions ? 'summon' : 'nova';
+  const rain = ai.rain ? ['rain'] : [];
+  const ATTACKS = {
+    queen: ['charge', 'nova', 'fan', summon, ...rain],
+    shogun: ['charge', 'charge', 'fan', 'volley', summon, ...(phaseNo >= 1 ? ['cross'] : [])],
+    seraph: ['halo', 'nova', 'volley', 'spiral', summon, ...rain],
+    empress: ['charge', 'nova', 'spiral', 'halo', 'cross', summon, ...rain],
+    beezebub: ['charge', 'nova', summon, 'brimstone', 'brimstone', 'pillars', 'volley', 'halo', ...rain, ...(phaseNo >= 2 ? ['spiral', 'cross'] : [])],
+  };
+  const attacks = (ATTACKS[boss.kind] ?? ATTACKS.queen).filter((a) => a !== ai.last);
   const attack = attacks[Math.floor(Math.random() * attacks.length)];
   ai.last = attack;
   ai.timer = QUEEN.attackDelay * delayScale;
@@ -977,16 +1447,55 @@ function startQueenAttack(boss, enraged, delayScale) {
     play('charge');
   } else if (attack === 'rain') {
     stingerRain(boss);
+  } else if (attack === 'brimstone') {
+    ai.mode = 'brimstone';
+    ai.timer = BRIMSTONE.windup;
+    ai.ringsLeft = 1 + (ai.phase ?? 0);
+    boss.glowColor.set(0xff4a10);
+    play('charge');
+    hud.showCallout('Brimstone Ring! Hop through it!');
+  } else if (attack === 'pillars') {
+    ai.mode = 'pillars';
+    ai.timer = 0.2;
+    ai.pillarsLeft = 5 + 2 * (ai.phase ?? 0);
+    boss.glowColor.set(0xff4a10);
+    play('roar');
+  } else if (attack === 'fan') {
+    fireFan(boss, Math.atan2(chase.y, chase.x), 9 + 2 * phaseNo, 1.2, 270);
+    shake = Math.max(shake, 4);
+    play('nova');
+  } else if (attack === 'volley') {
+    ai.mode = 'volley';
+    ai.timer = 0.3;
+    ai.shotsLeft = 6 + 2 * phaseNo;
+    boss.glowColor.set(0xffd36b);
+    play('charge');
+  } else if (attack === 'halo') {
+    ai.mode = 'halo';
+    ai.timer = 0.3;
+    ai.ringsLeft = 3 + phaseNo;
+    boss.glowColor.set(0xfff1b8);
+    play('charge');
+  } else if (attack === 'cross') {
+    ai.mode = 'spiral';
+    ai.arms = 4;
+    ai.timer = 2.6;
+    ai.spiralTick = 0;
+    ai.spiralAngle = Math.random() * Math.PI;
+    boss.glowColor.set(0xffd36b);
+    play('roar');
+    hud.showCallout('Bullet Cross!');
   } else if (attack === 'spiral') {
     ai.mode = 'spiral';
+    ai.arms = 2;
     ai.timer = 2.6;
     ai.spiralTick = 0;
     ai.spiralAngle = Math.random() * Math.PI;
     boss.glowColor.set(0xc070ff);
     play('roar');
-    hud.showCallout('Royal Spiral!');
+    hud.showCallout(hellish ? 'Infernal Spiral!' : 'Royal Spiral!');
   } else if (attack === 'nova') {
-    const count = (enraged ? QUEEN.enragedNovaCount : QUEEN.novaCount) + (empress ? 8 : 0);
+    const count = (enraged ? QUEEN.enragedNovaCount : QUEEN.novaCount) + (empress ? 8 : 0) + (hellish ? 12 : 0);
     const offset = Math.random() * Math.PI;
     for (let i = 0; i < count; i++) {
       const angle = offset + (i / count) * Math.PI * 2;
@@ -999,7 +1508,8 @@ function startQueenAttack(boss, enraged, delayScale) {
     for (let i = 0; i < QUEEN.summonCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const spot = boss.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(boss.radius + 25));
-      spawnEnemy(empress && i === 0 ? 'brute' : 'zipper', spot);
+      const kind = hellish ? (i === 0 ? 'brute' : 'stinger') : boss.kind === 'shogun' ? (i === 0 ? 'brute' : 'drone') : boss.kind === 'seraph' ? 'stinger' : empress && i === 0 ? 'brute' : 'zipper';
+      spawnEnemy(kind, spot);
     }
   }
 }
@@ -1066,6 +1576,8 @@ function updateStatuses(enemy, delta) {
 }
 
 function updateEnemies(delta) {
+  for (const enemy of enemies) if (enemy.type.hellfire && !enemy.dying) hellfireAura(enemy);
+  updateFireRings(delta);
   if (isGuest()) {
     updateMirrors(delta);
     return;
@@ -1089,18 +1601,19 @@ function updateEnemies(delta) {
 }
 
 function updateEnemyProjectiles(delta) {
-  for (const stinger of [...enemyProjectiles]) {
-    stinger.update(delta);
-    const hit =
-      !player.isInvulnerable &&
-      distanceSqXY(stinger.position, player.position) < (stinger.radius + player.radius * 0.8) ** 2;
-    if (hit) hurtPlayer(stinger.damage);
-
-    const blocked = !isInsideMap(stinger.position, -80) || hitsObstacle(stinger.position, stinger.radius);
-    if (blocked) particles.burst(stinger.position, { count: 4, colors: ['#b05cff'], speed: 40, up: 30, size: 1.2 });
-    if (hit || blocked || stinger.isSpent) removeFrom(enemyProjectiles, stinger);
-    if (phase === 'gameover') return;
-  }
+  const limit = MAP_HALF_SIZE + 80;
+  const reach = player.radius * 0.7; // a forgiving hitbox: bullet-hell games hit on the core only
+  bullets.update(delta, (bullet) => {
+    if (Math.abs(bullet.x) > limit || Math.abs(bullet.y) > limit) {
+      bullet.dead = true;
+      return;
+    }
+    if (player.isInvulnerable || player.downed || phase === 'gameover') return;
+    if ((bullet.x - player.position.x) ** 2 + (bullet.y - player.position.y) ** 2 < (bullet.radius * 0.8 + reach) ** 2) {
+      bullet.dead = true;
+      hurtPlayer(bullet.damage);
+    }
+  });
 }
 
 // --- Abilities ---
@@ -1244,7 +1757,7 @@ function updateProjectiles(delta) {
     }
 
     const used = target && projectile.hits.size > projectile.pierce;
-    const blocked = !isInsideMap(projectile.position) || hitsObstacle(projectile.position, projectile.radius);
+    const blocked = !isInsideMap(projectile.position, -40);
     if (blocked) particles.burst(projectile.position, { count: 4, colors: SPIT_DROPS, speed: 40, up: 30, size: 1.2, height: 0 });
     if (used || blocked || projectile.isSpent) removeFrom(projectiles, projectile);
   }
@@ -1254,6 +1767,11 @@ function splash(center, { radius, damage, knockback, color = SPLASH_COLOR, shake
   shake = Math.max(shake, shakeAmount);
   splashVisual(center, radius, color);
   share({ k: 'splash', p: [center.x, center.y], r: radius, c: color });
+
+  // The wave of tea washes incoming stingers away.
+  for (const bullet of bullets.cancel(center, radius)) {
+    particles.burst(next.set(bullet.x, bullet.y, 0), { count: 2, colors: TEA_DROPS, speed: 40, up: 30, size: 1.2 });
+  }
 
   for (const enemy of [...enemies]) {
     if (enemy.dying) continue;
@@ -1265,7 +1783,7 @@ function splash(center, { radius, damage, knockback, color = SPLASH_COLOR, shake
   }
 }
 
-/** The look and sound of a tea splash (used for teammates' splashes too). */
+/** The look and sound of a splash: tea bombs, kettle landings, and teammates' splashes. */
 function splashVisual(center, radius, color = SPLASH_COLOR) {
   play('splash');
   particles.burst(center, { count: Math.round(radius / 3), colors: TEA_DROPS, speed: radius * 2.2, up: 110, size: 1.8, height: 3, ring: radius * 0.25 });
@@ -1278,23 +1796,92 @@ function splashVisual(center, radius, color = SPLASH_COLOR) {
   splashEffects.push({ ring, age: 0 });
 }
 
-function teaSplash() {
+// --- Tea Bomb (space): a boiling kettle bomb lobbed at the aim, exploding into a splash ---------
+const BOMB_RANGE = 430;
+const BOMB_MIN_RANGE = 50;
+const BOMB_ARC = 110; // peak height of the throw
+const bombs = []; // { mesh, from, to, age, flight, own }
+let bombCharges = 0;
+const bombGeometry = new THREE.SphereGeometry(7, 16, 12);
+const bombMaterial = new THREE.MeshStandardMaterial({ color: '#c98a2b', emissive: '#ff9a2a', emissiveIntensity: 0.9, roughness: 0.3, metalness: 0.3 });
+
+/** Where to throw: the aim (clamped to the range), or for auto-cast the thickest crowd in range. */
+function bombTarget(auto) {
+  if (!auto) {
+    const target = ctx.aimGround.clone().setZ(0);
+    const offset = target.sub(player.position);
+    const distance = offset.length();
+    if (distance < 1) offset.copy(player.facing);
+    offset.setLength(THREE.MathUtils.clamp(distance, BOMB_MIN_RANGE, BOMB_RANGE));
+    return player.position.clone().add(offset).setZ(0);
+  }
+  const radius = player.stats.splashRadius * (weather.info.splashRadius ?? 1);
+  let best = null;
+  let bestScore = 0;
+  const bees = aliveEnemies();
+  for (const bee of bees) {
+    if (distanceSqXY(bee.position, player.position) > BOMB_RANGE ** 2) continue;
+    const score = bees.filter((other) => distanceSqXY(other.position, bee.position) < radius ** 2).length + (bee.type.boss ? 3 : 0);
+    if (score > bestScore) [best, bestScore] = [bee, score];
+  }
+  return bestScore >= 3 ? best.position.clone().setZ(0) : null;
+}
+
+function throwBomb(target) {
+  bombCharges--;
+  if (splashCooldownLeft === 0) splashCooldownLeft = player.stats.splashCooldown;
+  launchBomb(player.position, target, true);
+  share({ k: 'bomb', o: [player.position.x, player.position.y], t: [target.x, target.y] });
+  play('whistle');
+}
+
+/** A bomb in flight; only our own (`own`) explodes for real, teammates' are visuals (their splash arrives too). */
+function launchBomb(from, to, own) {
+  const mesh = new THREE.Mesh(bombGeometry, bombMaterial);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  const distance = Math.sqrt(distanceSqXY(from, to));
+  bombs.push({ mesh, from: from.clone().setZ(0), to: to.clone().setZ(0), age: 0, flight: 0.28 + distance / 1100, own });
+}
+
+function updateBombs(delta) {
+  for (const bomb of [...bombs]) {
+    bomb.age += delta;
+    const t = Math.min(1, bomb.age / bomb.flight);
+    bomb.mesh.position.lerpVectors(bomb.from, bomb.to, t);
+    bomb.mesh.position.z = 12 + Math.sin(t * Math.PI) * BOMB_ARC * Math.min(1, bomb.flight * 2);
+    bomb.mesh.rotation.x += delta * 12;
+    bomb.mesh.rotation.y += delta * 9;
+    particles.burst(bomb.mesh.position, { count: 1, colors: ['#ffffff', '#f3d29a'], speed: 10, up: 20, size: 1.6, height: 0, life: 0.4, gravity: -30 });
+    if (t >= 1) {
+      bombs.splice(bombs.indexOf(bomb), 1);
+      bomb.mesh.removeFromParent();
+      if (bomb.own) teaBlast(bomb.to);
+    }
+  }
+}
+
+/** The explosion: a splash where the bomb lands, with all its brews. */
+function teaBlast(center) {
   const { stats } = player;
-  splashCooldownLeft = stats.splashCooldown;
   const radius = stats.splashRadius * (weather.info.splashRadius ?? 1);
-  splash(player.position, {
+  splash(center, {
     radius,
     damage: stats.splashDamage,
     knockback: stats.splashKnockback,
     burn: stats.splashBurn,
     slow: stats.splashSlow,
   });
+  effects.ring(center, { radius: radius * 1.15, color: '#fff1d0', duration: 0.45, thickness: 0.15 });
+  particles.burst(center, { count: 24, colors: ['#ffffff', '#f3eadf', '#e8dcc8'], speed: 60, up: 180, size: 3, height: 4, gravity: -60, life: 0.9 });
+  postfx.pulse({ bloom: 0.4, aberration: 0.25 });
+  play('boom');
 
   // Thunder Splash: lightning on the nearest bees.
   if (stats.splashBolts) {
     aliveEnemies()
-      .filter((enemy) => enemy.position.distanceTo(player.position) < radius * 2)
-      .sort((a, b) => distanceSqXY(a.position, player.position) - distanceSqXY(b.position, player.position))
+      .filter((enemy) => enemy.position.distanceTo(center) < radius * 2)
+      .sort((a, b) => distanceSqXY(a.position, center) - distanceSqXY(b.position, center))
       .slice(0, stats.splashBolts)
       .forEach((enemy, i) =>
         sharedStrike(enemy.position, { damage: Math.max(4, stats.splashDamage), radius: 30, delay: 0.05 * i })
@@ -1302,14 +1889,14 @@ function teaSplash() {
   }
   // Volcano Pot: a lingering pool of lava.
   if (stats.lavaPool) {
-    effects.pool(player.position, { radius: radius * 0.8, dps: stats.lavaPool, duration: 3, color: '#ff4a10', opacity: 0.5, particleColors: FIRE });
+    effects.pool(center, { radius: radius * 0.8, dps: stats.lavaPool, duration: 3, color: '#ff4a10', opacity: 0.5, particleColors: FIRE });
   }
 }
 
 function kettleLanding() {
   const level = player.stats.landingSplash;
   splash(player.position, {
-    radius: LANDING_SPLASH_RADIUS + level * 10,
+    radius: LANDING_SPLASH_RADIUS + level * 15,
     damage: Math.round(2 * level),
     knockback: 200,
     color: 0xf0c060,
@@ -1495,7 +2082,7 @@ function updateCamera(delta) {
   if (shake < 0.05) shake = 0;
   zoomPunch *= Math.exp(-2.5 * delta);
 
-  if (phase === 'story' || phase === 'ending') return; // the cut-scenes drive the camera
+  if (phase === 'story' || phase === 'ending' || phase === 'travel') return; // the cut-scenes drive the camera
   // Title screen: a slow cinematic orbit around Tode.
   if (phase === 'title' || phase === 'loading') {
     orbiting = true;
@@ -1534,7 +2121,7 @@ function stormStrike() {
 
 // --- Music ---
 function updateMusic() {
-  if (!PLAYING.has(phase) && phase !== 'ascending' && phase !== 'bossIntro') {
+  if (!PLAYING.has(phase) && !['ascending', 'bossIntro', 'travel', 'clash'].includes(phase)) {
     music.play('garden', 0);
     return;
   }
@@ -1551,15 +2138,247 @@ function updateMusic() {
   music.play('battle', level);
 }
 
+// --- Experience: tea leaves, levels and infusions (Megabonk / Risk of Rain style) -------------
+let leafXp = 0;
+let playerLevel = 0;
+let pendingLevels = 0;
+let infusionOffer = null;
+let infusionTimer = 0;
+const infusionLevels = new Map();
+const INFUSION_TIME = 10; // seconds before the first option is taken for you
+const INFUSION_SLOWDOWN = 0.3; // solo: bullet time while choosing
+
+function dropLeaves(enemy) {
+  const value = (enemy.type.boss ? 40 : Math.max(1, enemy.score / 10)) * (enemy.elite ? 2 : 1);
+  leaves.drop(enemy.position, value, enemy.type.boss ? 30 : Math.min(5, Math.ceil(value)));
+}
+
+function updateLeaves(delta) {
+  const collected = leaves.update(delta, player.position, player.downed ? 0 : player.stats.magnet);
+  if (collected > 0) {
+    leafXp += collected * player.stats.leafValue;
+    play('pop');
+  }
+  while (leafXp >= leavesForLevel(playerLevel)) {
+    leafXp -= leavesForLevel(playerLevel);
+    playerLevel++;
+    pendingLevels++;
+    levelUpEffects();
+  }
+  if (pendingLevels > 0 && !infusionOffer) offerInfusions();
+  if (infusionOffer) {
+    if (hud.infusions.hidden) hud.showInfusions(infusionOffer, playerLevel - pendingLevels + 1, touch.enabled);
+    infusionTimer -= delta / (coop ? 1 : INFUSION_SLOWDOWN);
+    ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseInfusion(i));
+    if (infusionTimer <= 0) chooseInfusion(0);
+  }
+  hud.setXp(leafXp / leavesForLevel(playerLevel), playerLevel);
+}
+
+function levelUpEffects() {
+  play('legendary');
+  effects.ring(player.position, { radius: 120, color: '#c8f77a', duration: 0.6, thickness: 0.2 });
+  particles.burst(player.position, { count: 40, colors: ['#7ed957', '#c8f77a', '#ffd36b'], speed: 160, up: 160, size: 2, glow: true });
+  postfx.pulse({ bloom: 0.5 });
+  hud.showCallout('LEVEL UP!');
+}
+
+function offerInfusions() {
+  infusionOffer = rollInfusions(infusionLevels);
+  infusionTimer = INFUSION_TIME;
+  hud.showInfusions(infusionOffer, playerLevel - pendingLevels + 1, touch.enabled);
+}
+
+function chooseInfusion(index) {
+  const infusion = infusionOffer?.[index];
+  if (!infusion) return;
+  infusion.apply(player.stats, player);
+  infusionLevels.set(infusion.id, (infusionLevels.get(infusion.id) ?? 0) + 1);
+  infusionOffer = null;
+  pendingLevels--;
+  hud.hideInfusions();
+  play('pick');
+  particles.burst(player.position, { count: 20, colors: ['#c8f77a', '#ffffff'], speed: 90, up: 120, size: 1.8, glow: true });
+  updateHealth();
+}
+
+function resetExperience() {
+  leafXp = playerLevel = pendingLevels = 0;
+  infusionOffer = null;
+  infusionLevels.clear();
+  leaves.clear();
+  hud.hideInfusions();
+  hud.setXp(0, 0);
+}
+
+// --- Arenas and the journey between them ---
+/** Shows an arena right away: its world, obstacles, lighting and graphics level (call it under a flash). */
+function setArena(next) {
+  arena = next;
+  const garden = next.id === 'garden';
+  prepareArena(next);
+  map.visible = environment.group.visible = divinity.root.visible = garden;
+  for (const [id, built] of builtArenas) built.group.visible = id === next.id;
+  weather.setArena(garden ? null : next);
+  applyRenderer(next.gfx, { renderer, exposure: next.exposure });
+  setEnemyGraphics(next.gfx);
+  player.setGraphics(next.gfx);
+  if (coop) for (const remote of coop.remotes.values()) remote.puppet.setGraphics(next.gfx);
+}
+
+let realityGlitch = 8;
+/** Builds an arena ahead of time and compiles its shaders, so the journey there doesn't stutter. */
+function prepareArena(next) {
+  if (next.id === 'garden' || builtArenas.has(next.id)) return;
+  const built = next.build();
+  builtArenas.set(next.id, built);
+  scene.add(built.group);
+  // compileAsync only looks at visible objects; it gathers them right away.
+  renderer.compileAsync?.(built.group, camera, scene).catch(() => {});
+  built.group.visible = next === arena;
+}
+
+const TRAVEL_TIME = 4.2;
+const FALL_TIME = 5.4;
+const travel = { to: null, wave: 0, weather: null, time: 0, swapped: false, landed: false };
+
+/** Leaves for the next arena; the wave starts when Tode has landed there. */
+function startTravel(destination, number, weatherKind) {
+  clearWorld();
+  Object.assign(travel, { to: destination, wave: number, weather: weatherKind, time: 0, swapped: false, landed: false });
+  travel.fall = destination.id === 'hell';
+  travel.duration = travel.fall ? FALL_TIME : TRAVEL_TIME;
+  setPhase('travel', travel.duration);
+  orbiting = true;
+  hud.setWave(number, 0);
+  if (travel.fall) {
+    play('roar');
+    hud.showBanner('The ground gives way!', 'Something stirs far below…', 1.6);
+  } else {
+    play('ascend');
+  }
+}
+
+function updateTravel(delta) {
+  travel.time += delta;
+  const t = travel.time;
+  const tode = player.position;
+  const lift = (z) => {
+    player.model.position.z = player.groundOffset + z;
+    player.adornments.position.z = z;
+  };
+
+  if (travel.fall) {
+    // An earthquake, the garden cracks open, Tode plunges into the dark… and crashes into the Underworld.
+    if (t < 1.4) {
+      shake = Math.max(shake, 3 + t * 10);
+      camera.position.set(170 - t * 30, -170 + t * 30, 210 - t * 40);
+      camera.lookAt(tode.x, tode.y, tode.z);
+      if (Math.random() < delta * 8) {
+        const angle = Math.random() * Math.PI * 2;
+        const at = tode.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(30 + Math.random() * 120));
+        effects.ring(at, { radius: 40 + Math.random() * 50, color: '#ff3b1f', duration: 0.5, thickness: 0.3 });
+        particles.burst(at, { count: 10, colors: ['#3a2a20', '#ff6a00', '#5a4030'], speed: 60, up: 120, size: 2.2 });
+      }
+      postfx.pulse({ aberration: 0.3, warp: 0.4 });
+    } else if (t < 2.6) {
+      // Falling: everything goes dark and red.
+      const k = (t - 1.4) / 1.2;
+      lift(-260 * k * k);
+      camera.position.set(40, -40, 160 - k * 120);
+      camera.lookAt(tode.x, tode.y, tode.z - 260 * k * k);
+      postfx.flash('#120000', Math.min(1, k * 1.4));
+      if (!travel.swapped && k > 0.75) swapArena();
+    } else {
+      // Plunging out of the burning sky, then a crash landing.
+      const k = Math.min(1, (t - 2.6) / 1.3);
+      const z = 420 * (1 - k) * (1 - k);
+      lift(z);
+      const angle = -0.9 + (t - 2.6) * 0.35;
+      const distance = 260 - k * 60;
+      camera.position.set(Math.cos(angle) * distance, Math.sin(angle) * distance, 50 + (1 - k) * 160);
+      camera.lookAt(tode.x, tode.y, tode.z + z * 0.6 + 10);
+      if (z > 5) particles.burst(tode.clone().setZ(z + 10), { count: 3, colors: FIRE, speed: 20, up: 80, size: 2.5, glow: true });
+      if (!travel.landed && k >= 1) land('#ff4a10', FIRE, 24);
+    }
+  } else {
+    // Power up, leap through a flash of light, then swoop over the new arena and land.
+    if (t < 1.2) {
+      cameraZoom = 1;
+      const k = t / 1.2;
+      camera.position.set(130 - k * 40, -130 + k * 40, 70 - k * 15);
+      camera.lookAt(tode.x, tode.y, tode.z + 14);
+      shake = Math.max(shake, k * 4);
+      lift(Math.sin(k * Math.PI * 0.5) * 8);
+      particles.burst(tode, { count: 4, colors: ['#ffffff', '#ffe680', '#9ff4ff'], ring: 90, speed: -150, up: 40, size: 1.8, glow: true, height: 6 });
+    } else if (t < 1.6) {
+      const k = (t - 1.2) / 0.4;
+      lift(8 + k * k * 600);
+      camera.lookAt(tode.x, tode.y, tode.z + 60 + k * 300);
+      postfx.flash('#ffffff', Math.min(1, k * 1.5));
+      postfx.pulse({ warp: 1, aberration: 1, bloom: 1 });
+      if (!travel.swapped && k > 0.6) swapArena();
+    } else {
+      // A wide, rising orbit over the new arena (the only time its sky is in view), then the landing.
+      const k = Math.min(1, (t - 1.6) / 1.6);
+      const z = 600 * (1 - k) ** 2;
+      lift(z);
+      const angle = -2.2 + (t - 1.6) * 0.5;
+      const distance = 380 - k * 120;
+      camera.position.set(Math.cos(angle) * distance, Math.sin(angle) * distance, 40 + k * 60);
+      camera.lookAt(tode.x - 60 * (1 - k), tode.y + 60 * (1 - k), 30 + z * 0.4);
+      if (!travel.landed && k >= 1) land('#ffffff', ['#ffffff', '#ffe680', '#9ff4ff'], 14);
+    }
+  }
+
+  if (t >= travel.duration) {
+    lift(0);
+    hud.hideBossIntro();
+    beginWave(travel.wave, travel.weather);
+  }
+}
+
+function swapArena() {
+  travel.swapped = true;
+  player.position.set(0, 0, 0);
+  setArena(travel.to);
+  const stage = ARENAS.indexOf(travel.to) + 1;
+  hud.showBossIntro(travel.to.name, `Stage ${stage} · ${travel.to.subtitle}`);
+  music.play(travel.fall ? 'boss' : 'battle', 3);
+}
+
+function land(color, colors, impact) {
+  travel.landed = true;
+  play('boom');
+  shake = impact;
+  postfx.flash(color, 0.5);
+  postfx.pulse({ bloom: 1.2, aberration: 0.8 });
+  effects.ring(player.position, { radius: 220, color, duration: 0.8, thickness: 0.25 });
+  particles.burst(player.position, { count: 80, colors, speed: 260, up: 180, size: 2.4, glow: true, height: 4 });
+}
+
 // --- Waves ---
 function setPhase(next, duration = 0) {
   phase = next;
   phaseTimer = duration;
+  if (!PLAYING.has(next)) hud.hideInfusions();
   updateMusic();
 }
 
-/** `weatherKind` comes from the host in co-op; otherwise it is rolled here. */
+/**
+ * `weatherKind` comes from the host in co-op; otherwise it is rolled here.
+ * A wave in a new arena starts with the journey there (see startTravel).
+ */
 function startWave(number, weatherKind) {
+  const destination = arenaForWave(number);
+  weatherKind ??= seeded(() => rollWeather(number, waveConfig(number).isBoss));
+  if (destination.weathers && !destination.weathers.includes(weatherKind)) weatherKind = 'clear';
+  if (coop?.host) share({ k: 'wave', n: number, wx: weatherKind });
+  if (destination !== arena) startTravel(destination, number, weatherKind);
+  else beginWave(number, weatherKind);
+}
+
+function beginWave(number, weatherKind) {
   wave = number;
   config = waveConfig(number);
   if (coop) {
@@ -1576,17 +2395,16 @@ function startWave(number, weatherKind) {
   if (isDaily() && number >= 5) achieve('daily');
   spawnTimer = 0;
 
-  weatherKind ??= seeded(() => rollWeather(number, config.isBoss));
   weather.set(timeOfDay(number), weatherKind);
-  if (coop?.host) share({ k: 'wave', n: number, wx: weatherKind });
   weather.setCosmic(ascension.tier === 4);
   hud.setWeather(weather.info);
 
   setPhase('intro', WAVE_INTRO_TIME);
   hud.setWave(wave, 0);
   play(config.isBoss ? 'boss' : 'waveStart');
-  const bossName = config.boss === 'empress' ? 'The Empress' : 'Queen Buzzbelle';
-  if (number === FINAL_WAVE) hud.showBanner('Final Wave', 'The Empress of the hive descends!', WAVE_INTRO_TIME + 0.6);
+  const bossName = { empress: 'The Empress', beezebub: 'Bee-zebub', shogun: 'The Hornet Shogun', seraph: 'The Seraph Queen' }[config.boss] ?? 'Queen Buzzbelle';
+  if (number === HELL_WAVE) hud.showBanner('The Final Battle', 'Bee-zebub awakens!', WAVE_INTRO_TIME + 0.6);
+  else if (number === FINAL_WAVE) hud.showBanner(`Wave ${wave}`, 'The Empress of the hive descends!', WAVE_INTRO_TIME + 0.6);
   else if (config.isBoss) hud.showBanner(`Wave ${wave}`, `${bossName} approaches!`, WAVE_INTRO_TIME + 0.4);
   else hud.showBanner(`Wave ${wave}`, `${config.count} bees incoming`, WAVE_INTRO_TIME);
 }
@@ -1604,7 +2422,8 @@ function updateWave(delta) {
     }
   } else if (phase === 'fighting' && !isGuest()) {
     spawnTimer -= delta;
-    const maxAlive = MAX_ALIVE_ENEMIES + (coop ? 12 * (coop.size - 1) : 0);
+    // Bigger swarms in every arena: a bullet hell needs a horde.
+    const maxAlive = MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + (coop ? 12 * (coop.size - 1) : 0);
     if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < maxAlive) {
       if (spawnEnemy(spawnQueue[0])) spawnQueue.shift();
       spawnTimer = config.spawnInterval;
@@ -1618,6 +2437,7 @@ function updateWave(delta) {
 }
 
 function waveCleared() {
+  leaves.vacuum();
   if (wave >= 5 && !hitThisWave) achieve('untouchable');
   if (coop) achieve('coop');
   if (coop?.host) share({ k: 'cleared' });
@@ -1635,14 +2455,17 @@ function waveCleared() {
 }
 
 function offerRewards() {
-  if (wave === FINAL_WAVE && coop) {
+  // While the menus are open, get the next arena ready.
+  const upcoming = arenaForWave(wave + 1);
+  if (upcoming !== arena) setTimeout(() => prepareArena(upcoming), 150);
+  if (wave === HELL_WAVE && coop) {
     if (coop.host) {
       share({ k: 'over', v: true });
       endRun({ victory: true });
     }
     return;
   }
-  if (wave === FINAL_WAVE && !endless) {
+  if (wave === HELL_WAVE && !endless) {
     meta.victories++;
     saveMeta();
     startEnding();
@@ -1850,8 +2673,8 @@ function endStory() {
 // --- Ending cut-scene (after the Empress) ---
 const ENDING_TIME = 12;
 const ENDING_LINES = [
-  [0.3, 'The Empress has fallen. The hive is silent.'],
-  [3.2, 'Tode hops home to his tea table…'],
+  [0.3, 'Bee-zebub is banished. The hive is silent at last.'],
+  [3.2, 'Tode climbs out of the Underworld and hops home…'],
   [6.0, '…and pours himself a fresh cup.'],
   [8.6, 'It is, at last, perfectly steeped. ☕'],
 ];
@@ -1863,6 +2686,7 @@ function startEnding() {
   storyLine = 0;
   orbiting = true;
   clearWorld();
+  setArena(ARENAS[0]); // home again
   hud.showStory();
   hud.menu.hidden = true;
   tableSpot.set(TEA_TABLE.x, TEA_TABLE.y, 0);
@@ -2011,7 +2835,7 @@ function updateAscending(delta) {
 }
 
 // --- Co-op ---------------------------------------------------------------------------
-const KINDS = ['drone', 'zipper', 'brute', 'stinger', 'queen', 'empress'];
+const KINDS = ['drone', 'zipper', 'brute', 'stinger', 'queen', 'empress', 'beezebub', 'shogun', 'seraph'];
 const MODS = Object.keys(ELITE_MODS);
 const COOP_TILES = [SOLO_TILES, 31, 35, 41]; // garden size by number of players
 const SNAPSHOT_RATE = 15; // host bee snapshots per second
@@ -2131,6 +2955,7 @@ function applySnapshot(snap) {
     enemy.ai.mode = flags & 32 ? 'charge' : 'chase';
     if (flags & 1) {
       enemy.die();
+      dropLeaves(enemy);
       hud.removeHealthBar(enemy);
     }
     if (enemy.type.boss && !enemy.dying) hud.setBoss(enemy);
@@ -2172,7 +2997,13 @@ function handleNet(from, message) {
       break;
     }
     case 'sting':
-      launchStinger(vec(message.o), vec(message.d), message.s);
+      launchStinger(vec(message.o), vec(message.d), message.s, message.q);
+      break;
+    case 'fring':
+      launchFireRing(vec(message.o));
+      break;
+    case 'bomb':
+      launchBomb(vec(message.o), vec(message.t), false);
       break;
     case 'strike':
       effects.strike(vec(message.p), {
@@ -2445,9 +3276,17 @@ function updateCoop(realDelta, delta) {
 function clearWorld() {
   for (const enemy of [...enemies]) removeEnemy(enemy);
   for (const projectile of [...projectiles]) removeFrom(projectiles, projectile);
-  for (const stinger of [...enemyProjectiles]) removeFrom(enemyProjectiles, stinger);
+  bullets.clear();
+  leaves.clear();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
+  for (const ring of [...fireRings]) removeFireRing(ring);
+  for (const bomb of bombs.splice(0)) bomb.mesh.removeFromParent();
+  if (clash.beams) {
+    for (const mesh of Object.values(clash.beams)) mesh.removeFromParent();
+    clash.beams = null;
+    hud.hideClash();
+  }
   for (const leaf of [...orbitLeaves.children]) {
     leaf.removeFromParent();
     leaf.geometry.dispose();
@@ -2468,6 +3307,8 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   else stopDaily();
   submitted = false;
   clearWorld();
+  resetExperience();
+  setArena(ARENAS[0]);
   player.reset();
   player.downed = false;
   coopScore = 0;
@@ -2501,6 +3342,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   regenTimer = stormCloudTimer = steamDistance = 0;
   spitCooldownLeft = 0;
   splashCooldownLeft = 0;
+  bombCharges = player.stats.bombCharges;
   shake = 0;
   cameraZoom = 1;
   zoomPunch = 0;
@@ -2596,6 +3438,7 @@ function canRestart() {
 function goToTitle() {
   stopDaily();
   clearWorld();
+  setArena(ARENAS[0]);
   player.reset();
   ascension.setTier(0);
   divinity.setTier(0);
@@ -2696,6 +3539,7 @@ function toggleMute() {
 }
 
 const MENU_ACTIONS = {
+  infuse: ({ index }) => chooseInfusion(Number(index)),
   start: () => {
     if (phase !== 'title' && phase !== 'gameover') return;
     if (coop && net.inRoom) {
@@ -2803,9 +3647,24 @@ function updateGame(delta) {
   spitCooldownLeft = Math.max(0, spitCooldownLeft - delta);
   if ((input.primaryDown || autoFire) && spitCooldownLeft === 0 && !player.rooted) spit();
 
-  splashCooldownLeft = Math.max(0, splashCooldownLeft - delta);
-  if (splashCooldownLeft === 0 && (input.wasPressed('Space') || (autoCasting() && splashWorthIt()))) teaSplash();
+  // Tea bombs recharge one at a time.
+  const { bombCharges: maxBombs } = player.stats;
+  if (bombCharges < maxBombs) {
+    splashCooldownLeft = Math.max(0, splashCooldownLeft - delta);
+    if (splashCooldownLeft === 0) {
+      bombCharges++;
+      if (bombCharges < maxBombs) splashCooldownLeft = player.stats.splashCooldown;
+    }
+  } else {
+    bombCharges = maxBombs;
+  }
+  if (bombCharges > 0) {
+    const auto = !input.wasPressed('Space') && autoCasting();
+    const target = input.wasPressed('Space') ? bombTarget(touch.enabled) ?? bombTarget(false) : auto ? bombTarget(true) : null;
+    if (target) throwBomb(target);
+  }
 
+  updateZone(delta);
   player.update(delta, moveDirection, movePlayer);
   if (player.justLanded) {
     particles.burst(player.position, { count: 6, colors: DUST, speed: 45, up: 20, size: 1.8, height: 1 });
@@ -2819,6 +3678,8 @@ function updateGame(delta) {
   updatePowers(delta);
   skills.update(delta, autoCasting());
   updateProjectiles(delta);
+  updateBombs(delta);
+  updateLeaves(delta);
   updateEnemies(delta);
   if (phase !== 'gameover') updateEnemyProjectiles(delta);
   if (ultimateEffect && !effects.list.includes(ultimateEffect)) ultimateEffect = null;
@@ -2828,18 +3689,11 @@ function updateGame(delta) {
   hud.setCooldown('spit', spitCooldownLeft, stats.spitCooldown);
   hud.setCooldown('dash', player.dashCharges > 0 ? 0 : player.dashCooldownLeft, stats.dashCooldown);
   hud.setDashCharges(player.dashCharges, stats.dashCharges);
-  hud.setCooldown('splash', splashCooldownLeft, stats.splashCooldown);
+  hud.setCooldown('splash', bombCharges > 0 ? 0 : splashCooldownLeft, stats.splashCooldown);
+  hud.setCharges('splash', bombCharges, stats.bombCharges);
   hud.setUltimate(player.ultimate, player.gauge);
   hud.setSkills(skills.slots, settings.autoCast);
   updateHealth();
-}
-
-/** Auto-cast: splash when bees crowd in, or one is about to bite. */
-function splashWorthIt() {
-  const reach = player.stats.splashRadius * (weather.info.splashRadius ?? 1);
-  const inReach = aliveEnemies().filter((enemy) => enemy.position.distanceTo(player.position) < reach);
-  const biting = inReach.some((enemy) => enemy.position.distanceTo(player.position) < enemy.radius + player.radius + 12);
-  return inReach.length >= AUTO_SPLASH_CROWD || biting;
 }
 
 function frame(realDelta, render = true) {
@@ -2854,11 +3708,15 @@ function frame(realDelta, render = true) {
     updateBossIntro(realDelta);
   } else if (phase === 'ascending') {
     updateAscending(realDelta);
+  } else if (phase === 'travel') {
+    updateTravel(realDelta);
+  } else if (phase === 'clash') {
+    updateClash(realDelta);
   } else if (phase === 'choosing') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseBrew(i));
     if (input.wasPressed('KeyR')) reroll();
   } else if (phase === 'ultimate') {
-    ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
+    ['Digit1', 'Digit2', 'Digit3', 'Digit4'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
   } else if (phase === 'skill') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
   } else if (phase === 'ending') {
@@ -2879,15 +3737,30 @@ function frame(realDelta, render = true) {
     updateSplashEffects(delta);
     particles.update(delta);
     weather.update(delta, player.position, clock.elapsedTime);
-    environment.update(clock.elapsedTime);
+    updatePropFade(realDelta);
+    if (arena.id === 'garden') environment.update(clock.elapsedTime);
+    else builtArenas.get(arena.id)?.update(clock.elapsedTime, delta);
+    // At the Tournament of the Gods reality itself glitches now and then.
+    if (arena.id === 'cosmos' && PLAYING.has(phase) && (realityGlitch -= delta) <= 0) {
+      realityGlitch = 6 + Math.random() * 5;
+      postfx.pulse({ warp: 0.9, aberration: 0.8 });
+      postfx.shatter(0.18, 0.15);
+    }
     divinity.update(delta);
     ascension.update(delta);
   }
   updateCoop(realDelta, delta);
   touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate));
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
-  postfx.setTargets(ascension.postfxTargets());
+  const look = ascension.postfxTargets();
+  const boost = arena.postfx ?? {};
+  postfx.setTargets({
+    bloom: look.bloom + (boost.bloom ?? 0),
+    warp: look.warp + (boost.warp ?? 0),
+    aberration: look.aberration + (boost.aberration ?? 0),
+  });
   updateCamera(phase === 'paused' ? 0 : realDelta);
+  postfx.update(realDelta);
   if (render) postfx.render(realDelta);
   hud.update(delta, enemies);
   input.endFrame();
@@ -2895,7 +3768,9 @@ function frame(realDelta, render = true) {
 
 // --- Adaptive quality: lower the resolution on slow devices, raise it again when there's room ---
 const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
-const quality = { ratio: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
+// `ceiling` drops below a resolution that proved too slow, so quality settles instead of see-sawing
+// (every change reallocates the render targets, which shows as a hitch).
+const quality = { ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
 
 function setPixelRatio(ratio) {
   quality.ratio = THREE.MathUtils.clamp(ratio, 0.6, MAX_PIXEL_RATIO);
@@ -2911,12 +3786,15 @@ function adaptQuality(delta) {
   quality.time = quality.frames = 0;
   if (document.hidden) return;
   if (fps < 45 && quality.ratio > 0.6) {
+    quality.ceiling = Math.max(0.6, quality.ratio - 0.1);
     setPixelRatio(quality.ratio - 0.2);
     quality.goodWindows = 0;
   } else if (fps < 30 && sun.castShadow) {
     sun.castShadow = false; // last resort: no shadows
-  } else if (fps > 57 && quality.ratio < MAX_PIXEL_RATIO && ++quality.goodWindows >= 3) {
-    setPixelRatio(quality.ratio + 0.1);
+  } else if (fps > 57 && quality.ratio < quality.ceiling - 0.01 && ++quality.goodWindows >= 3) {
+    setPixelRatio(Math.min(quality.ceiling, quality.ratio + 0.1));
+    quality.goodWindows = 0;
+  } else if (fps <= 57) {
     quality.goodWindows = 0;
   }
 }
@@ -2949,9 +3827,11 @@ if (import.meta.env.DEV) {
     player,
     enemies,
     projectiles,
-    enemyProjectiles,
+    bullets,
     scene,
     camera,
+    renderer,
+    postfx,
     cameraOffset: CAMERA_OFFSET,
     ascension,
     weather,
@@ -2963,6 +3843,18 @@ if (import.meta.env.DEV) {
     get wave() {
       return wave;
     },
+    get arena() {
+      return arena.id;
+    },
+    get infusion() {
+      return infusionOffer;
+    },
+    chooseInfusion,
+    get level() {
+      return playerLevel;
+    },
+    /** Shows an arena right away, e.g. game.setArena('hell') (game.startWave(21) travels there instead). */
+    setArena: (id) => setArena(ARENAS.find((a) => a.id === id)),
     set autoPause(value) {
       autoPause = value;
     },

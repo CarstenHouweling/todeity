@@ -19,7 +19,7 @@ export class TouchControls {
       <div class="touch-stick-zone"><div class="touch-stick"><div class="touch-knob"></div></div></div>
       <div class="touch-buttons">
         <button class="touch-button" data-code="KeyR" data-role="ultimate">✨</button>
-        <button class="touch-button" data-code="Space">🍵</button>
+        <button class="touch-button" data-code="Space">💥</button>
         <button class="touch-button big" data-code="ShiftLeft">💨</button>
       </div>`;
     document.body.append(this.root);

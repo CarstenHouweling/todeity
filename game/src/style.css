@@ -919,6 +919,179 @@ canvas.game {
   100% { opacity: 0; transform: translate(-50%, -80%) scale(1.1) rotate(-3deg); }
 }
 
+/* Experience and infusions */
+.xp-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(60vw, 420px);
+  height: 9px;
+  border-radius: 5px;
+  background: rgba(20, 30, 20, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.xp-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #7ed957, #c8f77a, #ffd36b);
+  box-shadow: 0 0 10px rgba(200, 247, 122, 0.8);
+  transition: width 0.15s;
+}
+
+.xp-level {
+  position: absolute;
+  right: -46px;
+  top: -5px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #c8f77a;
+  text-shadow: 0 1px 2px #000;
+}
+
+.infusions {
+  position: absolute;
+  bottom: 124px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  animation: infusions-in 0.25s ease-out;
+}
+
+.infusions[hidden] {
+  display: none;
+}
+
+@keyframes infusions-in {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.infusions-title {
+  font-size: 20px;
+  font-weight: 900;
+  font-style: italic;
+  color: #c8f77a;
+  text-shadow: 0 0 12px #5fbf2a, 0 2px 0 #1a3a0a;
+}
+
+.infusions-cards {
+  display: flex;
+  gap: 10px;
+}
+
+.infusion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 150px;
+  padding: 10px 8px 8px;
+  border: 2px solid #7ed957;
+  border-radius: 12px;
+  background: rgba(16, 32, 16, 0.88);
+  color: #f2ffe6;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(126, 217, 87, 0.45);
+}
+
+.infusion:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 22px rgba(200, 247, 122, 0.8);
+}
+
+.infusion.rare {
+  border-color: #ffd36b;
+  box-shadow: 0 0 18px rgba(255, 211, 107, 0.7);
+}
+
+.infusion-icon {
+  font-size: 26px;
+}
+
+.infusion b {
+  font-size: 14px;
+}
+
+.infusion small {
+  font-size: 12px;
+  opacity: 0.85;
+  text-align: center;
+}
+
+.infusion-key {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #c8f77a;
+}
+
+.damage-number.crit {
+  color: #ffd23f;
+  font-size: 26px;
+  font-weight: 900;
+  text-shadow: 0 0 10px #ff9a00, 0 2px 0 #6b2c00;
+}
+
+/* Beam clash */
+.clash {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.clash[hidden] {
+  display: none;
+}
+
+.clash-label {
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 900;
+  font-style: italic;
+  color: #fff3c4;
+  -webkit-text-stroke: 2px #8a3b00;
+  text-shadow: 0 0 18px #ff9a00, 0 4px 0 #6b2c00;
+  white-space: nowrap;
+  animation: clash-throb 0.25s ease-in-out infinite alternate;
+}
+
+@keyframes clash-throb {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+
+.clash-meter {
+  width: min(70vw, 460px);
+  height: 18px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #ff3b1f, #7a0a2a);
+  box-shadow: 0 0 16px rgba(255, 60, 30, 0.7), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+}
+
+.clash-fill {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, #fff3c4, #ffd36b, #ffb02e);
+  box-shadow: 0 0 14px #ffd36b;
+}
+
 /* Boss entrance */
 .boss-intro {
   position: fixed;

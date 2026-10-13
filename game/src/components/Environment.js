@@ -13,20 +13,105 @@ function seededRandom(seed) {
 }
 const SEED = 20261013;
 let random = seededRandom(SEED);
-const range = (min, max) => min + random() * (max - min);
-const pick = (items) => items[Math.floor(random() * items.length)];
+export const range = (min, max) => min + random() * (max - min);
+export const pick = (items) => items[Math.floor(random() * items.length)];
+
+/** Restarts the seeded randomness, so a world looks the same every time it is built. */
+export function reseed(seed) {
+  random = seededRandom(seed);
+}
 
 export const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
+
+/**
+ * Graphics detail for everything built from now on. 0 is the original low-poly look (the garden); each arena
+ * further into the run is built at a higher level: more segments, smooth shading, organic shapes, shinier surfaces.
+ */
+let detail = 0;
+const smoothMaterials = [];
+
+export function setDetail(level) {
+  detail = level;
+}
+
+/** The default surface for props at the current detail level. */
+export function surface() {
+  if (!detail) return material;
+  smoothMaterials[detail] ??= new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: Math.max(0.35, 0.8 - detail * 0.1),
+    metalness: 0.05,
+  });
+  return smoothMaterials[detail];
+}
+
+const POLYHEDRA = new Set(['IcosahedronGeometry', 'DodecahedronGeometry', 'OctahedronGeometry', 'TetrahedronGeometry']);
+
+/** Rebuilds a primitive with more segments for the current detail level. */
+function refine(geometry) {
+  const p = geometry.parameters;
+  if (!detail || !p) return geometry;
+  const more = (segments, max = 48) => Math.min(max, Math.round(segments * (1 + detail * 0.75)) + 2);
+  let refined = null;
+  switch (geometry.type) {
+    case 'IcosahedronGeometry':
+    case 'DodecahedronGeometry':
+    case 'OctahedronGeometry':
+      refined = new geometry.constructor(p.radius, Math.min(4, p.detail + 1 + Math.ceil(detail / 2)));
+      break;
+    case 'CylinderGeometry':
+      refined = new THREE.CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, more(p.radialSegments), Math.max(p.heightSegments, detail * 2), p.openEnded, p.thetaStart, p.thetaLength);
+      break;
+    case 'ConeGeometry':
+      refined = new THREE.ConeGeometry(p.radius, p.height, more(p.radialSegments), Math.max(p.heightSegments, detail * 2), p.openEnded, p.thetaStart, p.thetaLength);
+      break;
+    case 'SphereGeometry':
+      refined = new THREE.SphereGeometry(p.radius, more(p.widthSegments), more(p.heightSegments, 32), p.phiStart, p.phiLength, p.thetaStart, p.thetaLength);
+      break;
+    case 'TorusGeometry':
+      refined = new THREE.TorusGeometry(p.radius, p.tube, more(p.radialSegments, 16), more(p.tubularSegments), p.arc);
+      break;
+    case 'LatheGeometry':
+      refined = new THREE.LatheGeometry(p.points, more(p.segments), p.phiStart, p.phiLength);
+      break;
+    case 'CircleGeometry':
+      refined = new THREE.CircleGeometry(p.radius, more(p.segments), p.thetaStart, p.thetaLength);
+      break;
+  }
+  if (!refined) return geometry;
+  geometry.dispose();
+  return refined;
+}
+
+/** Smooth, coherent wobble (instead of per-vertex noise), so detailed shapes stay organic rather than spiky. */
+const wobble = (x, y, z, seed) =>
+  Math.sin(x * 0.35 + seed) * Math.cos(y * 0.3 + seed * 1.7) * 0.7 + Math.sin(z * 0.32 + seed * 2.3) * 0.5;
 
 // --- Low-poly geometry helpers -------------------------------------------
 // Parts are modelled Y-up like regular three.js geometry; `model()` turns the result Z-up.
 
-function part(geometry, color, { position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0], jitter = 0 } = {}) {
+export function part(geometry, color, { position = [0, 0, 0], scale = [1, 1, 1], rotation = [0, 0, 0], jitter = 0 } = {}) {
+  const type = geometry.type;
+  geometry = refine(geometry);
   geometry.deleteAttribute('normal');
   geometry.deleteAttribute('uv');
-  const g = mergeVertices(geometry);
+  // Smooth shapes share vertices; detailed boxes and cylinder caps keep their hard edges.
+  const g = !detail || POLYHEDRA.has(type) ? mergeVertices(geometry) : geometry;
   const positions = g.attributes.position;
-  if (jitter) {
+  if (jitter && detail) {
+    const seed = range(0, 100);
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i);
+      const y = positions.getY(i);
+      const z = positions.getZ(i);
+      positions.setXYZ(
+        i,
+        x + jitter * wobble(x, y, z, seed),
+        y + jitter * wobble(y, z, x, seed + 3),
+        z + jitter * wobble(z, x, y, seed + 7)
+      );
+    }
+  } else if (jitter) {
     for (let i = 0; i < positions.count; i++) {
       positions.setXYZ(
         i,
@@ -49,7 +134,7 @@ function part(geometry, color, { position = [0, 0, 0], scale = [1, 1, 1], rotati
   return g;
 }
 
-function model(parts) {
+export function model(parts) {
   const geometry = mergeGeometries(parts);
   geometry.rotateX(Math.PI / 2);
   geometry.computeVertexNormals();
@@ -179,8 +264,8 @@ function reed() {
 // --- Placement --------------------------------------------------------------
 
 /** One InstancedMesh per geometry: [{ x, y, rotation?, scale? }, ...]. */
-export function instanced(geometry, placements, { shadows = true, tint = 0.15, surface = material } = {}) {
-  const mesh = new THREE.InstancedMesh(geometry, surface, placements.length);
+export function instanced(geometry, placements, { shadows = true, tint = 0.15, surface: look = surface() } = {}) {
+  const mesh = new THREE.InstancedMesh(geometry, look, placements.length);
   const matrix = new THREE.Matrix4();
   const quaternion = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 0, 1);
@@ -197,9 +282,11 @@ export function instanced(geometry, placements, { shadows = true, tint = 0.15, s
   return mesh;
 }
 
-function single(geometry, { x, y, rotation = 0, scale = 1 }) {
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(x, y, 0);
+/** One placed prop. Props fade when Tode is near or behind them (`prop: false` for flat pieces like steps). */
+export function single(geometry, { x, y, z = 0, rotation = 0, scale = 1, look = surface(), prop = true }) {
+  const mesh = new THREE.Mesh(geometry, look);
+  mesh.userData.prop = prop;
+  mesh.position.set(x, y, z);
   mesh.rotation.z = rotation;
   mesh.scale.setScalar(scale);
   mesh.castShadow = true;
@@ -472,6 +559,7 @@ function createButterflies() {
  */
 export function createEnvironment() {
   random = seededRandom(SEED); // the same garden every time it is (re)built
+  setDetail(0); // the garden keeps the original low-poly look
   const group = new THREE.Group();
   const obstacles = [];
   const circle = (x, y, radius) => obstacles.push({ x, y, radius });
@@ -490,7 +578,7 @@ export function createEnvironment() {
   // Pond
   const pond = createPond();
   group.add(pond.group, ...pond.extras);
-  circle(POND.x, POND.y, POND.radius - 6);
+  obstacles.push({ x: POND.x, y: POND.y, radius: POND.radius - 4, zone: 'water' });
 
   // Tea table with stools, next to the path.
   group.add(single(teaTable(), { ...TEA_TABLE, rotation: 0.4 }));

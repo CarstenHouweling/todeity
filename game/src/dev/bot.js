@@ -44,6 +44,11 @@ export function makeBot(game) {
         document.querySelector('[data-action="retire"]').click();
         break;
       }
+      if (game.infusion) {
+        const pick = game.infusion[Math.floor(Math.random() * game.infusion.length)];
+        bot.log.push(`+${pick.name} (Lv ${game.level})`);
+        game.chooseInfusion(game.infusion.indexOf(pick));
+      }
       if (['choosing', 'ultimate', 'skill'].includes(game.phase)) {
         const cards = [...document.querySelectorAll('.card')];
         const card = cards[Math.floor(Math.random() * cards.length)];
@@ -77,16 +82,16 @@ export function makeBot(game) {
         fx += dx * weight;
         fy += dy * weight;
       }
-      // Sidestep stingers flying at Tode, like a player would.
-      for (const stinger of game.enemyProjectiles) {
-        const dx = p.x - stinger.position.x;
-        const dy = p.y - stinger.position.y;
+      // Sidestep bullets flying at Tode, like a player would.
+      for (const bullet of game.bullets.list) {
+        const dx = p.x - bullet.x;
+        const dy = p.y - bullet.y;
         const distance = Math.hypot(dx, dy);
-        const incoming = (dx * stinger.direction.x + dy * stinger.direction.y) / (distance || 1);
+        const incoming = (dx * bullet.dx + dy * bullet.dy) / (distance || 1);
         if (distance > 140 || incoming < 0.8) continue;
-        const side = Math.sign(dx * stinger.direction.y - dy * stinger.direction.x) || 1;
-        fx += stinger.direction.y * side * 40;
-        fy += -stinger.direction.x * side * 40;
+        const side = Math.sign(dx * bullet.dy - dy * bullet.dx) || 1;
+        fx += bullet.dy * side * 40;
+        fy += -bullet.dx * side * 40;
       }
       const sx = fx * SCREEN_RIGHT.x + fy * SCREEN_RIGHT.y;
       const sy = fx * SCREEN_UP.x + fy * SCREEN_UP.y;
@@ -98,7 +103,7 @@ export function makeBot(game) {
 
       const nearest = alive.sort((a, b) => a.position.distanceTo(p) - b.position.distanceTo(p))[0];
       if (nearest) aim(nearest.position);
-      if (alive.filter((e) => e.position.distanceTo(p) < 85).length >= 3) tap('Space');
+      if (alive.filter((e) => e.position.distanceTo(p) < 220).length >= 3) tap('Space'); // tea bomb at the aim
       if (nearest && nearest.position.distanceTo(p) < nearest.radius + 25) tap('ShiftLeft');
       if (game.player.gauge >= 100 && alive.length >= 3) tap('KeyR');
 

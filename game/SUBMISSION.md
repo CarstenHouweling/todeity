@@ -33,9 +33,16 @@ world, music and sound all generated in code.
   reality-warping god form. The spit evolves from green to radiant gold.
 - **The world transforms:** blossoms and lanterns, crystals and floating islands, and finally a marble garden
   floating above a sea of clouds.
-- **Ultimates:** Steeping Beam, Thunder Tea Storm, Grand Teapot Drop.
+- **Ultimates:** Steeping Beam, Thunder Tea Storm, Grand Teapot Drop, Summoning: Great Tode.
+- **Roguelite bullet hell:** bees and bosses fire fans, rings and spirals; tea bombs cancel bullets; kills drop
+  tea leaves for mid-wave level-ups with stacking infusions and critical hits.
 - **8 skills** that auto-cast (Ember Comet, Tea Turret, Mirror Tode, Tea Tornado…) so the action never stops.
-- **Bosses:** cinematic entrances, rage phases, Queen Buzzbelle and the final Empress at wave 20.
+- **Bosses:** one per arena with cinematic entrances and rage phases: Queen Buzzbelle, the Hornet Shogun, the
+  Seraph Queen, the Empress at wave 20, then a fall into the
+  Underworld for the true finale against Bee-zebub, with huge beam clashes you win by mashing.
+- **Five arenas:** garden → Sage Mountain → Sky Citadel → Tournament of the Gods → the Underworld, each with its
+  own bee species (ronin hornets, seraph bees, void wasps, demon hornets); the graphics get smoother and shinier
+  with every arena (smooth shading, glossy materials, filmic tone mapping).
 - **Weather & time of day:** tea rain, gales, thunderstorms with lightning strikes, from morning to night.
 - **Juice:** slow-motion finishers, hit-stop, kill-streak callouts ("Brewtal!"), procedural orchestral music.
 - **Co-op for 2–4 players** with room codes; the garden grows with the party.
@@ -45,7 +52,7 @@ world, music and sound all generated in code.
 ## Gameplay video shot list (60–90 s)
 
 1. **0:00** Title screen orbiting Golden Tode (3 s), click Start, the story cut-scene's "Not. On. My. Watch." (5 s).
-2. **0:08** Wave 1–2 action: spit fans, tea splash, kill-streak callout.
+2. **0:08** Wave 1–2 action: spit fans, tea bombs, a level-up infusion, kill-streak callout.
 3. **0:20** Brew screen with a Duo exchange between two spirits; pick it.
 4. **0:28** Ultimate pick → fire the **Steeping Beam** through a swarm.
 5. **0:38** Ascension cut-scene to **Golden Tode**; the garden bursts into blossom.

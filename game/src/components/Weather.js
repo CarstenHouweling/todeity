@@ -16,7 +16,7 @@ const PALETTES = {
 
 export const WEATHERS = {
   clear: { name: 'Clear skies', icon: '☀️', text: '', dim: 1 },
-  rain: { name: 'Tea Rain', icon: '🌧️', text: 'Tea splash radius +25%', dim: 0.62, splashRadius: 1.25 },
+  rain: { name: 'Tea Rain', icon: '🌧️', text: 'Tea bomb blast radius +25%', dim: 0.62, splashRadius: 1.25 },
   storm: { name: 'Thunderstorm', icon: '⛈️', text: 'Lightning strikes the garden: dodge the red rings!', dim: 0.42 },
   gale: { name: 'Gale', icon: '🍃', text: 'Bees are blown about · spit flies 30% further', dim: 0.92, spitRange: 1.3, wind: 45 },
 };
@@ -52,6 +52,7 @@ export class Weather {
     this.time = 'morning';
     this.kind = 'clear';
     this.cosmic = false;
+    this.arena = null; // an arena's own lighting replaces the time of day (see Arenas.js)
     this.darkLeft = 0;
     this.strikeTimer = 3;
     this.thunderFlash = 0;
@@ -85,13 +86,17 @@ export class Weather {
     this.cosmic = cosmic;
   }
 
+  setArena(arena) {
+    this.arena = arena?.palette ? arena : null;
+  }
+
   /** Blackens the sky for a while (the Thunder Tea Storm ultimate). */
   darken(seconds) {
     this.darkLeft = Math.max(this.darkLeft, seconds);
   }
 
   resolve() {
-    const palette = PALETTES[this.cosmic ? 'cosmic' : this.time];
+    const palette = this.arena?.palette ?? PALETTES[this.cosmic ? 'cosmic' : this.time];
     const dim = this.info.dim * (this.darkLeft > 0 ? 0.35 : 1);
     return { ...palette, dim };
   }
@@ -218,7 +223,7 @@ export class Weather {
 
   updateRain(delta, center) {
     const { lines, drops, positions } = this.rain;
-    const raining = this.kind === 'rain' || this.kind === 'storm';
+    const raining = (this.kind === 'rain' || this.kind === 'storm') && !this.arena?.noRain;
     const material = lines.material;
     material.opacity += ((raining ? 0.5 : 0) - material.opacity) * (1 - Math.exp(-2 * delta));
     lines.visible = material.opacity > 0.01;
@@ -265,7 +270,7 @@ export class Weather {
 
   updateFireflies(elapsed) {
     const { points, flies, positions, colors } = this.fireflies;
-    const dark = this.cosmic || this.time === 'night' || this.time === 'sunset' || this.darkLeft > 0;
+    const dark = this.cosmic || this.time === 'night' || this.time === 'sunset' || this.darkLeft > 0 || ['cosmos', 'hell'].includes(this.arena?.id);
     const material = points.material;
     material.opacity += ((dark ? 1 : 0) - material.opacity) * 0.03;
     points.visible = material.opacity > 0.01;

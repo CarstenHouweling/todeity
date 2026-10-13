@@ -35,7 +35,10 @@ export class Input {
       );
     });
     canvas.addEventListener('pointerdown', (event) => {
-      if (event.button === 0) this.primaryDown = true;
+      if (event.button === 0) {
+        this.primaryDown = true;
+        this.pressed.add('MouseLeft');
+      }
       if (event.button === 2) this.pressed.add('MouseRight');
       if (event.button === 1) {
         event.preventDefault(); // no auto-scroll

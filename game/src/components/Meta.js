@@ -82,7 +82,7 @@ const LINES = [
 
 /** Tode's reflection after a run: milestones first, then the next line of the story. */
 export function runLine({ wave, victory, firstBossKill, reachedGod }) {
-  if (victory) return 'The Empress has fallen. Tode finally finishes his tea. It is, at last, perfectly steeped. ☕';
+  if (victory) return 'Bee-zebub is banished and the hive is silent. Tode finally finishes his tea. It is, at last, perfectly steeped. ☕';
   if (reachedGod) return 'For a moment Tode was a god, and the garden bent around him. He wants that feeling back.';
   if (firstBossKill) return 'The Queen fell, but the hive did not. There is an Empress beyond the hedge…';
   if (wave === 5) return 'So there IS a Queen. And she has a crown. Tode wants that crown.';

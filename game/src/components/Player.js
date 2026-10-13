@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { computeFootprintRadius } from './collision.js';
+import { smoothGeometry, upgradeMaterial } from './Graphics.js';
 
 export const PLAYER_SCALE = 20;
 
@@ -9,6 +10,9 @@ export const BASE_STATS = {
   maxHp: 5,
   moveSpeed: 170,
   damageMultiplier: 1,
+  critChance: 0.05, // critical hits deal double damage
+  magnet: 75, // range at which tea leaves fly to Tode
+  leafValue: 1,
 
   // Spit (left mouse)
   spitDamage: 1,
@@ -27,22 +31,23 @@ export const BASE_STATS = {
   boltEvery: 0, // every Nth spit is a chain-lightning bolt
   spitHealEvery: 0, // heal a heart every N spit hits
 
-  // Tea splash (space)
-  splashDamage: 3,
-  splashRadius: 80,
-  splashCooldown: 4,
-  splashKnockback: 320,
+  // Tea bomb (space): lobbed at the aim, explodes into a splash that also washes away stingers
+  splashDamage: 8,
+  splashRadius: 100,
+  splashCooldown: 2.2, // seconds per charge
+  bombCharges: 2,
+  splashKnockback: 420,
   splashBurn: 0,
   splashSlow: 0,
   splashBolts: 0, // lightning bolts called by each splash
   lavaPool: 0, // damage per second of the lava pool it leaves
 
-  // Hop dash (shift)
-  dashSpeed: 650,
-  dashDuration: 0.18,
-  dashCooldown: 1.2,
+  // Hop dash (shift): Tode can't be hurt mid-hop and bumps bees aside
+  dashSpeed: 800,
+  dashDuration: 0.22,
+  dashCooldown: 1,
   dashCharges: 1,
-  dashDamage: 0, // damage to bees Tode dashes through
+  dashDamage: 2, // damage to bees Tode dashes through
   landingSplash: 0, // strength of the splash released when a dash lands
   steamTrail: false,
   freezeDash: 0, // shatter damage of bees frozen by dashing through them
@@ -73,6 +78,7 @@ const DASH_HEIGHT = 14;
 const LANDING_SPEED = 60; // how fast Tode settles to the ground when stopping
 const HIT_INVULNERABILITY = 0.9; // seconds
 const SHIELD_INVULNERABILITY = 0.6;
+const DASH_GRACE = 0.25; // seconds Tode stays safe after landing, so hopping into a swarm doesn't backfire
 
 const loader = new GLTFLoader();
 const targetVelocity = new THREE.Vector3();
@@ -87,6 +93,8 @@ export class Player {
     this.group.add(this.adornments);
     this.model = null;
     this.frogMaterials = [];
+    this.frogMeshes = []; // { mesh, geometry, material, entry }: the classic look, to switch graphics levels
+    this.graphicsLevel = 0;
     this.baseGroundOffset = 0;
     this.groundOffset = 0;
     this.radius = 10;
@@ -115,10 +123,12 @@ export class Player {
       // Own copies, so Tode can turn golden without touching the shared model.
       child.material = child.material.clone();
       const { color, emissive, metalness = 0, roughness = 1 } = child.material;
-      this.frogMaterials.push({
+      const entry = {
         material: child.material,
         base: { color: color.clone(), emissive: emissive?.clone(), metalness, roughness },
-      });
+      };
+      this.frogMaterials.push(entry);
+      this.frogMeshes.push({ mesh: child, geometry: child.geometry, material: child.material, entry });
     });
 
     model.updateMatrixWorld(true);
@@ -134,6 +144,29 @@ export class Player {
 
   get position() {
     return this.group.position;
+  }
+
+  /** Classic faceted Tode at level 0; smooth, glossy skin from level 1 on (see Graphics.js). */
+  setGraphics(level) {
+    if (level === this.graphicsLevel) return;
+    this.graphicsLevel = level;
+    for (const look of this.frogMeshes) {
+      const current = look.mesh.material;
+      const next = level === 0 ? look.material : upgradeMaterial(look.material, level);
+      next.flatShading = level === 0 && look.material.flatShading;
+      // Keep the ascension colours it has right now.
+      next.color.copy(current.color);
+      next.emissive?.copy(current.emissive);
+      if ('metalness' in next) {
+        next.metalness = current.metalness;
+        next.roughness = current.roughness;
+      }
+      next.needsUpdate = true;
+      if (current !== look.material) current.dispose();
+      look.mesh.material = next;
+      look.mesh.geometry = level === 0 ? look.geometry : smoothGeometry(look.geometry);
+      look.entry.material = next;
+    }
   }
 
   get isDashing() {
@@ -247,9 +280,10 @@ export class Player {
         this.velocity.copy(this.dash.direction).multiplyScalar(this.stats.moveSpeed);
         this.dash = null;
         this.justLanded = true;
+        this.unstoppableLeft = Math.max(this.unstoppableLeft, DASH_GRACE);
       }
     } else {
-      targetVelocity.copy(direction).multiplyScalar(this.stats.moveSpeed);
+      targetVelocity.copy(direction).multiplyScalar(this.stats.moveSpeed * this.speedFactor);
       this.velocity.lerp(targetVelocity, 1 - Math.exp(-ACCELERATION * delta));
     }
 
@@ -288,6 +322,7 @@ export class Player {
     this.unstoppableLeft = 0; // can't be hurt, without blinking (while firing the beam)
     this.hopPhase = 0;
     this.rooted = false;
+    this.speedFactor = 1; // swimming, rift boosts (set by the game each frame)
     this.shield = false;
     this.shieldTimer = 0;
     this.gauge = 0; // ultimate charge, 0–100
