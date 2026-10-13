@@ -23,6 +23,7 @@ import { Ascension, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { buy, leavesForRun, meta, pantryLevel, runLine, saveMeta } from './components/Meta.js';
 import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
+import { Divinity } from './components/Divinity.js';
 
 // Enemies
 const MAX_ALIVE_ENEMIES = 30;
@@ -126,6 +127,7 @@ scene.add(map);
 
 const environment = createEnvironment();
 scene.add(environment.group);
+const divinity = new Divinity({ scene, map, environment });
 
 const player = new Player();
 scene.add(player.group);
@@ -1291,6 +1293,7 @@ function updateAscending(delta) {
     postfx.pulse({ bloom: elapsed, aberration: elapsed * 0.4 });
   } else if (ascension.tier !== ascendingTo) {
     ascension.setTier(ascendingTo);
+    divinity.setTier(ascendingTo);
     const { banner, sub, name } = TIERS[ascendingTo];
     hud.setForm(name, ascendingTo);
     hud.showBanner(banner, sub, 2.4, 'ascend');
@@ -1342,6 +1345,7 @@ function startRun() {
   clearWorld();
   player.reset();
   ascension.setTier(0);
+  divinity.setTier(0);
   skills.reset();
   brewLevels.clear();
   brewTexts.clear();
@@ -1417,6 +1421,7 @@ function goToTitle() {
   clearWorld();
   player.reset();
   ascension.setTier(0);
+  divinity.setTier(0);
   weather.set('morning', 'clear');
   weather.setCosmic(false);
   hud.setWeather(weather.info);
@@ -1611,6 +1616,7 @@ function frame(delta, render = true) {
     particles.update(delta);
     weather.update(delta, player.position, clock.elapsedTime);
     environment.update(clock.elapsedTime);
+    divinity.update(delta);
     ascension.update(delta);
   }
   postfx.setTargets(ascension.postfxTargets());
@@ -1683,6 +1689,7 @@ if (import.meta.env.DEV) {
     },
     setTier: (tier) => {
       ascension.setTier(tier);
+      divinity.setTier(tier);
       hud.setForm(TIERS[tier].name, tier);
       weather.setCosmic(tier === 4);
     },

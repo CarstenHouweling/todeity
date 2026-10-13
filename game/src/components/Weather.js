@@ -11,7 +11,7 @@ const PALETTES = {
   golden: { sky: '#f6c48c', sun: '#ffc27a', sunIntensity: 2.3, hemiSky: '#ffe0b8', hemiGround: '#5a6a2a', hemi: 1.2, ambient: 0.55 },
   sunset: { sky: '#e9806a', sun: '#ff8a5c', sunIntensity: 1.8, hemiSky: '#ffb6a0', hemiGround: '#3f3550', hemi: 1.0, ambient: 0.5 },
   night: { sky: '#141c38', sun: '#9fb4ff', sunIntensity: 0.9, hemiSky: '#4a5a9a', hemiGround: '#16241a', hemi: 0.8, ambient: 0.32 },
-  cosmic: { sky: '#24093f', sun: '#c9a8ff', sunIntensity: 1.3, hemiSky: '#9a6bff', hemiGround: '#1a0f30', hemi: 1.1, ambient: 0.32 },
+  cosmic: { sky: '#f3dcef', sun: '#ffe7c4', sunIntensity: 1.5, hemiSky: '#f0dcff', hemiGround: '#9a7ac8', hemi: 0.95, ambient: 0.38 },
 };
 
 export const WEATHERS = {

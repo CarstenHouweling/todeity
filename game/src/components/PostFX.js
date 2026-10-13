@@ -57,7 +57,7 @@ export class PostFX {
     const size = renderer.getSize(new THREE.Vector2());
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(size, BASE_BLOOM, 0.55, 0.88);
+    this.bloom = new UnrealBloomPass(size, BASE_BLOOM, 0.55, 0.93);
     this.composer.addPass(this.bloom);
     this.reality = new ShaderPass(RealityShader);
     this.composer.addPass(this.reality);

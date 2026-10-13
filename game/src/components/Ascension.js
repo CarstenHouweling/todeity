@@ -18,7 +18,7 @@ const LOOKS = [
   { scale: 1.05, gold: 0.1, glow: 0.12, metal: 0, bloom: 0.45, warp: 0, aberration: 0 },
   { scale: 1.12, gold: 0.22, glow: 0.22, metal: 0.15, bloom: 0.6, warp: 0, aberration: 0 },
   { scale: 1.2, gold: 0.5, glow: 0.3, metal: 0.55, bloom: 0.75, warp: 0.12, aberration: 0.15 },
-  { scale: 1.3, gold: 0.7, glow: 0.35, metal: 0.4, bloom: 0.75, warp: 0.55, aberration: 0.45 },
+  { scale: 1.3, gold: 0.7, glow: 0.35, metal: 0.4, bloom: 0.6, warp: 0.55, aberration: 0.45 },
 ];
 
 const GOLD = new THREE.Color('#ffc93c');

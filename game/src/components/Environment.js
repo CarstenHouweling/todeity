@@ -15,7 +15,7 @@ const random = seededRandom(20261013);
 const range = (min, max) => min + random() * (max - min);
 const pick = (items) => items[Math.floor(random() * items.length)];
 
-const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
+export const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
 
 // --- Low-poly geometry helpers -------------------------------------------
 // Parts are modelled Y-up like regular three.js geometry; `model()` turns the result Z-up.
@@ -59,36 +59,37 @@ const TRUNK = '#8a5a33';
 const LEAVES = ['#3f9a45', '#4caf50', '#5cbf5a', '#378c3e'];
 const PINE = ['#2f7d3b', '#3a8f45', '#46a050'];
 
-function pineTree() {
-  const parts = [part(new THREE.CylinderGeometry(2.5, 3.5, 14, 6), TRUNK, { position: [0, 7, 0] })];
+// Builders take colour palettes, so the divine world can grow blossom, golden and crystal versions.
+export function pineTree(colors = PINE, trunk = TRUNK) {
+  const parts = [part(new THREE.CylinderGeometry(2.5, 3.5, 14, 6), trunk, { position: [0, 7, 0] })];
   for (let i = 0; i < 3; i++) {
     parts.push(
-      part(new THREE.ConeGeometry(22 - i * 6, 26, 7), PINE[i], { position: [0, 20 + i * 13, 0], jitter: 1.5 })
+      part(new THREE.ConeGeometry(22 - i * 6, 26, 7), colors[i % colors.length], { position: [0, 20 + i * 13, 0], jitter: 1.5 })
     );
   }
   return model(parts);
 }
 
-function roundTree() {
+export function roundTree(leaves = LEAVES, trunk = TRUNK) {
   return model([
-    part(new THREE.CylinderGeometry(3, 4.5, 24, 6), TRUNK, { position: [0, 12, 0], jitter: 0.5 }),
-    part(new THREE.IcosahedronGeometry(18, 0), pick(LEAVES), { position: [0, 36, 0], jitter: 2.5 }),
-    part(new THREE.IcosahedronGeometry(12, 0), pick(LEAVES), { position: [11, 29, 4], jitter: 2 }),
-    part(new THREE.IcosahedronGeometry(13, 0), pick(LEAVES), { position: [-9, 31, -6], jitter: 2 }),
+    part(new THREE.CylinderGeometry(3, 4.5, 24, 6), trunk, { position: [0, 12, 0], jitter: 0.5 }),
+    part(new THREE.IcosahedronGeometry(18, 0), pick(leaves), { position: [0, 36, 0], jitter: 2.5 }),
+    part(new THREE.IcosahedronGeometry(12, 0), pick(leaves), { position: [11, 29, 4], jitter: 2 }),
+    part(new THREE.IcosahedronGeometry(13, 0), pick(leaves), { position: [-9, 31, -6], jitter: 2 }),
   ]);
 }
 
-function bush() {
+export function bush(leaves = LEAVES) {
   return model([
-    part(new THREE.IcosahedronGeometry(9, 0), pick(LEAVES), { position: [0, 6, 0], jitter: 1.5 }),
-    part(new THREE.IcosahedronGeometry(7, 0), pick(LEAVES), { position: [8, 4, 3], jitter: 1.2 }),
-    part(new THREE.IcosahedronGeometry(6, 0), pick(LEAVES), { position: [-7, 4, -2], jitter: 1.2 }),
+    part(new THREE.IcosahedronGeometry(9, 0), pick(leaves), { position: [0, 6, 0], jitter: 1.5 }),
+    part(new THREE.IcosahedronGeometry(7, 0), pick(leaves), { position: [8, 4, 3], jitter: 1.2 }),
+    part(new THREE.IcosahedronGeometry(6, 0), pick(leaves), { position: [-7, 4, -2], jitter: 1.2 }),
   ]);
 }
 
-function rock(size = 10) {
+export function rock(size = 10, colors = ['#9aa0a6', '#8d939a', '#a7acb1']) {
   return model([
-    part(new THREE.DodecahedronGeometry(size, 0), pick(['#9aa0a6', '#8d939a', '#a7acb1']), {
+    part(new THREE.DodecahedronGeometry(size, 0), pick(colors), {
       position: [0, size * 0.3, 0],
       scale: [1, 0.6, 1.2],
       jitter: size * 0.22,
@@ -110,7 +111,7 @@ function grassTuft() {
   return model(parts);
 }
 
-function flower(color) {
+export function flower(color) {
   return model([
     part(new THREE.CylinderGeometry(0.4, 0.4, 7, 3), '#4f9d3a', { position: [0, 3.5, 0] }),
     part(new THREE.IcosahedronGeometry(2, 0), color, { position: [0, 7.5, 0] }),
@@ -177,8 +178,8 @@ function reed() {
 // --- Placement --------------------------------------------------------------
 
 /** One InstancedMesh per geometry: [{ x, y, rotation?, scale? }, ...]. */
-function instanced(geometry, placements, { shadows = true, tint = 0.15 } = {}) {
-  const mesh = new THREE.InstancedMesh(geometry, material, placements.length);
+export function instanced(geometry, placements, { shadows = true, tint = 0.15, surface = material } = {}) {
+  const mesh = new THREE.InstancedMesh(geometry, surface, placements.length);
   const matrix = new THREE.Matrix4();
   const quaternion = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 0, 1);
@@ -206,7 +207,7 @@ function single(geometry, { x, y, rotation = 0, scale = 1 }) {
 }
 
 /** Random points in a region, kept `spacing` apart from each other and from `avoid` circles. */
-function scatterPoints(count, { inside, spacing, avoid = [] }) {
+export function scatterPoints(count, { inside, spacing, avoid = [] }) {
   const points = [];
   for (let attempt = 0; attempt < count * 30 && points.length < count; attempt++) {
     const candidate = inside();
@@ -220,13 +221,13 @@ function scatterPoints(count, { inside, spacing, avoid = [] }) {
   return points;
 }
 
-const insideArena = (margin) => () => [
+export const insideArena = (margin) => () => [
   range(-MAP_HALF_SIZE + margin, MAP_HALF_SIZE - margin),
   range(-MAP_HALF_SIZE + margin, MAP_HALF_SIZE - margin),
 ];
 
 /** Outside the fence, denser close to it. */
-const outsideArena = (from, to) => () => {
+export const outsideArena = (from, to) => () => {
   const x = range(-to, to);
   const y = range(-to, to);
   const edgeDistance = Math.max(Math.abs(x), Math.abs(y)) - MAP_HALF_SIZE;
@@ -372,6 +373,7 @@ function createPond() {
 
   return {
     group,
+    water,
     extras: [instanced(reed(), reedPlacements, { shadows: false }), instanced(rock(10), pebbles)],
     update(time) {
       for (const ripple of ripples) {
@@ -496,8 +498,11 @@ export function createEnvironment() {
 
   // Garden trees, rocks and bushes that block movement.
   const builders = { roundTree, pineTree, rock: () => rock(10), bush };
+  const gardenProps = [];
   for (const [kind, x, y, radius, scale] of GARDEN_PROPS) {
-    group.add(single(builders[kind](), { x, y, scale, rotation: range(0, Math.PI * 2) }));
+    const mesh = single(builders[kind](), { x, y, scale, rotation: range(0, Math.PI * 2) });
+    group.add(mesh);
+    gardenProps.push({ kind, mesh });
     circle(x, y, radius);
   }
 
@@ -505,9 +510,17 @@ export function createEnvironment() {
   const keepClear = [...hives.map((h) => ({ ...h, radius: 70 }))];
   const forest = scatterPoints(260, { inside: outsideArena(40, 900), spacing: 34, avoid: keepClear });
   const treeKinds = [pineTree(), pineTree(), roundTree(), roundTree(), bush(), rock(12)];
+  const kindNames = ['pineTree', 'pineTree', 'roundTree', 'roundTree', 'bush', 'rock'];
   const byKind = treeKinds.map(() => []);
   forest.forEach((point) => byKind[Math.floor(random() * treeKinds.length)].push({ ...point, scale: range(0.8, 1.5) }));
-  treeKinds.forEach((geometry, i) => byKind[i].length && group.add(instanced(geometry, byKind[i])));
+  const forestMeshes = [];
+  treeKinds.forEach((geometry, i) => {
+    if (!byKind[i].length) return;
+    const mesh = instanced(geometry, byKind[i]);
+    group.add(mesh);
+    forestMeshes.push({ kind: kindNames[i], mesh });
+  });
+  const outside = forestMeshes.map(({ mesh }) => mesh);
 
   // Small details: no collisions.
   const blocked = [
@@ -518,12 +531,19 @@ export function createEnvironment() {
   ];
   const grassInside = scatterPoints(220, { inside: insideArena(10), spacing: 18, avoid: blocked });
   const grassOutside = scatterPoints(900, { inside: outsideArena(8, 700), spacing: 16, avoid: keepClear });
-  group.add(instanced(grassTuft(), [...grassInside, ...grassOutside], { shadows: false }));
+  const tuft = grassTuft();
+  const outsideGrass = instanced(tuft, grassOutside, { shadows: false });
+  const insideGrass = instanced(tuft, grassInside, { shadows: false });
+  group.add(insideGrass, outsideGrass);
+  outside.push(outsideGrass);
 
   ['#ffffff', '#ffd84d', '#ff8fb8', '#b48cff'].forEach((color) => {
     const flowers = scatterPoints(45, { inside: insideArena(10), spacing: 22, avoid: blocked });
     const wild = scatterPoints(70, { inside: outsideArena(5, 500), spacing: 20, avoid: keepClear });
-    group.add(instanced(flower(color), [...flowers, ...wild], { shadows: false }));
+    const geometry = flower(color);
+    const wildMesh = instanced(geometry, wild, { shadows: false });
+    group.add(instanced(geometry, flowers, { shadows: false }), wildMesh);
+    outside.push(wildMesh);
   });
 
   const mushrooms = GARDEN_PROPS.filter(([kind]) => kind.endsWith('Tree')).flatMap(([, x, y]) =>
@@ -538,6 +558,14 @@ export function createEnvironment() {
   return {
     group,
     obstacles,
+    // Handles for the divine transformation (see Divinity.js).
+    gardenProps,
+    forestMeshes,
+    outside,
+    pondWater: pond.water,
+    insideGrass,
+    blocked,
+    keepClear,
     update(time) {
       pond.update(time);
       pollen.update(time);
