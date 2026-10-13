@@ -22,23 +22,47 @@ A 3D browser roguelite built with Three.js + Vite. It started as the game from t
 
 ```bash
 cd game
-npm install   # only needed when game/node_modules is missing; the course setup may resolve from ../node_modules
-npm run dev   # http://localhost:5173 (or the port Vite prints)
-npm run build # production build into game/dist
+npm install    # only needed when game/node_modules is missing; the course setup may resolve from ../node_modules
+npm run dev    # the game on http://localhost:5173 (or the port Vite prints)
+npm run server # the leaderboard API on http://localhost:8787 (Vite proxies /api to it during development)
+npm run build  # production build into game/dist
+npm start      # production: serves game/dist and the API from one Node process (PORT env, default 8787)
 ```
+
+The game works without the server; the leaderboard then just says it isn't reachable.
+
+### Deploying to Azure App Service
+
+`game/server/server.js` has no dependencies and serves both the built game and the leaderboard API.
+
+1. Create an App Service: **Linux, Node 20 LTS** (the cheapest tier is fine to start; enable *Web sockets* for future
+   multiplayer).
+2. Deploy the `game/` folder with `dist/` built (`npm run build` first), e.g. with the Azure extension for
+   VS Code/JetBrains, `az webapp up`, or GitHub Actions. Startup command: `npm start`.
+3. App settings: `DATA_DIR=/home/data` so scores survive restarts and redeploys (App Service sets `PORT` itself).
+
+Scores are stored as JSON (`scores.json`, top 100 all-time + 14 days of daily boards). The server rate-limits
+submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, so it is not cheat-proof.
 
 ## Gameplay summary
 
 - WASD move (camera-relative), mouse aims, hold LMB to spit, Shift/RMB hop-dash, Space tea splash,
-  R/Q/middle mouse fires the ultimate, Esc/P pauses, M mutes.
-- Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups).
-  After wave 2 you pick an **ultimate** instead. Boss every 5th wave (Queen Buzzbelle), final boss
-  **Empress Buzzbelle at wave 20**, then a victory screen with an optional endless mode.
-- **Ascension:** brew levels (+2 per Duo/Legendary, +2 for the ultimate) give "power"; at thresholds
-  3/7/12/18 Tode transforms (Awakened → Golden → Radiant → God of Tea) with a cut-scene.
+  R/middle mouse fires the ultimate, Q/E/F cast skills (when auto-cast is off), Esc/P pauses, M mutes.
+- Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups), offered by a tea
+  spirit with a line of dialogue. After wave 2 you pick an **ultimate**; after waves 3, 7, 11 and 15 a **skill**
+  (or a skill upgrade). Boss every 5th wave (Queen Buzzbelle, cinematic entrance, rage phases), final boss
+  **Empress Buzzbelle at wave 20**, then a victory screen with an optional endless mode. Elite bees from wave 6.
+- **Skills auto-cast** by default (the owner mostly runs, aims and shoots); the pause menu switches to manual.
+  The tea splash also auto-casts when bees crowd in.
+- **Ascension:** brew levels (+2 per Duo/Legendary, +2 for the ultimate, 1 + level per skill) give "power"; at
+  thresholds 3/7/12/18 Tode transforms (Awakened → Golden → Radiant → God of Tea) with a cut-scene, and **the world
+  transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven above the
+  clouds).
+- **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
+  bonus.
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
-  and Tode says a story line after each run. Saved in `localStorage` (`tode-meta`, `tode-best-score`,
-  `tode-sound`).
+  and Tode says a story line after each run. **Leaderboard** (all-time and a seeded **Daily Brew**) via
+  `game/server`. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
 
 ## Code map (`game/src`)
 
@@ -49,6 +73,11 @@ npm run build # production build into game/dist
 | `components/Enemy.js` | Bee types (`ENEMY_TYPES`: drone, zipper, brute, stinger, queen, empress), statuses (burn, chill/freeze), hit flash, death animation, boss crown. |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
 | `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Grand Teapot Drop. |
+| `components/Skills.js` | Learnable skills (`SKILLS`) and the `SkillBook` (slots, cooldowns, auto-cast targeting, manual Q/E/F). |
+| `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges). |
+| `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
+| `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
+| `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
 | `components/Weather.js` | Time of day per wave, weather (clear, Tea Rain, Gale, Thunderstorm) with gameplay modifiers, rain/leaves/fireflies. |
@@ -62,6 +91,7 @@ npm run build # production build into game/dist
 | `components/Map.js` | Lawn (canvas texture with mowing pattern and path) + meadow; `MAP_HALF_SIZE`, `isInsideMap`. |
 | `components/House.js`, `Camera.js`, `Renderer.js`, `Input.js`, `Particles.js`, `Projectile.js`, `collision.js` | As named. |
 | `dev/bot.js` | Dev-only autoplayer for balance testing. |
+| `../server/server.js` | Node server: static hosting of `dist/` + `/api/scores` leaderboard (+ future multiplayer relay). |
 | `style.css` | All UI styling. |
 
 ## Conventions and gotchas
@@ -93,6 +123,8 @@ game.give('eye')          // grant a brew by id (also Duo/Legendary)
 game.ultimate('teapot')   // own an ultimate with a full gauge
 game.setTier(4)           // jump to an ascension tier
 game.setWeather('night', 'storm')
+game.learn('comet')       // learn (or level up) a skill
+game.settings.autoCast = false
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
 ```
@@ -100,13 +132,16 @@ const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of wav
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game
 with `game.step()` and take a screenshot to see the result.
 
-Balance reference (Oct 13): the bot (perfect aim, random brews, dodges stingers) dies around waves 11–15 and
-sometimes wins at wave 20. Runs take about 6–8 minutes.
+Balance reference (Oct 13, after skills, elites and boss phases): the bot (perfect aim, random picks, dodges
+stingers but not telegraphed strikes) mostly dies at the wave-10 Queen, sometimes at wave 5, and wins about 1 run
+in 4–5. Runs take about 6–8 minutes.
 
 ## Ideas / roadmap
 
-- Playtest-driven tweaks (the owner has a list of tweaks pending).
-- Publish a playable build (GitHub Pages or itch.io) for voters, record a gameplay video for the submission post.
+- **Co-op multiplayer (planned next):** 2–4 players, host-authoritative (the host's browser simulates bees/waves,
+  others send inputs and receive snapshots) through a WebSocket relay in `game/server`; the map grows and more bees
+  spawn per player. Needs main.js refactored from one player to N players.
+- Deploy to Azure (see above), record a gameplay video for the submission post.
 - More variety: more bee types, more brews, keepsakes, a second arena or biome, room/door choices like Hades.
 - The music mix has not been checked by ear; volumes in `Music.js`/`Sound.js` may need tuning.
 

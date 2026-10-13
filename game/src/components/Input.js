@@ -15,6 +15,8 @@ export class Input {
     this.primaryDown = false;
 
     window.addEventListener('keydown', (event) => {
+      // Typing in a text field (the leaderboard name) is not playing.
+      if (event.target.closest?.('input, textarea')) return;
       if (GAME_KEYS.has(event.code)) event.preventDefault();
       if (!event.repeat) this.pressed.add(event.code);
       this.held.add(event.code);

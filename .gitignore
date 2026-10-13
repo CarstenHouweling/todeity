@@ -7,3 +7,6 @@ dist/
 
 # OS files
 .DS_Store
+
+# Local leaderboard data
+game/server/data/

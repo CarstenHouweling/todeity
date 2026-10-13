@@ -1059,3 +1059,88 @@ canvas.game {
   font-size: 16px;
   font-style: italic;
 }
+
+/* Leaderboard */
+.leaderboard {
+  cursor: default;
+}
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.scores {
+  width: min(560px, 90vw);
+  margin: 10px auto 0;
+  border-collapse: collapse;
+  font-size: 15px;
+  text-align: left;
+}
+
+.scores th {
+  padding: 4px 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.scores td {
+  padding: 6px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.scores tr.me td {
+  background: rgba(255, 215, 106, 0.25);
+  font-weight: 800;
+}
+
+.scores .name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scores .form-cell {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.submit-score {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  cursor: default;
+}
+
+.submit-score input {
+  width: 180px;
+  padding: 10px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+}
+
+/* Narrow windows: a slimmer ability bar, and the brew icons move above it */
+@media (max-width: 760px) {
+  .ability {
+    width: 50px;
+    height: 50px;
+  }
+
+  .ability-icon {
+    font-size: 24px;
+  }
+
+  .owned {
+    bottom: 104px;
+    max-width: 60vw;
+  }
+}

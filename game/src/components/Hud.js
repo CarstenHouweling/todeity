@@ -3,6 +3,7 @@ import { BLENDS, RARITIES, describe } from './PowerUps.js';
 import { ULTIMATES } from './Ultimates.js';
 import { SKILLS, SKILL_KEY_LABELS } from './Skills.js';
 import { brewDialogue, kettleDialogue } from './Spirits.js';
+import { TIERS } from './Ascension.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 
 const ABILITIES = [
@@ -92,6 +93,10 @@ export class Hud {
       const target = event.target.closest('[data-action]');
       if (target) this.onAction(target.dataset.action, target.dataset);
       else if (this.menuClickAction) this.onAction(this.menuClickAction);
+    });
+    this.menu.addEventListener('submit', (event) => {
+      event.preventDefault();
+      this.onAction('submit', { name: this.menu.querySelector('#player-name')?.value ?? '' });
     });
 
     this.damageNumbers = [];
@@ -304,6 +309,8 @@ export class Hud {
         ${best ? `<p class="best">Best score: ${best}${meta.victories ? ` · 👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : ''}</p>` : ''}
         <div class="menu-buttons">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
+          <button class="menu-button" data-action="daily">📅 Daily Brew</button>
+          <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
           <button class="menu-button" data-action="pantry">🍃 Tode's Pantry <small>${meta.leaves} leaves</small></button>
         </div>
         <p class="prompt">or press Space</p>
@@ -466,15 +473,55 @@ export class Hud {
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, time, leaves, line, victory }) {
+  /** Rows of a leaderboard; `highlight` marks the player's own new entry (1-based rank). */
+  scoreTable(scores, highlight = null) {
+    if (!scores) return '<p class="sub">The leaderboard is not reachable right now.</p>';
+    if (!scores.length) return '<p class="sub">No scores yet. Be the first legend!</p>';
+    const rows = scores
+      .map(
+        (entry, i) => `
+        <tr class="${i + 1 === highlight ? 'me' : ''}">
+          <td>${i + 1}</td>
+          <td class="name">${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}</td>
+          <td>${entry.score.toLocaleString()}</td>
+          <td>W${entry.wave}</td>
+          <td class="form-cell">${TIERS[entry.tier]?.name ?? ''}</td>
+        </tr>`
+      )
+      .join('');
+    return `<table class="scores"><tr><th>#</th><th>Name</th><th>Score</th><th>Wave</th><th>Form</th></tr>${rows}</table>`;
+  }
+
+  showLeaderboard(board, scores) {
+    this.showMenu(
+      'leaderboard',
+      `
+      <div class="panel">
+        <h2>🏆 Leaderboard</h2>
+        <div class="tabs">
+          <button class="menu-button ${board === 'all' ? 'primary' : ''}" data-action="leaderboard" data-board="all">All time</button>
+          <button class="menu-button ${board === 'daily' ? 'primary' : ''}" data-action="leaderboard" data-board="daily">📅 Today's Daily Brew</button>
+        </div>
+        ${scores === undefined ? '<p class="sub">Loading…</p>' : this.scoreTable(scores)}
+        <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
+      </div>`
+    );
+  }
+
+  showGameOver({ score, isRecord, kills, wave, time, leaves, line, victory, daily, name }) {
     this.showMenu(
       `game-over ${victory ? 'victory' : ''}`,
       `
       <h1>${victory ? 'Victory!' : 'Game Over'}</h1>
-      <p>${isRecord ? 'New best score' : 'Score'}: ${score}</p>
+      <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}</p>
       <p class="stats">Reached wave ${wave} · ${kills} bees defeated · ${Math.floor(time)}s</p>
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
       <p class="line">“${line}”</p>
+      <form class="submit-score">
+        <input id="player-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
+        <button class="menu-button" type="submit">🏆 Submit score</button>
+      </form>
+      <div class="board-slot"></div>
       <div class="menu-buttons">
         <button class="menu-button primary" data-action="start">↻ Play again</button>
         <button class="menu-button" data-action="pantry">🍃 Pantry</button>
@@ -482,6 +529,14 @@ export class Hud {
       </div>
       <p class="prompt">or press Space</p>`
     );
+  }
+
+  /** Shows the result of a score submission and the board on the game-over screen. */
+  showSubmitted(message, scores, rank) {
+    const form = this.menu.querySelector('.submit-score');
+    if (form) form.innerHTML = `<p class="sub">${message}</p>`;
+    const slot = this.menu.querySelector('.board-slot');
+    if (slot) slot.innerHTML = this.scoreTable(scores, rank);
   }
 
   showVictory() {
@@ -537,4 +592,8 @@ export class Hud {
     for (const label of this.damageNumbers) label.node.remove();
     this.damageNumbers = [];
   }
+}
+
+function escapeHtml(text) {
+  return String(text ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }

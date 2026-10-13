@@ -24,6 +24,8 @@ import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { buy, leavesForRun, meta, pantryLevel, runLine, saveMeta } from './components/Meta.js';
 import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
+import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
+import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 
 // Enemies
 const MAX_ALIVE_ENEMIES = 30;
@@ -1241,10 +1243,10 @@ function setPhase(next, duration = 0) {
 function startWave(number) {
   wave = number;
   config = waveConfig(number);
-  spawnQueue = buildSpawnQueue(config);
+  spawnQueue = seeded(() => buildSpawnQueue(config));
   spawnTimer = 0;
 
-  weather.set(timeOfDay(number), rollWeather(number, config.isBoss));
+  weather.set(timeOfDay(number), seeded(() => rollWeather(number, config.isBoss)));
   weather.setCosmic(ascension.tier === 4);
   hud.setWeather(weather.info);
 
@@ -1309,14 +1311,14 @@ function offerRewards() {
     return;
   }
   if (SKILL_WAVES.includes(wave)) {
-    offers = skills.offers();
+    offers = seeded(() => skills.offers());
     if (offers.length) {
       setPhase('skill');
       hud.showSkills(offers, settings.autoCast);
       return;
     }
   }
-  offers = rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate });
+  offers = seeded(() => rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate }));
   if (!offers.length) {
     afterReward();
     return;
@@ -1373,7 +1375,7 @@ function reroll() {
   if (phase !== 'choosing' || rerolls <= 0) return;
   rerolls--;
   play('click');
-  offers = rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate });
+  offers = seeded(() => rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate }));
   hud.showBrews(wave, offers, rerolls);
 }
 
@@ -1526,7 +1528,11 @@ function clearWorld() {
   hud.clearWorldLabels();
 }
 
-function startRun() {
+function startRun({ daily = false } = {}) {
+  // The Daily Brew rolls waves, weather and offers from today's seed, the same for everyone.
+  if (daily) startDaily();
+  else stopDaily();
+  submitted = false;
   clearWorld();
   player.reset();
   ascension.setTier(0);
@@ -1573,6 +1579,8 @@ function startRun() {
 
 function endRun({ victory = false } = {}) {
   setPhase('gameover');
+  combo = 0;
+  hud.setCombo(0);
   gameOverTime = clock.elapsedTime;
   player.group.visible = false;
   stormCloud.visible = false;
@@ -1593,7 +1601,8 @@ function endRun({ victory = false } = {}) {
   saveMeta();
 
   const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier === 4 });
-  hud.showGameOver({ score: finalScore, isRecord, kills, wave, time: timeAlive, leaves, line, victory });
+  lastRun = { score: finalScore, wave, tier: ascension.tier, kills, time: Math.floor(timeAlive), victory, daily: isDaily() };
+  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName() });
 }
 
 function gameOver() {
@@ -1603,11 +1612,45 @@ function gameOver() {
   endRun();
 }
 
+let lastRun = null;
+let submitted = false;
+
+async function submitRun(name) {
+  if (!lastRun || submitted) return;
+  const cleanName = name.trim().slice(0, 16);
+  if (!cleanName) {
+    hud.menu.querySelector('#player-name')?.focus();
+    return;
+  }
+  submitted = true;
+  savePlayerName(cleanName);
+  play('click');
+  const result = await submitScore({ ...lastRun, name: cleanName });
+  if (result.error) {
+    submitted = false;
+    hud.showSubmitted(result.error, null);
+    return;
+  }
+  const board = lastRun.daily ? 'daily' : 'all';
+  const rank = lastRun.daily ? result.dailyRank : result.rank;
+  const scores = await fetchScores(board, 10);
+  const where = lastRun.daily ? "today's Daily Brew" : 'the leaderboard';
+  hud.showSubmitted(rank ? `You're #${rank} on ${where}! 🎉` : `Score submitted to ${where}.`, scores, rank);
+  if (rank && rank <= 3) play('victory');
+}
+
+async function showLeaderboard(board) {
+  hud.showLeaderboard(board, undefined);
+  const scores = await fetchScores(board, 10);
+  if (phase === 'title' || phase === 'gameover') hud.showLeaderboard(board, scores);
+}
+
 function canRestart() {
   return phase === 'gameover' && clock.elapsedTime - gameOverTime >= RESTART_DELAY;
 }
 
 function goToTitle() {
+  stopDaily();
   clearWorld();
   player.reset();
   ascension.setTier(0);
@@ -1668,6 +1711,9 @@ function toggleMute() {
 
 const MENU_ACTIONS = {
   start: () => (phase === 'title' || phase === 'gameover') && startRun(),
+  daily: () => (phase === 'title' || phase === 'gameover') && startRun({ daily: true }),
+  leaderboard: ({ board }) => showLeaderboard(board ?? 'all'),
+  submit: ({ name }) => submitRun(name ?? ''),
   pantry: () => hud.showPantry(),
   buy: ({ id }) => {
     if (buy(id)) play('pick');
