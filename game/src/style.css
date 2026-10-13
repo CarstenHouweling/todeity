@@ -843,3 +843,27 @@ canvas.game {
   color: #ffe680;
   text-shadow: 0 0 24px #ffb020, 0 4px 0 #7a4200;
 }
+
+/* Skills */
+.kind-skill {
+  border-color: #3fd0c0;
+  background: linear-gradient(#effffb, #c9f3ea);
+  box-shadow: 0 8px 0 #1f8f84, 0 0 22px rgba(63, 208, 192, 0.7), 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.kind-skill .card-blend {
+  background: linear-gradient(90deg, #3fd0c0, #8ff0e4);
+}
+
+.kind-skill .tag-rarity {
+  background: #1f8f84;
+}
+
+.ability[class*='ability-skill'] {
+  border-color: rgba(63, 208, 192, 0.6);
+}
+
+.ability[class*='ability-skill'] .ability-key {
+  font-size: 10px;
+  text-transform: uppercase;
+}

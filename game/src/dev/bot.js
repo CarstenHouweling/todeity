@@ -44,7 +44,7 @@ export function makeBot(game) {
         document.querySelector('[data-action="retire"]').click();
         break;
       }
-      if (game.phase === 'choosing' || game.phase === 'ultimate') {
+      if (['choosing', 'ultimate', 'skill'].includes(game.phase)) {
         const cards = [...document.querySelectorAll('.card')];
         const card = cards[Math.floor(Math.random() * cards.length)];
         bot.log.push(`+${card.querySelector('.card-name').textContent}`);

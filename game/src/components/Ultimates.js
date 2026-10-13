@@ -29,7 +29,7 @@ export const ULTIMATES = {
 const TEA = ['#c98a2b', '#e7b45a', '#f3d29a', '#ffffff'];
 const GOLD = ['#fff3c4', '#ffd36b', '#ffb02e', '#ffffff'];
 
-const additive = (color, opacity) =>
+export const additive = (color, opacity) =>
   new THREE.MeshBasicMaterial({
     color,
     transparent: true,
@@ -39,7 +39,7 @@ const additive = (color, opacity) =>
     fog: false,
   });
 
-function disposeTree(root) {
+export function disposeTree(root) {
   root.removeFromParent();
   root.traverse((child) => {
     child.geometry?.dispose();
@@ -207,7 +207,7 @@ const TEAPOT_HEIGHT = 700;
 const TEAPOT_DAMAGE = 35;
 const TEAPOT_RADIUS = 190;
 
-function createTeapot() {
+export function createTeapot() {
   const porcelain = new THREE.MeshStandardMaterial({ color: '#fbfaf5', roughness: 0.3, flatShading: true });
   const blue = new THREE.MeshStandardMaterial({ color: '#3f78d1', roughness: 0.4, flatShading: true });
   const teapot = new THREE.Group();

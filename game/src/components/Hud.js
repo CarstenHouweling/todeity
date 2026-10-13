@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { BLENDS, RARITIES, describe } from './PowerUps.js';
 import { ULTIMATES } from './Ultimates.js';
+import { SKILLS, SKILL_KEY_LABELS } from './Skills.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
   { id: 'dash', key: 'Shift', name: 'Hop dash', icon: '💨' },
   { id: 'splash', key: 'Space', name: 'Tea splash', icon: '🍵' },
+  ...SKILL_KEY_LABELS.map((key, i) => ({ id: `skill${i}`, key, name: 'Skill', icon: '✨' })),
   { id: 'ultimate', key: 'R', name: 'Ultimate', icon: '✨' },
 ];
 const DAMAGE_NUMBER_DURATION = 0.8; // seconds
@@ -60,6 +62,7 @@ export class Hud {
       this.slots[ability.id] = { slot, icon, cover, timer, badge };
     }
     this.slots.ultimate.slot.hidden = true;
+    SKILL_KEY_LABELS.forEach((_, i) => (this.slots[`skill${i}`].slot.hidden = true));
 
     this.owned = element('owned', this.root);
 
@@ -161,6 +164,22 @@ export class Hud {
     slot.classList.toggle('charging', gauge < 100);
   }
 
+  /** Learned skills: [{ id, level, cooldownLeft }]; `auto` shows they cast themselves. */
+  setSkills(slots, auto) {
+    SKILL_KEY_LABELS.forEach((key, i) => {
+      const slot = slots[i];
+      const ui = this.slots[`skill${i}`];
+      ui.slot.hidden = !slot;
+      if (!slot) return;
+      const skill = SKILLS[slot.id];
+      ui.icon.textContent = skill.icon;
+      ui.slot.title = `${skill.name} (level ${slot.level})`;
+      ui.badge.textContent = slot.level > 1 ? slot.level : '';
+      ui.slot.querySelector('.ability-key').textContent = auto ? 'auto' : key;
+      this.setCooldown(`skill${i}`, slot.cooldownLeft, skill.cooldown(slot.level));
+    });
+  }
+
   /** The brews picked this run: [{ icon, name, level, blend }]. */
   setOwned(list) {
     this.owned.replaceChildren(
@@ -242,6 +261,7 @@ export class Hud {
           <span><b>Shift / RMB</b> hop dash</span>
           <span><b>Space</b> tea splash</span>
           <span><b>R</b> ultimate</span>
+          <span><b>Q/E/F</b> skills (or auto)</span>
           <span><b>Esc</b> pause</span>
         </div>
         ${best ? `<p class="best">Best score: ${best}${meta.victories ? ` · 👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : ''}</p>` : ''}
@@ -283,16 +303,22 @@ export class Hud {
     );
   }
 
-  card({ action, index, brew, rarity, level, text }) {
+  card({ action, index, brew, rarity, level, text, kind: kindOverride }) {
     const blends = brew.blends ?? (brew.blend ? [brew.blend] : []);
     const colors = blends.map((id) => BLENDS[id].color);
     const first = colors[0] ?? '#ffc93c';
     const second = colors[1] ?? first;
-    const kind = brew.kind ?? 'ultimate';
+    const kind = kindOverride ?? brew.kind ?? 'ultimate';
     const tag =
-      kind === 'duo' ? 'Duo' : kind === 'legendary' ? 'Legendary' : kind === 'ultimate' ? 'Ultimate' : RARITIES[rarity].name;
+      { duo: 'Duo', legendary: 'Legendary', ultimate: 'Ultimate', skill: 'Skill' }[kind] ?? RARITIES[rarity].name;
     const rarityClass = kind === 'brew' ? `rarity-${RARITIES[rarity].id}` : `kind-${kind}`;
-    const label = brew.blends ? blends.map(blendLabel).join(' × ') : brew.blend ? blendLabel(brew.blend) : '✨ Ultimate';
+    const label = brew.blends
+      ? blends.map(blendLabel).join(' × ')
+      : brew.blend
+        ? blendLabel(brew.blend)
+        : kind === 'skill'
+          ? '🌀 Skill'
+          : '✨ Ultimate';
     return `
       <button class="card ${rarityClass}" data-action="${action}" data-index="${index}" style="--blend:${first};--blend2:${second}">
         <span class="card-key">${index + 1}</span>
@@ -327,7 +353,17 @@ export class Hud {
     );
   }
 
-  showPause({ build, ultimate, form, sound }) {
+  showSkills(offers, auto) {
+    const cards = offers
+      .map(({ skill, level }, index) =>
+        this.card({ action: 'skill', index, brew: skill, level, text: skill.text(level), kind: 'skill' })
+      )
+      .join('');
+    const how = auto ? 'Skills cast themselves when the moment is right' : 'Cast skills with <b>Q</b>, <b>E</b> and <b>F</b>';
+    this.showMenu('powerups skills', `<h2>Learn a skill</h2><p class="sub">${how}</p><div class="cards">${cards}</div>`);
+  }
+
+  showPause({ build, ultimate, form, sound, autoCast }) {
     const brews = build.length
       ? build
           .map(
@@ -349,6 +385,7 @@ export class Hud {
           <button class="menu-button primary" data-action="resume">▶ Resume</button>
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
+          <button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>
           <button class="menu-button" data-action="restart">↻ Restart run</button>
           <button class="menu-button" data-action="title">⌂ Quit to title</button>
         </div>

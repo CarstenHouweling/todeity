@@ -22,6 +22,7 @@ import { startUltimate, ULTIMATES } from './components/Ultimates.js';
 import { Ascension, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { buy, leavesForRun, meta, pantryLevel, runLine, saveMeta } from './components/Meta.js';
+import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
 
 // Enemies
 const MAX_ALIVE_ENEMIES = 30;
@@ -79,6 +80,8 @@ const STEAM_SPACING = 18; // distance between steam puffs of the Steam Engine
 const GAUGE_PER_DAMAGE = 0.8; // % per point of damage dealt
 const GAUGE_PER_HIT = 12; // % for getting hit
 const ULTIMATE_WAVE = 2; // the ultimate is chosen after clearing this wave
+const SKILL_WAVES = [3, 7, 11, 15]; // a skill (or skill upgrade) is chosen after these waves
+const AUTO_SPLASH_CROWD = 3; // auto-cast: tea splash when this many bees are in reach
 
 // Score
 const SCORE_PER_SECOND = 0.1;
@@ -164,6 +167,7 @@ let rerolls = 0;
 let luck = 0;
 let endless = false;
 let autoPause = true;
+const settings = { autoCast: true, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
 
 let timeAlive = 0;
 let kills = 0;
@@ -212,6 +216,8 @@ const ctx = {
   damageEnemy: (...args) => damageEnemy(...args),
   hurtPlayer: (amount) => hurtPlayer(amount),
   lightningHit,
+  fireSpit: (origin, direction, damage) => fireSpit(origin, direction, damage),
+  isFree: (position, radius) => !isBlockedForPlayer(position, radius),
 };
 const effects = new Effects(ctx);
 const weather = new Weather({
@@ -223,6 +229,7 @@ const weather = new Weather({
   onThunder: () => play('thunder'),
 });
 const ascension = new Ascension(player, particles, effects);
+const skills = new SkillBook(ctx);
 Object.assign(ctx, { effects, weather });
 
 // --- Collisions & movement ---
@@ -257,12 +264,12 @@ function slide(position, dx, dy, isBlocked) {
   }
 }
 
-function isBlockedForPlayer(position) {
-  return !isInsideMap(position, player.radius) || hitsObstacle(position, player.radius);
+function isBlockedForPlayer(position, radius = player.radius) {
+  return !isInsideMap(position, radius) || hitsObstacle(position, radius);
 }
 
 function movePlayer(dx, dy) {
-  slide(player.position, dx, dy, isBlockedForPlayer);
+  slide(player.position, dx, dy, (position) => isBlockedForPlayer(position));
 }
 
 function enemyBlocker(enemy) {
@@ -1150,6 +1157,14 @@ function offerRewards() {
     hud.showUltimates();
     return;
   }
+  if (SKILL_WAVES.includes(wave)) {
+    offers = skills.offers();
+    if (offers.length) {
+      setPhase('skill');
+      hud.showSkills(offers, settings.autoCast);
+      return;
+    }
+  }
   offers = rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate });
   if (!offers.length) {
     afterReward();
@@ -1189,6 +1204,20 @@ function chooseUltimate(index) {
   afterReward();
 }
 
+function chooseSkill(index) {
+  const offer = offers[index];
+  if (!offer || phase !== 'skill') return;
+  skills.learn(offer.skill.id);
+  play('legendary');
+  effects.ring(player.position, { radius: 90, color: '#3fd0c0', duration: 0.6 });
+  hud.hideMenu();
+  afterReward();
+}
+
+function saveSettings() {
+  safeStorage('set', 'tode-settings', JSON.stringify(settings));
+}
+
 function reroll() {
   if (phase !== 'choosing' || rerolls <= 0) return;
   rerolls--;
@@ -1211,6 +1240,7 @@ function refreshOwned() {
 /** Brews (duo and legendary count double) and the ultimate make Tode ascend. */
 function power() {
   let total = player.ultimate ? 2 : 0;
+  for (const slot of skills.slots) total += 1 + slot.level;
   for (const [id, level] of brewLevels) total += brewById(id).kind === 'brew' ? level : 2;
   return total;
 }
@@ -1312,6 +1342,7 @@ function startRun() {
   clearWorld();
   player.reset();
   ascension.setTier(0);
+  skills.reset();
   brewLevels.clear();
   brewTexts.clear();
   hud.setOwned([]);
@@ -1412,7 +1443,17 @@ function showPauseMenu() {
     const brew = brewById(id);
     return { icon: brew.icon, name: brew.name, level, color: brewColor(brew), text: brewTexts.get(id) };
   });
-  hud.showPause({ build, ultimate: player.ultimate, form: TIERS[ascension.tier].name, sound: soundSettings() });
+  for (const slot of skills.slots) {
+    const skill = SKILLS[slot.id];
+    build.push({ icon: skill.icon, name: skill.name, level: slot.level, color: '#3fd0c0', text: skill.text(slot.level) });
+  }
+  hud.showPause({
+    build,
+    ultimate: player.ultimate,
+    form: TIERS[ascension.tier].name,
+    sound: soundSettings(),
+    autoCast: settings.autoCast,
+  });
 }
 
 function resume() {
@@ -1440,6 +1481,12 @@ const MENU_ACTIONS = {
   title: () => (phase === 'title' ? hud.showTitle(bestScore) : goToTitle()),
   brew: ({ index }) => chooseBrew(Number(index)),
   ultimate: ({ index }) => chooseUltimate(Number(index)),
+  skill: ({ index }) => chooseSkill(Number(index)),
+  'toggle-autocast': () => {
+    settings.autoCast = !settings.autoCast;
+    saveSettings();
+    showPauseMenu();
+  },
   reroll,
   pause,
   resume,
@@ -1496,13 +1543,14 @@ function updateGame(delta) {
   updateAim();
 
   if (input.wasPressed('ShiftLeft', 'ShiftRight', 'MouseRight')) tryDash(moveDirection);
-  if (input.wasPressed('KeyR', 'KeyQ', 'MouseMiddle')) tryUltimate();
+  if (input.wasPressed('KeyR', 'MouseMiddle')) tryUltimate();
+  SKILL_KEYS.forEach((key, i) => input.wasPressed(key) && skills.castManual(i, ctx.aimGround));
 
   spitCooldownLeft = Math.max(0, spitCooldownLeft - delta);
   if (input.primaryDown && spitCooldownLeft === 0 && !player.rooted) spit();
 
   splashCooldownLeft = Math.max(0, splashCooldownLeft - delta);
-  if (input.wasPressed('Space') && splashCooldownLeft === 0) teaSplash();
+  if (splashCooldownLeft === 0 && (input.wasPressed('Space') || (settings.autoCast && splashWorthIt()))) teaSplash();
 
   player.update(delta, moveDirection, movePlayer);
   if (player.justLanded) {
@@ -1511,6 +1559,7 @@ function updateGame(delta) {
   }
 
   updatePowers(delta);
+  skills.update(delta, settings.autoCast);
   updateProjectiles(delta);
   updateEnemies(delta);
   if (phase !== 'gameover') updateEnemyProjectiles(delta);
@@ -1523,7 +1572,16 @@ function updateGame(delta) {
   hud.setDashCharges(player.dashCharges, stats.dashCharges);
   hud.setCooldown('splash', splashCooldownLeft, stats.splashCooldown);
   hud.setUltimate(player.ultimate, player.gauge);
+  hud.setSkills(skills.slots, settings.autoCast);
   updateHealth();
+}
+
+/** Auto-cast: splash when bees crowd in, or one is about to bite. */
+function splashWorthIt() {
+  const reach = player.stats.splashRadius * (weather.info.splashRadius ?? 1);
+  const inReach = aliveEnemies().filter((enemy) => enemy.position.distanceTo(player.position) < reach);
+  const biting = inReach.some((enemy) => enemy.position.distanceTo(player.position) < enemy.radius + player.radius + 12);
+  return inReach.length >= AUTO_SPLASH_CROWD || biting;
 }
 
 function frame(delta, render = true) {
@@ -1539,6 +1597,8 @@ function frame(delta, render = true) {
     if (input.wasPressed('KeyR')) reroll();
   } else if (phase === 'ultimate') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
+  } else if (phase === 'skill') {
+    ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
     startRun();
   }
@@ -1606,6 +1666,9 @@ if (import.meta.env.DEV) {
     },
     chooseBrew,
     chooseUltimate,
+    skills,
+    learn: (id) => skills.learn(id),
+    settings,
     killAll: () => aliveEnemies().forEach((enemy) => damageEnemy(enemy, 9999)),
     skipSpawns: () => spawnQueue.splice(0),
     spawn: (kind, x, y) => spawnEnemy(kind, new THREE.Vector3(x, y, 0)),
