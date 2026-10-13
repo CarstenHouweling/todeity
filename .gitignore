@@ -1,0 +1,9 @@
+# Dependencies and builds
+node_modules/
+dist/
+
+# IDE and course-plugin local state
+.idea/
+
+# OS files
+.DS_Store

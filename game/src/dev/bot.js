@@ -1,0 +1,117 @@
+// Dev-only autoplayer for balance testing. In the browser console:
+//   const bot = game.makeBot(); bot.run(120)  // simulates 120 s of play, returns a log
+// It kites away from bees, aims at the nearest one, splashes crowds and picks random brews.
+// It never dodges stingers on purpose, so it is weaker than a human late in a run.
+
+const SCREEN_RIGHT = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+const SCREEN_UP = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
+
+export function makeBot(game) {
+  const canvas = document.querySelector('canvas.game');
+  const held = new Set();
+  const key = (type, code) => window.dispatchEvent(new KeyboardEvent(type, { code }));
+  const setKey = (code, on) => {
+    if (on === held.has(code)) return;
+    on ? held.add(code) : held.delete(code);
+    key(on ? 'keydown' : 'keyup', code);
+  };
+  const tap = (code) => {
+    key('keydown', code);
+    key('keyup', code);
+  };
+  const holdFire = () => canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 0, bubbles: true }));
+  const aim = (position) => {
+    const v = position.clone().setZ(10).project(game.camera);
+    window.dispatchEvent(
+      new PointerEvent('pointermove', {
+        clientX: ((v.x + 1) / 2) * window.innerWidth,
+        clientY: ((1 - v.y) / 2) * window.innerHeight,
+      })
+    );
+  };
+
+  const bot = { time: 0, log: [], wave: 0, waveStart: 0 };
+  game.autoPause = false; // the test browser is often in the background
+  if (game.phase === 'title' || game.phase === 'gameover') tap('Space');
+  game.step(0.05);
+  holdFire();
+
+  bot.run = (seconds) => {
+    const end = bot.time + seconds;
+    while (bot.time < end && game.phase !== 'gameover') {
+      if (game.phase === 'victory') {
+        bot.log.push('VICTORY');
+        document.querySelector('[data-action="retire"]').click();
+        break;
+      }
+      if (game.phase === 'choosing' || game.phase === 'ultimate') {
+        const cards = [...document.querySelectorAll('.card')];
+        const card = cards[Math.floor(Math.random() * cards.length)];
+        bot.log.push(`+${card.querySelector('.card-name').textContent}`);
+        card.click();
+        holdFire();
+      }
+      if (game.wave !== bot.wave) {
+        if (bot.wave) bot.log.push(`wave ${bot.wave}: ${(bot.time - bot.waveStart).toFixed(0)}s, ${game.player.hp} hp`);
+        bot.wave = game.wave;
+        bot.waveStart = bot.time;
+      }
+
+      const p = game.player.position;
+      const alive = game.enemies.filter((e) => !e.dying);
+      // Flee from nearby bees (the queen counts triple), drift back toward the middle,
+      // and stay out of the corners where bees spawn.
+      let fx = -p.x * 0.05;
+      let fy = -p.y * 0.05;
+      for (const [cx, cy] of [[-330, -330], [330, -330], [-330, 330], [330, 330]]) {
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const weight = 3000 / (dx * dx + dy * dy + 1);
+        fx += dx * weight;
+        fy += dy * weight;
+      }
+      for (const e of alive) {
+        const dx = p.x - e.position.x;
+        const dy = p.y - e.position.y;
+        const weight = ((e.type.boss ? 3 : 1) * 1000) / (dx * dx + dy * dy + 1);
+        fx += dx * weight;
+        fy += dy * weight;
+      }
+      // Sidestep stingers flying at Tode, like a player would.
+      for (const stinger of game.enemyProjectiles) {
+        const dx = p.x - stinger.position.x;
+        const dy = p.y - stinger.position.y;
+        const distance = Math.hypot(dx, dy);
+        const incoming = (dx * stinger.direction.x + dy * stinger.direction.y) / (distance || 1);
+        if (distance > 140 || incoming < 0.8) continue;
+        const side = Math.sign(dx * stinger.direction.y - dy * stinger.direction.x) || 1;
+        fx += stinger.direction.y * side * 40;
+        fy += -stinger.direction.x * side * 40;
+      }
+      const sx = fx * SCREEN_RIGHT.x + fy * SCREEN_RIGHT.y;
+      const sy = fx * SCREEN_UP.x + fy * SCREEN_UP.y;
+      const length = Math.hypot(sx, sy) || 1;
+      setKey('KeyD', sx / length > 0.38);
+      setKey('KeyA', sx / length < -0.38);
+      setKey('KeyW', sy / length > 0.38);
+      setKey('KeyS', sy / length < -0.38);
+
+      const nearest = alive.sort((a, b) => a.position.distanceTo(p) - b.position.distanceTo(p))[0];
+      if (nearest) aim(nearest.position);
+      if (alive.filter((e) => e.position.distanceTo(p) < 85).length >= 3) tap('Space');
+      if (nearest && nearest.position.distanceTo(p) < nearest.radius + 25) tap('ShiftLeft');
+      if (game.player.gauge >= 100 && alive.length >= 3) tap('KeyR');
+
+      game.step(0.1);
+      bot.time += 0.1;
+    }
+    if (game.phase === 'gameover') bot.log.push(`run over in wave ${game.wave} after ${bot.time.toFixed(0)}s`);
+    return bot.log.join(' | ');
+  };
+
+  bot.stop = () => {
+    held.forEach((code) => setKey(code, false));
+    window.dispatchEvent(new PointerEvent('pointerup', { button: 0 }));
+  };
+  return bot;
+}
