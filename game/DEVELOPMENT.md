@@ -71,6 +71,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **First impressions:** the title camera orbits a Golden Tode; the first run starts with a skippable story
   cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
+- **Finale:** the Empress (wave 20) has a Royal Spiral attack; beating her plays an ending cut-scene and credits.
+- **Achievements** (`components/Achievements.js`): 15, each worth 15 Golden Leaves, shown in the Pantry.
+  First-run **tips** appear once each (`meta.tips`).
 - **Phones:** touch controls (floating joystick, dash/splash/ultimate buttons) with auto-aim and auto-fire; skills
   always auto-cast. Quality adapts to the frame rate (pixel ratio 0.6–1.5, shadows off as a last resort).
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
@@ -113,6 +116,8 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
+| `components/TouchControls.js` | Joystick and buttons for touch devices. |
+| `components/Achievements.js` | Achievement list and unlocking (rewards Golden Leaves). |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
 | `components/Weather.js` | Time of day per wave, weather (clear, Tea Rain, Gale, Thunderstorm) with gameplay modifiers, rain/leaves/fireflies. |

@@ -271,6 +271,26 @@ let comboTimer = 0;
 let introBoss = null;
 let hitThisWave = false;
 
+// First-run tips: each one is shown once, ever.
+const TIPS = {
+  move: () =>
+    touch.enabled
+      ? 'Drag on the left side to move. Tode aims and spits by himself!'
+      : 'Move with WASD and hold the left mouse button to spit where you aim.',
+  brew: () => 'Brews from two different Blends unlock Duo brews. Two from one Blend unlock a Legendary.',
+  ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press R!'),
+  skill: () => 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
+  dash: () => (touch.enabled ? 'Tap 💨 to hop-dash through danger.' : 'Shift or right-click to hop-dash: you can\'t be hurt mid-hop.'),
+};
+
+function tip(id) {
+  meta.tips ??= [];
+  if (meta.tips.includes(id) || coop) return;
+  meta.tips.push(id);
+  saveMeta();
+  hud.showTip(TIPS[id]());
+}
+
 /** Unlocks an achievement and celebrates it the first time. */
 function achieve(id) {
   const achievement = unlock(id);
@@ -671,6 +691,7 @@ function addGauge(amount) {
   if (!player.ultimate || player.gauge >= 100) return;
   player.gauge = Math.min(100, player.gauge + amount * player.stats.gaugeRate);
   if (player.gauge >= 100) {
+    tip('ultimate');
     play('ultimateReady');
     hud.damageNumber(player.position, 'ULTIMATE READY · R', 40, 'ready');
   }
@@ -1575,6 +1596,8 @@ function updateWave(delta) {
 
   if (phase === 'intro' && phaseTimer <= 0) {
     setPhase('fighting');
+    if (wave === 1) tip('move');
+    if (wave === 2) tip('dash');
     if (config.isBoss && !isGuest()) {
       const boss = spawnEnemy(config.boss, farthestCorner(), { elite: null });
       if (boss) startBossIntro(boss);
@@ -1656,6 +1679,7 @@ function chooseBrew(index) {
   brew.apply(player, value);
   play(brew.kind === 'brew' ? 'pick' : 'legendary');
   if (brew.kind === 'duo' || brew.kind === 'legendary') achieve(brew.kind);
+  tip('brew');
   if (brew.kind !== 'brew') {
     postfx.flash(brew.kind === 'legendary' ? '#ffd36b' : '#ffffff', 0.35);
     effects.ring(player.position, { radius: 90, color: brew.kind === 'legendary' ? '#ffb000' : '#ffffff', duration: 0.6 });
@@ -1683,6 +1707,7 @@ function chooseSkill(index) {
   if (!offer || phase !== 'skill') return;
   skills.learn(offer.skill.id);
   if (skills.slots.length >= 3) achieve('skills3');
+  tip('skill');
   play('legendary');
   effects.ring(player.position, { radius: 90, color: '#3fd0c0', duration: 0.6 });
   hud.hideMenu();

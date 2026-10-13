@@ -53,6 +53,7 @@ export class Hud {
     this.banner = element('banner', this.root);
     this.callout = element('callout', this.root);
     this.toasts = element('toasts', document.body);
+    this.tip = element('tip', this.root);
     this.combo = element('combo', this.root);
     this.bossIntro = element('boss-intro', document.body);
     this.bossIntro.hidden = true;
@@ -283,6 +284,14 @@ export class Hud {
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>`;
     }
     this.showMenu('lobby', `<div class="panel"><h2>👥 Co-op</h2>${errorLine}${body}</div>`);
+  }
+
+  /** A gentle hint above the ability bar for new players. */
+  showTip(text) {
+    this.tip.innerHTML = `💡 ${text}`;
+    this.tip.classList.remove('show');
+    void this.tip.offsetWidth;
+    this.tip.classList.add('show');
   }
 
   showAchievement({ icon, name, text }) {
