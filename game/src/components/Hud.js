@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BLENDS, RARITIES, describe } from './PowerUps.js';
 import { ULTIMATES } from './Ultimates.js';
 import { SKILLS, SKILL_KEY_LABELS } from './Skills.js';
+import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 
 const ABILITIES = [
@@ -368,6 +369,36 @@ export class Hud {
       </button>`;
   }
 
+  /** Spirit portraits with their lines, typed out like a conversation. */
+  dialogue(lines) {
+    return `<div class="dialogue">${lines
+      .map(
+        ({ spirit, line }, i) => `
+        <div class="speech" style="--spirit:${spirit.color};animation-delay:${i * 0.9}s">
+          <span class="portrait">${spirit.portrait}</span>
+          <span class="speech-text"><b>${spirit.name}</b> <small>${spirit.title}</small><span class="line" data-line="${line.replace(/"/g, '&quot;')}" data-delay="${i * 0.9}"></span></span>
+        </div>`
+      )
+      .join('')}</div>`;
+  }
+
+  typeDialogue() {
+    clearInterval(this.typing);
+    const lines = [...this.menu.querySelectorAll('.line')];
+    const started = performance.now();
+    this.typing = setInterval(() => {
+      let done = true;
+      for (const node of lines) {
+        const elapsed = (performance.now() - started) / 1000 - Number(node.dataset.delay);
+        const text = node.dataset.line;
+        const shown = Math.max(0, Math.min(text.length, Math.floor(elapsed * 45)));
+        node.textContent = text.slice(0, shown);
+        if (shown < text.length) done = false;
+      }
+      if (done) clearInterval(this.typing);
+    }, 30);
+  }
+
   showBrews(wave, offers, rerolls) {
     const cards = offers
       .map((offer, index) => this.card({ action: 'brew', index, ...offer, text: describe(offer) }))
@@ -375,8 +406,9 @@ export class Hud {
     const reroll = rerolls > 0 ? `<button class="menu-button" data-action="reroll">🔄 Reroll (${rerolls})</button>` : '';
     this.showMenu(
       'powerups',
-      `<h2>Wave ${wave} cleared!</h2><p class="sub">Choose a brew</p><div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
+      `<h2>Wave ${wave} cleared!</h2>${this.dialogue(brewDialogue(offers))}<div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
     );
+    this.typeDialogue();
   }
 
   showUltimates() {
@@ -385,8 +417,9 @@ export class Hud {
       .join('');
     this.showMenu(
       'powerups ultimates',
-      `<h2>Awaken your ultimate</h2><p class="sub">Charged by battle · unleash it with <b>R</b></p><div class="cards">${cards}</div>`
+      `<h2>Awaken your ultimate</h2>${this.dialogue(kettleDialogue('ultimate'))}<p class="sub">Charged by battle · unleash it with <b>R</b></p><div class="cards">${cards}</div>`
     );
+    this.typeDialogue();
   }
 
   showSkills(offers, auto) {
@@ -396,7 +429,11 @@ export class Hud {
       )
       .join('');
     const how = auto ? 'Skills cast themselves when the moment is right' : 'Cast skills with <b>Q</b>, <b>E</b> and <b>F</b>';
-    this.showMenu('powerups skills', `<h2>Learn a skill</h2><p class="sub">${how}</p><div class="cards">${cards}</div>`);
+    this.showMenu(
+      'powerups skills',
+      `<h2>Learn a skill</h2>${this.dialogue(kettleDialogue('skill'))}<p class="sub">${how}</p><div class="cards">${cards}</div>`
+    );
+    this.typeDialogue();
   }
 
   showPause({ build, ultimate, form, sound, autoCast }) {

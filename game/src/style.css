@@ -998,3 +998,64 @@ canvas.game {
   white-space: nowrap;
   text-shadow: 0 1px 2px #000;
 }
+
+/* Spirit dialogue */
+.dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(640px, 92vw);
+  margin: 12px auto 4px;
+  text-align: left;
+}
+
+.speech {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px 10px 10px;
+  border: 2px solid var(--spirit);
+  border-radius: 14px;
+  background: rgba(10, 20, 10, 0.75);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--spirit) 40%, transparent);
+  animation: speech-in 0.4s ease-out backwards;
+}
+
+.speech:nth-child(even) {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+@keyframes speech-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+.portrait {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff55, var(--spirit) 60%, #00000055);
+  box-shadow: 0 0 0 3px #00000055, 0 0 16px var(--spirit);
+  font-size: 34px;
+}
+
+.speech-text b {
+  color: var(--spirit);
+  font-size: 16px;
+}
+
+.speech-text small {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.speech .line {
+  display: block;
+  min-height: 1.3em;
+  margin-top: 2px;
+  font-size: 16px;
+  font-style: italic;
+}
