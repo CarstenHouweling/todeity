@@ -1,9 +1,10 @@
-// Procedural soundtrack: synthesised in the browser, layered by intensity.
-//   0 calm  → pad, plucks and a soft melody (title screen, between waves)
-//   1       → + kick, hats, bass
-//   2       → + snare, driving bass, arpeggio
-//   3       → + heroic lead melody, tom fills, crashes
-//   4       → + choir, double-time hats (god tier, final waves)
+// Procedural "orchestral" soundtrack, synthesised in the browser and layered by intensity:
+//   0 calm  → soft strings, harp arpeggios and a plucked melody (title screen, between waves)
+//   1       → + taiko drums, shakers, sub bass, string ostinato
+//   2       → + snare, driving bass, 16th-note strings, brass stabs
+//   3       → + horn melody, choir, crashes, drum fills, cymbal swells
+//   4       → + melody harmony, double-time percussion (god tier, final waves, bosses)
+// Everything runs through a compressor and a reverb "hall" for size.
 import { audio, noise, onAudioUnlocked, tone } from './Sound.js';
 
 const midi = (note) => 440 * 2 ** ((note - 69) / 12);
@@ -15,19 +16,20 @@ function melody(bars) {
   return steps;
 }
 
-// i – VI – III – VII in A minor: the classic "epic" progression.
+// i – VI – III – VII in A minor: the classic heroic progression.
 const HEROIC_CHORDS = [
   [57, 60, 64],
   [53, 57, 60],
   [48, 52, 55],
   [55, 59, 62],
 ];
+const HEROIC_ROOTS = [45, 41, 36, 43];
 
 const SONGS = {
   garden: {
-    bpm: 96,
+    bpm: 92,
     chords: HEROIC_CHORDS,
-    bass: [45, 41, 36, 43],
+    roots: HEROIC_ROOTS,
     melody: melody([
       [[0, 76, 4], [6, 74, 2], [8, 72, 6]],
       [[0, 72, 4], [6, 69, 2], [8, 65, 6]],
@@ -36,9 +38,9 @@ const SONGS = {
     ]),
   },
   battle: {
-    bpm: 128,
+    bpm: 132,
     chords: HEROIC_CHORDS,
-    bass: [45, 41, 36, 43],
+    roots: HEROIC_ROOTS,
     melody: melody([
       [[0, 69, 3], [3, 72, 3], [6, 76, 2], [8, 74, 2], [10, 72, 2], [12, 69, 4]],
       [[0, 72, 3], [3, 69, 3], [6, 65, 2], [8, 67, 2], [10, 69, 6]],
@@ -48,30 +50,101 @@ const SONGS = {
   },
   boss: {
     bpm: 140,
-    // i – iv – VI – V: darker, with the tension of the major V.
+    boss: true,
+    // i – VI – iv – V: dark, with the tension of the major V.
     chords: [
       [57, 60, 64],
-      [50, 53, 57],
       [53, 57, 60],
+      [50, 53, 57],
       [52, 56, 59],
     ],
-    bass: [45, 38, 41, 40],
+    roots: [45, 41, 38, 40],
     melody: melody([
       [[0, 69, 2], [2, 69, 2], [4, 72, 2], [6, 71, 2], [8, 69, 4], [12, 64, 4]],
+      [[0, 72, 2], [2, 72, 2], [4, 77, 2], [6, 76, 2], [8, 72, 4], [12, 69, 4]],
       [[0, 74, 2], [2, 74, 2], [4, 77, 2], [6, 76, 2], [8, 74, 4], [12, 69, 4]],
-      [[0, 72, 2], [2, 74, 2], [4, 76, 2], [6, 77, 2], [8, 79, 4], [12, 77, 4]],
       [[0, 76, 4], [4, 75, 2], [6, 76, 2], [8, 80, 4], [12, 76, 4]],
+    ]),
+  },
+  // God of Tea: VI – VII – i – III, soaring and triumphant.
+  divine: {
+    bpm: 140,
+    chords: [
+      [53, 57, 60],
+      [55, 59, 62],
+      [57, 60, 64],
+      [48, 52, 55],
+    ],
+    roots: [41, 43, 45, 36],
+    melody: melody([
+      [[0, 72, 4], [4, 74, 2], [6, 76, 2], [8, 77, 6], [14, 76, 2]],
+      [[0, 74, 4], [4, 71, 2], [6, 74, 2], [8, 79, 8]],
+      [[0, 76, 3], [3, 77, 3], [6, 79, 2], [8, 81, 6], [14, 79, 2]],
+      [[0, 79, 4], [4, 76, 4], [8, 72, 8]],
     ]),
   },
 };
 
-const BASS_STEPS = { 1: [0, 8], 2: [0, 3, 6, 8, 11, 14] };
-const KICK_STEPS = { 1: [0, 8], 3: [0, 6, 8, 11] };
+// A minor scale, for harmonising the melody a third below.
+const SCALE = new Set([9, 11, 0, 2, 4, 5, 7]);
+function thirdBelow(note) {
+  for (const interval of [3, 4]) if (SCALE.has((note - interval + 120) % 12)) return note - interval;
+  return note - 3;
+}
 
-// --- Instruments ---------------------------------------------------------------
+// --- Signal chain: everything → compressor, plus a reverb send ---------------------
 
-function voice({ type, frequency, at, duration, volume, attack = 0.01, release = 0.12, cutoff, detune = 0, vibrato = 0 }) {
+let chain = null;
+
+function hallImpulse(context, seconds, decay) {
+  const length = Math.floor(context.sampleRate * seconds);
+  const buffer = context.createBuffer(2, length, context.sampleRate);
+  for (let channel = 0; channel < 2; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** decay;
+  }
+  return buffer;
+}
+
+function setupChain() {
   const { context, musicBus } = audio();
+  const input = context.createGain();
+  const compressor = context.createDynamicsCompressor();
+  compressor.threshold.value = -20;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.005;
+  compressor.release.value = 0.25;
+  const makeUp = context.createGain();
+  makeUp.gain.value = 1.6;
+  const reverb = context.createConvolver();
+  reverb.buffer = hallImpulse(context, 2.8, 2.4);
+  const send = context.createGain();
+  send.gain.value = 0.35;
+
+  input.connect(compressor);
+  input.connect(send).connect(reverb).connect(compressor);
+  compressor.connect(makeUp).connect(musicBus);
+  chain = { input };
+}
+
+function voice({
+  type,
+  frequency,
+  at,
+  duration,
+  volume,
+  attack = 0.01,
+  release = 0.12,
+  cutoff,
+  cutoffPeak, // filter envelope: opens to this right after the attack (brass "blare")
+  q = 0.7,
+  detune = 0,
+  vibrato = 0,
+  pan = 0,
+}) {
+  const { context } = audio();
+  const end = at + duration + release;
   const oscillator = context.createOscillator();
   oscillator.type = type;
   oscillator.frequency.value = frequency;
@@ -81,16 +154,22 @@ function voice({ type, frequency, at, duration, volume, attack = 0.01, release =
   if (vibrato) {
     const lfo = context.createOscillator();
     const depth = context.createGain();
-    lfo.frequency.value = 5.5;
-    depth.gain.value = frequency * vibrato;
+    lfo.frequency.value = 5.2;
+    depth.gain.setValueAtTime(0, at);
+    depth.gain.linearRampToValueAtTime(frequency * vibrato, at + Math.min(0.4, duration));
     lfo.connect(depth).connect(oscillator.frequency);
     lfo.start(at);
-    lfo.stop(at + duration + release + 0.05);
+    lfo.stop(end + 0.05);
   }
   if (cutoff) {
     const filter = context.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = cutoff;
+    filter.Q.value = q;
+    filter.frequency.setValueAtTime(cutoff, at);
+    if (cutoffPeak) {
+      filter.frequency.exponentialRampToValueAtTime(cutoffPeak, at + attack + 0.06);
+      filter.frequency.exponentialRampToValueAtTime(cutoff * 1.4, at + Math.max(attack + 0.1, duration));
+    }
     node.connect(filter);
     node = filter;
   }
@@ -99,48 +178,93 @@ function voice({ type, frequency, at, duration, volume, attack = 0.01, release =
   gain.gain.setValueAtTime(0, at);
   gain.gain.linearRampToValueAtTime(volume, at + attack);
   gain.gain.setValueAtTime(volume, at + Math.max(attack, duration));
-  gain.gain.linearRampToValueAtTime(0, at + duration + release);
-  node.connect(gain).connect(musicBus);
+  gain.gain.linearRampToValueAtTime(0, end);
+  node.connect(gain);
+  let out = gain;
+  if (pan) {
+    const panner = context.createStereoPanner();
+    panner.pan.value = pan;
+    gain.connect(panner);
+    out = panner;
+  }
+  out.connect(chain.input);
   oscillator.start(at);
-  oscillator.stop(at + duration + release + 0.05);
+  oscillator.stop(end + 0.05);
 }
 
-const bus = () => audio().musicBus;
+/** Reverse-cymbal swell that rises into the next phrase. */
+function swell(at, duration) {
+  const { context } = audio();
+  const length = Math.floor(context.sampleRate * duration);
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  const filter = context.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(400, at);
+  filter.frequency.exponentialRampToValueAtTime(7000, at + duration);
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(0.18, at + duration);
+  gain.gain.linearRampToValueAtTime(0, at + duration + 0.02);
+  source.connect(filter).connect(gain).connect(chain.input);
+  source.start(at);
+  source.stop(at + duration + 0.05);
+}
+
+const into = () => chain.input;
 
 const instruments = {
-  kick: (at) => tone({ frequency: 150, to: 40, duration: 0.32, volume: 0.55, at, bus: bus(), attack: 0.003 }),
+  taiko: (at, pitch = 1) => {
+    tone({ frequency: 120 * pitch, to: 45 * pitch, duration: 0.55, volume: 0.75, at, bus: into(), attack: 0.002 });
+    noise({ duration: 0.12, volume: 0.35, filter: 'lowpass', frequency: 500, at, bus: into() });
+  },
   snare: (at) => {
-    noise({ duration: 0.18, volume: 0.28, frequency: 1800, q: 0.8, at, bus: bus() });
-    tone({ type: 'triangle', frequency: 220, to: 160, duration: 0.1, volume: 0.12, at, bus: bus() });
+    noise({ duration: 0.25, volume: 0.32, frequency: 1900, q: 0.7, at, bus: into() });
+    tone({ type: 'triangle', frequency: 210, to: 150, duration: 0.12, volume: 0.14, at, bus: into() });
   },
-  hat: (at, accent) =>
-    noise({ duration: accent ? 0.09 : 0.04, volume: accent ? 0.08 : 0.05, filter: 'highpass', frequency: 7000, at, bus: bus() }),
-  tom: (at, frequency) => tone({ frequency, to: frequency * 0.6, duration: 0.3, volume: 0.3, at, bus: bus() }),
-  crash: (at) => noise({ duration: 1.6, volume: 0.12, filter: 'highpass', frequency: 5000, at, bus: bus() }),
-  bass: (at, note, duration) => {
-    voice({ type: 'sawtooth', frequency: midi(note), at, duration, volume: 0.09, cutoff: 600, release: 0.05 });
-    voice({ type: 'sine', frequency: midi(note - 12), at, duration, volume: 0.16, release: 0.05 });
+  shaker: (at, accent) =>
+    noise({ duration: 0.05, volume: accent ? 0.07 : 0.045, filter: 'highpass', frequency: 6500, at, bus: into() }),
+  crash: (at) => noise({ duration: 2.2, volume: 0.13, filter: 'highpass', frequency: 4000, at, bus: into() }),
+  timpani: (at, note) => {
+    tone({ frequency: midi(note), to: midi(note) * 0.97, duration: 0.7, volume: 0.32, at, bus: into(), attack: 0.004 });
+    noise({ duration: 0.08, volume: 0.15, filter: 'lowpass', frequency: 300, at, bus: into() });
   },
-  pad: (at, chord, duration, brightness) =>
-    chord.forEach((note) =>
+  subBass: (at, note, duration) => voice({ type: 'sine', frequency: midi(note - 12), at, duration, volume: 0.3, release: 0.15 }),
+  bass: (at, note, duration) =>
+    voice({ type: 'sawtooth', frequency: midi(note), at, duration, volume: 0.1, cutoff: 450, cutoffPeak: 1200, release: 0.06 }),
+  strings: (at, note, duration, volume = 0.04) =>
+    [-0.45, 0.45].forEach((pan, i) =>
+      voice({ type: 'sawtooth', frequency: midi(note), detune: i ? 7 : -7, at, duration, volume, attack: 0.008, release: 0.07, cutoff: 2400, pan })
+    ),
+  sustain: (at, chord, duration, volume = 0.02) =>
+    chord.forEach((note, n) =>
       [-8, 8].forEach((detune) =>
-        voice({ type: 'sawtooth', frequency: midi(note), detune, at, duration, volume: 0.022, attack: 0.5, release: 0.6, cutoff: brightness })
+        voice({ type: 'sawtooth', frequency: midi(note), detune, at, duration, volume, attack: 0.7, release: 0.9, cutoff: 1300, pan: (n - 1) * 0.4 })
       )
     ),
-  choir: (at, chord, duration) =>
-    chord.forEach((note) =>
-      voice({ type: 'sine', frequency: midi(note + 12), at, duration, volume: 0.035, attack: 0.6, release: 0.8, vibrato: 0.006 })
+  brass: (at, chord, duration) =>
+    [chord[0] - 12, ...chord].forEach((note, n) =>
+      voice({ type: 'sawtooth', frequency: midi(note), at, duration, volume: 0.055, attack: 0.03, release: 0.15, cutoff: 350, cutoffPeak: 2800, q: 1.2, pan: (n - 1.5) * 0.25 })
     ),
-  pluck: (at, note, volume = 0.07) =>
-    voice({ type: 'triangle', frequency: midi(note), at, duration: 0.05, volume, release: 0.35 }),
-  arp: (at, note) => voice({ type: 'square', frequency: midi(note), at, duration: 0.05, volume: 0.025, release: 0.08, cutoff: 2500 }),
-  lead: (at, note, duration) => {
-    voice({ type: 'sawtooth', frequency: midi(note), at, duration, volume: 0.045, attack: 0.03, release: 0.2, cutoff: 3200, vibrato: 0.004 });
-    voice({ type: 'triangle', frequency: midi(note + 12), at, duration, volume: 0.03, attack: 0.03, release: 0.2 });
+  horn: (at, note, duration, volume = 0.075) => {
+    voice({ type: 'sawtooth', frequency: midi(note), at, duration, volume, attack: 0.04, release: 0.25, cutoff: 900, cutoffPeak: 3200, vibrato: 0.005 });
+    voice({ type: 'sawtooth', frequency: midi(note), detune: 6, at, duration, volume: volume * 0.6, attack: 0.04, release: 0.25, cutoff: 900, cutoffPeak: 3000, vibrato: 0.005 });
+    voice({ type: 'triangle', frequency: midi(note + 12), at, duration, volume: volume * 0.35, attack: 0.05, release: 0.25 });
   },
+  choir: (at, chord, duration) =>
+    chord.forEach((note, n) =>
+      [-10, 10].forEach((detune) =>
+        voice({ type: 'triangle', frequency: midi(note + 12), detune, at, duration, volume: 0.03, attack: 0.6, release: 1.1, cutoff: 1800, vibrato: 0.007, pan: (n - 1) * 0.5 })
+      )
+    ),
+  harp: (at, note, volume = 0.07) =>
+    voice({ type: 'triangle', frequency: midi(note), at, duration: 0.04, volume, release: 0.6, pan: (Math.random() - 0.5) * 0.6 }),
 };
 
-// --- Sequencer -------------------------------------------------------------------
+// --- Sequencer ---------------------------------------------------------------------
 
 const LOOKAHEAD = 0.12; // seconds of music scheduled ahead of time
 
@@ -157,6 +281,7 @@ class MusicPlayer {
   start() {
     onAudioUnlocked(() => {
       if (this.timer) return;
+      setupChain();
       this.nextTime = audio().context.currentTime + 0.1;
       this.timer = setInterval(() => this.schedule(), 25);
     });
@@ -176,8 +301,9 @@ class MusicPlayer {
     while (this.nextTime < context.currentTime + LOOKAHEAD) {
       if (this.step % 16 === 0) this.song = this.nextSong;
       const song = SONGS[this.song];
-      this.playStep(song, this.step, this.nextTime, 60 / song.bpm / 4);
-      this.nextTime += 60 / song.bpm / 4;
+      const stepTime = 60 / song.bpm / 4;
+      this.playStep(song, this.step, this.nextTime, stepTime);
+      this.nextTime += stepTime;
       this.step = (this.step + 1) % 64;
     }
   }
@@ -186,39 +312,53 @@ class MusicPlayer {
     const bar = Math.floor(step / 16);
     const s = step % 16;
     const chord = song.chords[bar];
-    const level = this.song === 'garden' ? 0 : Math.max(this.intensity, this.song === 'boss' ? 3 : 1);
-
-    if (s === 0) {
-      instruments.pad(at, chord, stepTime * 16, level >= 3 ? 2400 : 1300);
-      if (level >= 4) instruments.choir(at, chord, stepTime * 16);
-      if (level >= 3 && (bar === 0 || bar === 2)) instruments.crash(at);
-    }
+    const root = song.roots[bar];
+    const barTime = stepTime * 16;
+    const level = this.song === 'garden' ? 0 : Math.max(this.intensity, song.boss || this.song === 'divine' ? 4 : 1);
+    const note = song.melody[step];
 
     if (level === 0) {
-      // Calm: gentle plucked arpeggio and the melody on plucks.
-      if (s % 4 === 0) instruments.pluck(at, chord[(s / 4) % 3] + 12, 0.045);
-      const note = song.melody[step];
-      if (note) instruments.pluck(at, note.note, 0.08);
+      // Calm: soft strings, harp arpeggio and the melody on harp.
+      if (s === 0) instruments.sustain(at, chord, barTime, 0.032);
+      if (s % 2 === 0) instruments.harp(at, chord[(s / 2) % 3] + (s >= 8 ? 24 : 12), 0.065);
+      if (note) instruments.harp(at, note.note, 0.13);
       return;
     }
 
-    // Drums
-    const kicks = level >= 3 ? KICK_STEPS[3] : KICK_STEPS[1];
-    if (kicks.includes(s)) instruments.kick(at);
+    // Percussion
+    const taikoSteps = song.boss ? [0, 3, 6, 8, 10, 11, 14] : level >= 3 ? [0, 6, 8, 11, 14] : [0, 8];
+    if (taikoSteps.includes(s)) instruments.taiko(at, s === 0 ? 0.9 : 1);
     if (level >= 2 && (s === 4 || s === 12)) instruments.snare(at);
-    if (level >= 4 || s % 2 === 0) instruments.hat(at, s % 4 === 2);
-    if (level >= 3 && bar === 3 && s >= 12) instruments.tom(at, [220, 180, 150, 120][s - 12]);
+    if (s % 2 === 0 || level >= 4) instruments.shaker(at, s % 4 === 0);
+    if (level >= 3 && bar === 3 && s >= 12) {
+      if (level >= 4) instruments.snare(at);
+      instruments.taiko(at, [1.6, 1.4, 1.2, 1.05][s - 12]);
+    }
+    if (level >= 3 && s === 0 && (bar === 0 || bar === 2)) instruments.crash(at);
+    if (level >= 3 && bar === 3 && s === 8) swell(at, stepTime * 8);
+    if (level >= 4 && bar === 1 && s >= 12) instruments.timpani(at, root);
 
     // Bass
-    const bassSteps = level >= 2 ? BASS_STEPS[2] : BASS_STEPS[1];
-    if (bassSteps.includes(s)) instruments.bass(at, song.bass[bar] + (s === 14 ? 12 : 0), stepTime * 1.6);
+    if (s === 0) instruments.subBass(at, root, barTime * 0.95);
+    if (level >= 2 && [0, 3, 6, 8, 11, 14].includes(s)) instruments.bass(at, root + (s === 14 ? 12 : 0), stepTime * 1.5);
 
-    // Arpeggio: chord tones climbing over two octaves.
-    if (level >= 2) instruments.arp(at, chord[s % 3] + 12 + (Math.floor(s / 3) % 2) * 12);
+    // String ostinato: root and fifth, the driving "da-da-da" of epic scores.
+    const pattern = [0, 0, 2, 0, 0, 2, 0, 1];
+    if (level >= 2 || s % 2 === 0) {
+      instruments.strings(at, chord[pattern[s % 8]] + 12, stepTime * 0.8, level >= 3 ? 0.045 : 0.035);
+    }
 
-    // Lead melody
-    const note = song.melody[step];
-    if (level >= 3 && note) instruments.lead(at, note.note, stepTime * note.length * 0.9);
+    // Brass stabs and sustained chords
+    if (level >= 2 && s === 0) instruments.brass(at, chord, stepTime * 3);
+    if (level >= 3 && (s === 6 || s === 10)) instruments.brass(at, chord, stepTime * 1.2);
+    if (level >= 2 && s === 0) instruments.sustain(at, chord, barTime, 0.014);
+    if (level >= 3 && s === 0) instruments.choir(at, chord, barTime);
+
+    // The horn melody, harmonised a third below at full intensity.
+    if (level >= 3 && note) {
+      instruments.horn(at, note.note, stepTime * note.length * 0.92);
+      if (level >= 4) instruments.horn(at, thirdBelow(note.note), stepTime * note.length * 0.92, 0.045);
+    }
   }
 }
 

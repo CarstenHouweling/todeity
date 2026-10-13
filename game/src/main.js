@@ -1068,7 +1068,11 @@ function updateMusic() {
     music.play('boss', tier >= 4 || wave >= 15 ? 4 : 3);
     return;
   }
-  const level = wave >= 15 || tier >= 4 ? 4 : wave >= 7 || tier >= 2 ? 3 : wave >= 3 ? 2 : 1;
+  if (tier >= 4) {
+    music.play('divine', 4);
+    return;
+  }
+  const level = wave >= 15 ? 4 : wave >= 7 || tier >= 2 ? 3 : wave >= 3 ? 2 : 1;
   music.play('battle', level);
 }
 
@@ -1223,7 +1227,7 @@ const TRANSFORM_AT = 1.3; // seconds into the cut-scene
 function startAscension(tier) {
   ascendingTo = tier;
   setPhase('ascending', ASCEND_DURATION);
-  music.play(config?.isBoss ? 'boss' : 'battle', Math.min(4, tier + 1));
+  music.play(config?.isBoss ? 'boss' : tier >= 4 ? 'divine' : 'battle', Math.min(4, tier + 1));
   play('ascend');
 }
 
