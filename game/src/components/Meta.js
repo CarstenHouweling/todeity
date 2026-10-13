@@ -14,7 +14,18 @@ export const PANTRY = [
   { id: 'revive', name: 'Lily Pad Blessing', icon: '🪷', text: 'Once per run, rise again with 2 hearts', costs: [150] },
 ];
 
-const defaults = () => ({ leaves: 0, levels: {}, runs: 0, bestWave: 0, bossKills: 0, victories: 0, maxTier: 0 });
+const defaults = () => ({
+  leaves: 0,
+  levels: {},
+  runs: 0,
+  bestWave: 0,
+  bossKills: 0,
+  victories: 0,
+  maxTier: 0,
+  eliteKills: 0,
+  achievements: [],
+  seenStory: false,
+});
 
 function load() {
   try {

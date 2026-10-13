@@ -9,7 +9,7 @@ import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
 import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TILES, TILE_SIZE } from './components/Map.js';
 import { loadHouse } from './components/House.js';
-import { createEnvironment, HOME, PATH } from './components/Environment.js';
+import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
 import { BLENDS, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, waveConfig } from './components/Waves.js';
@@ -24,6 +24,7 @@ import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { buy, leavesForRun, meta, pantryLevel, runLine, saveMeta } from './components/Meta.js';
 import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
+import { unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 import { Net } from './components/Net.js';
@@ -268,6 +269,15 @@ let lastHitStop = 0;
 let combo = 0;
 let comboTimer = 0;
 let introBoss = null;
+let hitThisWave = false;
+
+/** Unlocks an achievement and celebrates it the first time. */
+function achieve(id) {
+  const achievement = unlock(id);
+  if (!achievement) return;
+  hud.showAchievement(achievement);
+  play('legendary');
+}
 
 // --- Co-op state ---
 // The host simulates the bees and the waves; every player simulates their own Tode.
@@ -467,8 +477,13 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   enemy.netId = nextNetId++;
   // More frogs, mightier bosses.
   if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.6 * (coop.size - 1)));
-  const spot = at ?? freeCorner(enemy.radius);
-  if (!spot || (at && enemyBlocker(enemy)(spot))) {
+  let spot = at ?? freeCorner(enemy.radius);
+  // A requested spot can be blocked (a huge boss at a corner, a summon inside a tree): step toward the middle.
+  if (at) {
+    const isBlocked = enemyBlocker(enemy);
+    spot = [1, 0.92, 0.84, 0.76, 0.68, 0.6].map((f) => at.clone().multiplyScalar(f)).find((p) => !isBlocked(p));
+  }
+  if (!spot) {
     enemy.dispose();
     return null;
   }
@@ -515,6 +530,8 @@ function onEnemyKilled(enemy) {
   combo++;
   comboTimer = COMBO_WINDOW;
   if (!isGuest()) points += Math.round(enemy.score * (1 + Math.min(combo, 50) * COMBO_BONUS));
+  if (combo >= 50) achieve('combo50');
+  if (enemy.elite && ++meta.eliteKills >= 10) achieve('elites');
   const streak = STREAKS.get(combo);
   if (streak) {
     hud.showCallout(streak);
@@ -553,6 +570,7 @@ function onEnemyKilled(enemy) {
 }
 
 function bossDefeated(name, score) {
+  achieve(name.includes('Empress') ? 'empress' : 'queen');
   bossKills++;
   hud.setBoss(null);
   shake = BOSS_DEATH_SHAKE;
@@ -672,6 +690,7 @@ function hurtPlayer(amount, enemy = null) {
     particles.burst(player.position, { count: 16, colors: PETALS, speed: 120, up: 80, size: 1.6 });
     effects.ring(player.position, { radius: 60, color: '#ff9ec7', duration: 0.4 });
   } else {
+    hitThisWave = true;
     shake = Math.max(shake, HIT_SHAKE);
     hitStop(0.08);
     play('hurt');
@@ -871,6 +890,26 @@ function updateQueen(boss, delta) {
       }
       break;
     }
+    case 'spiral':
+      // The Empress's Royal Spiral: two arms of stingers sweeping round.
+      ai.timer -= delta;
+      ai.spiralTick -= delta;
+      boss.glow = 0.4 + 0.3 * Math.sin(ai.timer * 20);
+      moveEnemy(boss, 0, 0, delta);
+      while (ai.spiralTick <= 0) {
+        ai.spiralTick += 0.1;
+        ai.spiralAngle += 0.38;
+        for (const offset of [0, Math.PI]) {
+          const angle = ai.spiralAngle + offset;
+          fireStinger(boss, new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0), 160);
+        }
+      }
+      if (ai.timer <= 0) {
+        boss.glow = 0;
+        ai.mode = 'chase';
+        ai.timer = QUEEN.attackDelay * delayScale;
+      }
+      break;
     case 'recover':
       ai.timer -= delta;
       moveEnemy(boss, 0, 0, delta);
@@ -894,9 +933,13 @@ function startQueenAttack(boss, enraged, delayScale) {
   const { ai } = boss;
   const empress = boss.kind === 'empress';
   const minions = aliveEnemies().length - 1;
-  const attacks = ['charge', 'nova', minions < QUEEN.maxMinions ? 'summon' : 'charge', ...(ai.rain ? ['rain'] : [])].filter(
-    (a) => a !== ai.last
-  );
+  const attacks = [
+    'charge',
+    'nova',
+    minions < QUEEN.maxMinions ? 'summon' : 'charge',
+    ...(ai.rain ? ['rain'] : []),
+    ...(empress ? ['spiral'] : []),
+  ].filter((a) => a !== ai.last);
   const attack = attacks[Math.floor(Math.random() * attacks.length)];
   ai.last = attack;
   ai.timer = QUEEN.attackDelay * delayScale;
@@ -913,6 +956,14 @@ function startQueenAttack(boss, enraged, delayScale) {
     play('charge');
   } else if (attack === 'rain') {
     stingerRain(boss);
+  } else if (attack === 'spiral') {
+    ai.mode = 'spiral';
+    ai.timer = 2.6;
+    ai.spiralTick = 0;
+    ai.spiralAngle = Math.random() * Math.PI;
+    boss.glowColor.set(0xc070ff);
+    play('roar');
+    hud.showCallout('Royal Spiral!');
   } else if (attack === 'nova') {
     const count = (enraged ? QUEEN.enragedNovaCount : QUEEN.novaCount) + (empress ? 8 : 0);
     const offset = Math.random() * Math.PI;
@@ -1423,7 +1474,7 @@ function updateCamera(delta) {
   if (shake < 0.05) shake = 0;
   zoomPunch *= Math.exp(-2.5 * delta);
 
-  if (phase === 'story') return; // the cut-scene drives the camera
+  if (phase === 'story' || phase === 'ending') return; // the cut-scenes drive the camera
   // Title screen: a slow cinematic orbit around Tode.
   if (phase === 'title' || phase === 'loading') {
     orbiting = true;
@@ -1500,6 +1551,8 @@ function startWave(number, weatherKind) {
     hud.setWaiting(null);
   }
   spawnQueue = isGuest() ? [] : seeded(() => buildSpawnQueue(config));
+  hitThisWave = false;
+  if (isDaily() && number >= 5) achieve('daily');
   spawnTimer = 0;
 
   weatherKind ??= seeded(() => rollWeather(number, config.isBoss));
@@ -1542,6 +1595,8 @@ function updateWave(delta) {
 }
 
 function waveCleared() {
+  if (wave >= 5 && !hitThisWave) achieve('untouchable');
+  if (coop) achieve('coop');
   if (coop?.host) share({ k: 'cleared' });
   const bonus = WAVE_CLEAR_BONUS * wave;
   points += bonus;
@@ -1565,11 +1620,9 @@ function offerRewards() {
     return;
   }
   if (wave === FINAL_WAVE && !endless) {
-    setPhase('victory');
     meta.victories++;
     saveMeta();
-    play('victory');
-    hud.showVictory();
+    startEnding();
     return;
   }
   if (wave >= ULTIMATE_WAVE && !player.ultimate) {
@@ -1602,6 +1655,7 @@ function chooseBrew(index) {
   brewTexts.set(brew.id, describe(offer));
   brew.apply(player, value);
   play(brew.kind === 'brew' ? 'pick' : 'legendary');
+  if (brew.kind === 'duo' || brew.kind === 'legendary') achieve(brew.kind);
   if (brew.kind !== 'brew') {
     postfx.flash(brew.kind === 'legendary' ? '#ffd36b' : '#ffffff', 0.35);
     effects.ring(player.position, { radius: 90, color: brew.kind === 'legendary' ? '#ffb000' : '#ffffff', duration: 0.6 });
@@ -1628,6 +1682,7 @@ function chooseSkill(index) {
   const offer = offers[index];
   if (!offer || phase !== 'skill') return;
   skills.learn(offer.skill.id);
+  if (skills.slots.length >= 3) achieve('skills3');
   play('legendary');
   effects.ring(player.position, { radius: 90, color: '#3fd0c0', duration: 0.6 });
   hud.hideMenu();
@@ -1767,6 +1822,62 @@ function endStory() {
   startRun();
 }
 
+// --- Ending cut-scene (after the Empress) ---
+const ENDING_TIME = 12;
+const ENDING_LINES = [
+  [0.3, 'The Empress has fallen. The hive is silent.'],
+  [3.2, 'Tode hops home to his tea table…'],
+  [6.0, '…and pours himself a fresh cup.'],
+  [8.6, 'It is, at last, perfectly steeped. ☕'],
+];
+const tableSpot = new THREE.Vector3();
+
+function startEnding() {
+  setPhase('ending');
+  storyTime = 0;
+  storyLine = 0;
+  orbiting = true;
+  clearWorld();
+  hud.showStory();
+  hud.menu.hidden = true;
+  tableSpot.set(TEA_TABLE.x, TEA_TABLE.y, 0);
+  player.position.set(TEA_TABLE.x + 26, TEA_TABLE.y - 24, 0);
+  player.aimAt(tableSpot);
+  music.play('garden', 0);
+}
+
+function updateEnding(delta) {
+  storyTime += delta;
+  const t = storyTime;
+  while (storyLine < ENDING_LINES.length && t >= ENDING_LINES[storyLine][0]) hud.setStoryLine(ENDING_LINES[storyLine++][1]);
+
+  // Orbit the tea table, then pull far back to show the world Tode made.
+  const pull = Math.max(0, (t - 8.4) / 3.6);
+  const angle = -1.2 + t * 0.12;
+  const distance = 110 + pull * pull * 380;
+  const height = 55 + pull * pull * 300;
+  const local = new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, height);
+  camera.position.copy(local.add(tableSpot).sub(player.position));
+  camera.lookAt(tableSpot.x, tableSpot.y, 12);
+
+  if (t > 6 && Math.random() < 0.4) {
+    particles.burst(tableSpot.clone().add(new THREE.Vector3(-3, 0, 0)), { count: 1, colors: ['#ffffff', '#f3eadf'], speed: 6, up: 30, gravity: -10, height: 26, size: 2, life: 1.4 });
+  }
+  if (t > 8.6 && !updateEnding.sparkled) {
+    updateEnding.sparkled = true;
+    play('legendary');
+    postfx.flash('#fff2c0', 0.4);
+    particles.burst(player.position, { count: 70, colors: ['#ffffff', '#ffe680', '#ffd6f5'], speed: 200, up: 220, size: 2.2, glow: true });
+  }
+  if (t >= ENDING_TIME) {
+    updateEnding.sparkled = false;
+    hud.hideBossIntro();
+    setPhase('victory');
+    play('victory');
+    hud.showVictory();
+  }
+}
+
 // --- Boss entrance ---
 function startBossIntro(boss) {
   if (coop?.host) share({ k: 'bossIntro', id: boss.netId });
@@ -1844,6 +1955,7 @@ function updateAscending(delta) {
     postfx.pulse({ bloom: elapsed, aberration: elapsed * 0.4 });
   } else if (ascension.tier !== ascendingTo) {
     ascension.setTier(ascendingTo);
+    achieve(['', 'awakened', 'golden', 'radiant', 'god'][ascendingTo]);
     divinity.setTier(ascendingTo);
     const { banner, sub, name } = TIERS[ascendingTo];
     hud.setForm(name, ascendingTo);
@@ -2522,6 +2634,7 @@ function resume() {
 
 /** Saves a clean screenshot (no HUD) with a small watermark, for sharing the most epic moments. */
 function takePhoto() {
+  achieve('photo');
   postfx.render(0);
   const source = renderer.domElement;
   const canvas = document.createElement('canvas');
@@ -2723,6 +2836,8 @@ function frame(realDelta, render = true) {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
   } else if (phase === 'skill') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
+  } else if (phase === 'ending') {
+    updateEnding(realDelta);
   } else if (phase === 'story') {
     updateStory(realDelta);
     if (storyTime > 0.5 && (input.pressed.size > 0 || input.primaryDown)) endStory();
@@ -2745,7 +2860,7 @@ function frame(realDelta, render = true) {
   }
   updateCoop(realDelta, delta);
   touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate));
-  hud.root.classList.toggle('quiet', phase === 'title' || phase === 'loading');
+  hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
   postfx.setTargets(ascension.postfxTargets());
   updateCamera(phase === 'paused' ? 0 : realDelta);
   if (render) postfx.render(realDelta);

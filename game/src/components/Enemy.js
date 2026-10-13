@@ -40,7 +40,7 @@ export const ENEMY_TYPES = {
   empress: {
     name: 'Empress Buzzbelle',
     scale: 18,
-    hp: 95,
+    hp: 75,
     speed: 0.6,
     damage: 2,
     score: 1000,

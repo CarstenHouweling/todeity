@@ -1400,3 +1400,124 @@ body.touch .ability-bar {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.7);
 }
+
+.credits {
+  margin: 14px 0 4px;
+  font-size: 15px;
+  opacity: 0.9;
+  animation: credits-in 2.5s ease-out;
+}
+
+.credits p {
+  margin: 4px 0;
+  font-size: 15px;
+}
+
+.credits .thanks {
+  margin-top: 10px;
+  font-size: 20px;
+  color: #ffe680;
+}
+
+@keyframes credits-in {
+  from { opacity: 0; transform: translateY(30px); }
+}
+
+/* Achievements */
+.toasts {
+  position: fixed;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 260px;
+  padding: 10px 16px;
+  border: 2px solid #ffd76a;
+  border-radius: 14px;
+  background: rgba(30, 20, 5, 0.85);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(255, 200, 80, 0.6);
+  animation: toast-in 0.45s ease-out;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-20px) scale(0.9); }
+}
+
+.toast-icon {
+  font-size: 32px;
+}
+
+.toast small,
+.toast b,
+.toast em {
+  display: block;
+}
+
+.toast small {
+  font-size: 11px;
+  color: #ffd76a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.toast b {
+  font-size: 17px;
+}
+
+.toast em {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.pantry h3 {
+  margin: 18px 0 8px;
+}
+
+.pantry h3 small {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.achievements {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.achievement {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 24px;
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.achievement.unlocked {
+  filter: none;
+  opacity: 1;
+  background: rgba(255, 215, 106, 0.2);
+  box-shadow: 0 0 10px rgba(255, 200, 80, 0.5);
+}

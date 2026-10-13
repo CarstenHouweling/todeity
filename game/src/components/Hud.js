@@ -4,6 +4,7 @@ import { ULTIMATES } from './Ultimates.js';
 import { SKILLS, SKILL_KEY_LABELS } from './Skills.js';
 import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { TIERS } from './Ascension.js';
+import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 
 const ABILITIES = [
@@ -51,6 +52,7 @@ export class Hud {
 
     this.banner = element('banner', this.root);
     this.callout = element('callout', this.root);
+    this.toasts = element('toasts', document.body);
     this.combo = element('combo', this.root);
     this.bossIntro = element('boss-intro', document.body);
     this.bossIntro.hidden = true;
@@ -283,6 +285,13 @@ export class Hud {
     this.showMenu('lobby', `<div class="panel"><h2>👥 Co-op</h2>${errorLine}${body}</div>`);
   }
 
+  showAchievement({ icon, name, text }) {
+    const toast = element('toast', this.toasts);
+    toast.innerHTML = `<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${ACHIEVEMENT_REWARD} 🍃</small><b>${name}</b><em>${text}</em></span>`;
+    setTimeout(() => toast.classList.add('leaving'), 4200);
+    setTimeout(() => toast.remove(), 4800);
+  }
+
   setCombo(count) {
     this.combo.textContent = count >= 3 ? `${count} combo` : '';
     this.combo.classList.toggle('hot', count >= 15);
@@ -441,6 +450,10 @@ ${
         <p class="sub">Golden Leaves earned in every run buy upgrades that last forever.</p>
         <p class="leaves">🍃 ${meta.leaves} Golden Leaves</p>
         <div class="upgrades">${rows}</div>
+        <h3>🏆 Achievements <small>${ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length}/${ACHIEVEMENTS.length} · +${ACHIEVEMENT_REWARD} 🍃 each</small></h3>
+        <div class="achievements">${ACHIEVEMENTS.map(
+          (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text}">${a.icon}</span>`
+        ).join('')}</div>
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
       </div>`
     );
@@ -643,9 +656,15 @@ ${
     this.showMenu(
       'game-over victory',
       `
-      <h1>Victory!</h1>
-      <p>The Empress is defeated and the garden is quiet.</p>
-      <p class="line">“Tode finally finishes his tea. It is, at last, perfectly steeped. ☕”</p>
+      <h1>The End</h1>
+      <p>Tode, God of Tea, finishes his cup in peace.</p>
+      <div class="credits">
+        <p><b>Todeity: Rise of the Tea God</b></p>
+        <p>Made with Three.js and an AI coding agent, grown from the JetBrains Academy course</p>
+        <p>Bee model: Quaternius (CC0) · House model: Jarlan Perez (CC-BY 3.0)</p>
+        <p>Music &amp; sound: generated in your browser</p>
+        <p class="thanks">Thank you for playing! 🐸☕</p>
+      </div>
       <div class="menu-buttons">
         <button class="menu-button primary" data-action="endless">∞ Keep going (endless)</button>
         <button class="menu-button" data-action="retire">☕ Finish the run</button>
