@@ -58,8 +58,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - WASD move (camera-relative), mouse aims, hold LMB to spit, Shift/RMB hop-dash, Space tea bomb,
   R/middle mouse fires the ultimate, Q/E/F cast skills (when auto-cast is off), Esc/P pauses, M mutes.
 - Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups), offered by a tea
-  spirit with a line of dialogue. After wave 2 you pick an **ultimate**; after waves 3, 7, 11 and 15 a **skill**
-  (or a skill upgrade). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
+  spirit with a line of dialogue. After the first boss (wave 5) you pick an **ultimate**. **Skills** come from
+  levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
   Buzzbelle (5), the Hornet Shogun (10), the Seraph Queen (15), **Empress Buzzbelle (20)**, then the ground gives
   way and the true finale is **Bee-zebub in the Underworld (21)**, then a victory screen with an optional
   endless mode. Elite bees from wave 6.
@@ -68,11 +68,25 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   and four-armed spirals (`spiral`/`cross`), charges and summons (`ATTACKS` in `startQueenAttack`). Enemy bullets
   are an instanced field (`components/Bullets.js`), hit on a forgiving core, and tea bombs cancel them. The swarm
   cap grows by 6 per arena.
-- **Experience (Megabonk / Risk of Rain style):** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to
-  Tode within his magnet range; each level offers a quick pick of 3 **infusions** (`components/Infusions.js`,
-  stacking upgrades such as damage, fire rate, crit chance, magnet, extra bomb charges, extra spit) in a
-  non-blocking panel (keys 1–3 or click; solo slows time to 30% while it's open; auto-picks after 10 s).
-  **Critical hits** (5% base) deal double damage with gold numbers. Every player gathers their own leaves in co-op.
+- **Chaos:** bee health and numbers grow steeply (`waveConfig`). From wave 4 waves may get **modifiers**
+  (`MODIFIERS` in `Waves.js`: Frenzy, Horde, Elite Surge, Meteor Shower, Vengeful Swarm, Armoured; two at once
+  from wave 14), shown under the weather. Each arena past the garden has a **hazard** from its second wave on
+  (`HAZARDS` in main.js: falling boulders, holy lightning, meteors, brimstone; `effects.meteor()`), and from wave 6
+  coordinated **squads** appear (`spawnSquad`: an encirclement, a phalanx marching across, a firing squad of
+  stingers that volley together).
+- **Experience:** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to Tode within his magnet range;
+  every level is a pick of 3 **skills**, new ones or upgrades (14 skills, up to 6 slots, level 5 each). Solo, the
+  game pauses for the pick right away (`openLevelUp`, back to the fight afterwards, possibly via a mid-wave
+  transformation); in co-op the picks wait until the wave is cleared (the bar shows `Lv 7 (+2)`). Every player
+  gathers their own leaves. **Critical hits** (5%) deal double damage with gold numbers.
+- **Side objectives** (`OBJECTIVES` in main.js): when Tode reaches an arena it gets one: smash 3 wild hives
+  (garden) or golden hives (Sky Citadel), hives being `nest` structure enemies that keep letting out bees; or hold
+  3 shrines (temple bells, reality rifts), circles that fill while a Tode stands in them and draw bees in. The
+  arena's last wave doesn't clear until it's done (`gateOpen`): the way on is sealed. Arrows at the screen edge
+  point at objectives out of view.
+- **Bigger arenas:** every arena is 4 tiles wider than the one before (`arenaTiles`; `setMapTiles` on arrival).
+  Builders lay out in garden-sized coordinates and `spread` stretches them; `fillProps` adds more props; bigger
+  fields get extra spawn points along the edges.
 - **Arenas** (`components/Arenas.js`): a new playing field every 5 waves: Tode's Garden (1–5), Sage Mountain
   (6–10), Sky Citadel (11–15), Tournament of the Gods (16–20), The Underworld (21+). Each has its own ground,
   props/obstacles, corner spawners, sky dome, lighting palette, particles and post-processing boost, and is built
@@ -86,12 +100,16 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   (~175 units, 1 s recharge) passes through bees, hurting and bumping them (2 damage base), and leaves Tode
   safe for 0.25 s after landing.
 - **Ascension:** brew levels (+2 per Duo/Legendary, +2 for the ultimate, 1 + level per skill) give "power"; at
-  thresholds 3/7/12/18 Tode transforms (Awakened → Golden → Radiant → God of Tea) with a cut-scene, and **the world
-  transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven above the
-  clouds).
+  thresholds 3/7/12/18 Tode transforms with a cut-scene: a quake, rising debris and lightning, then a burst that
+  shatters reality and a pillar of light. The stages (`STAGES` in `Ascension.js`) are like a martial-arts hero
+  powering up: Awakened (white aura), Golden (golden flame and spiky golden crest), Radiant (bigger crest,
+  constant crackling lightning), God of Tea (calm crimson flame, ruby crest, halo, runes and a storm of twinkling
+  sparkles). It can happen mid-wave after a skill pick. In the garden **the world transforms with him**
+  (blossoms → lanterns and petals → crystals and floating islands → a marble heaven above the clouds).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
-- **First impressions:** the title camera orbits a Golden Tode; the first run starts with a skippable story
+- **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
+  again too); the first run starts with a skippable story
   cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
 - **Finale:** the Empress (wave 20) has a Royal Spiral attack. Bee-zebub (wave 21, horns and a fire aura) adds
   Brimstone Rings (walls of fire spreading from him: only a hop-dash gets you through), chasing Hellfire Pillars,
@@ -101,15 +119,17 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   the player mashes Space/click/tap to push the clash point back (`CLASH` in main.js). Winning deals 10% of the
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
   inverted flash); losing costs a heart.
-- **Ultimates:** Steeping Beam, Thunder Tea Storm, Grand Teapot Drop and **Summoning: Great Tode** (a summoning
-  seal, then a giant toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
+- **Ultimates** (picked after wave 5, the gauge fills slowly): Steeping Beam (an enormous beam; Tode keeps moving
+  at 45% speed and steering it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
+  toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
 - **Achievements** (`components/Achievements.js`): 16, each worth 15 Golden Leaves, shown in the Pantry.
   First-run **tips** appear once each (`meta.tips`).
 - **Phones:** touch controls (floating joystick, dash/splash/ultimate buttons) with auto-aim and auto-fire; skills
   always auto-cast. Quality adapts to the frame rate (pixel ratio 0.6–1.5, shadows off as a last resort).
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
-  and Tode says a story line after each run. **Leaderboard** (all-time and a seeded **Daily Brew**) via
-  `game/server`. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
+  and Tode says a story line after each run. **Leaderboards** via `game/server`: score, deepest run (wave, then
+  level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
+  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
 
 ## Graphics levels
 
@@ -161,10 +181,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Enemy.js` | Bee types (`ENEMY_TYPES`: drone, zipper, brute, stinger, queen, shogun, seraph, empress, beezebub), statuses (burn, chill/freeze), hit flash, death animation, glTF or procedural model. |
 | `components/BeeModels.js` | Procedural bee species per arena and boss regalia, with their flight animation. |
 | `components/Bullets.js` | Instanced enemy bullets (spawn, update with a hit callback, cancel in a radius). |
-| `components/Leaves.js`, `components/Infusions.js` | Tea-leaf experience orbs; level-up infusions and the level curve. |
+| `components/Leaves.js` | Tea-leaf experience orbs and the level curve (`leavesForLevel`). |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
-| `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Grand Teapot Drop, Summoning: Great Tode. |
-| `components/Skills.js` | Learnable skills (`SKILLS`) and the `SkillBook` (slots, cooldowns, auto-cast targeting, manual Q/E/F). |
+| `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Summoning: Great Tode (and the teapot model). |
+| `components/Skills.js` | 14 skills (`SKILLS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting, manual Q/E/F for the first three). |
 | `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges). |
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
@@ -187,7 +207,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Map.js` | Lawn (canvas texture with mowing pattern and path) + meadow; `MAP_HALF_SIZE`, `isInsideMap`. |
 | `components/House.js`, `Camera.js`, `Renderer.js`, `Input.js`, `Particles.js`, `Projectile.js`, `collision.js` | As named. |
 | `dev/bot.js` | Dev-only autoplayer for balance testing. |
-| `../server/server.js` | Node server: static hosting of `dist/` + `/api/scores` leaderboard (+ future multiplayer relay). |
+| `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
 | `style.css` | All UI styling. |
 
 ## Conventions and gotchas
@@ -228,7 +248,7 @@ game.step(5)              // advance 5 s of game time without requestAnimationFr
 game.startWave(20)        // jump to a wave
 game.spawn('queen', 0, 150), game.killAll(), game.skipSpawns()
 game.give('eye')          // grant a brew by id (also Duo/Legendary)
-game.ultimate('teapot')   // own an ultimate with a full gauge
+game.ultimate('storm')    // own an ultimate with a full gauge
 game.setTier(4)           // jump to an ascension tier
 game.setWeather('night', 'storm')
 game.learn('comet')       // learn (or level up) a skill
@@ -239,7 +259,7 @@ game.setArena('hell')     // show an arena right away; game.startWave(21) travel
 game.arena                // the current arena id
 game.ultimate('summon')   // then press R for the Great Tode
 game.bullets.list         // enemy bullets in flight
-game.level, game.infusion, game.chooseInfusion(0)
+game.level                // Tode's level (tea leaves)
 game.settings.autoCast = false
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
@@ -249,9 +269,9 @@ Tip for AI agents with an embedded browser: a hidden browser pane pauses `reques
 with `game.step()` and take a screenshot to see the result. `step()` renders only its last frame; CSS animations
 (banners) run on real time, so a screenshot right after a long step can still show them.
 
-Balance reference (Oct 13, after infusions and the tea bomb): the bot (perfect aim, random picks, dodges bullets
-but not telegraphed strikes) died at waves 10 and 20 and beat Bee-zebub once in three runs, at level ~18–19.
-Runs take about 7 minutes. Humans will find the bullet patterns harder than the bot does. See `SUBMISSION.md` for the contest post kit.
+Balance reference (Oct 13, after the chaos update): the bot (perfect aim, random picks, dodges bullets but not
+telegraphed strikes, walks into shrines) died at the wave-10 Hornet Shogun twice and at wave 16 once in three
+runs (levels 12–19). Humans will find the bullet patterns harder than the bot does. See `SUBMISSION.md` for the contest post kit.
 
 ## Ideas / roadmap
 

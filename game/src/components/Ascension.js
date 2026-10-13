@@ -6,11 +6,28 @@ import * as THREE from 'three';
  */
 export const TIERS = [
   { name: 'Tode', power: 0 },
-  { name: 'Awakened Tode', power: 3, banner: 'TODE AWAKENS', sub: 'A golden glow stirs within…' },
+  { name: 'Awakened Tode', power: 3, banner: 'TODE AWAKENS', sub: 'A white fire stirs within…' },
   { name: 'Golden Tode', power: 7, banner: 'GOLDEN TODE', sub: 'His power erupts in golden flame!' },
-  { name: 'Radiant Tode', power: 12, banner: 'RADIANT TODE', sub: 'Lightning answers his call.' },
-  { name: 'Tode, God of Tea', power: 18, banner: 'GOD OF TEA', sub: 'Reality bends around the kettle.' },
+  { name: 'Radiant Tode', power: 12, banner: 'RADIANT TODE', sub: 'Lightning crackles around him.' },
+  { name: 'Tode, God of Tea', power: 18, banner: 'GOD OF TEA', sub: 'A divine crimson flame. Reality bends.' },
 ];
+
+/**
+ * The look of each stage, like the stages of a martial-arts hero powering up: a white aura, then golden flame
+ * and a spiky golden crest, then crackling lightning and a bigger crest, then a calm divine crimson flame with
+ * a ruby crest, a halo and a storm of sparkles.
+ */
+const STAGES = [
+  null,
+  { aura: ['#cfefff', '#ffffff'], opacity: [0.5, 0.22], crest: null, arc: null, sparkles: 0 },
+  { aura: ['#ffc93c', '#fff3a0'], opacity: [0.7, 0.28], crest: { color: '#ffd23f', glow: '#ffb000', size: 1 }, arc: null, sparkles: 0 },
+  { aura: ['#ffd040', '#e8f6ff'], opacity: [0.8, 0.3], crest: { color: '#ffe680', glow: '#ffc000', size: 1.3 }, arc: { color: '#bfe8ff', every: 0.05 }, sparkles: 14 },
+  // The god form is calmer and deeper in colour: a crimson flame that doesn't wash out to white.
+  { aura: ['#e0183c', '#ff9a3a'], opacity: [0.55, 0.18], crest: { color: '#ff4a6a', glow: '#ff1a4a', size: 1.35 }, arc: { color: '#ffd6e0', every: 0.08 }, sparkles: 48 },
+];
+
+/** Aura and cut-scene colour per stage. */
+export const STAGE_COLORS = ['#ffffff', '#cfefff', '#ffc93c', '#ffe680', '#ff4a6a'];
 
 // Per tier: model scale, how gold he turns, glow, metal look, post-processing.
 const LOOKS = [
@@ -22,15 +39,44 @@ const LOOKS = [
 ];
 
 const GOLD = new THREE.Color('#ffc93c');
-const DIVINE = new THREE.Color('#fff4d6');
+const DIVINE = new THREE.Color('#ffc4b4'); // the god form's rose-gold glow
 const FLAMES = [
   ['#ffe680', '#ffc93c', '#ffffff'],
-  ['#ffe680', '#ffc93c', '#ffffff'],
+  ['#ffffff', '#cfefff', '#9fd8ff'],
   ['#ffe066', '#ffb020', '#ff8a1f', '#ffffff'],
   ['#fff2a8', '#ffd040', '#ffffff', '#9fd8ff'],
-  ['#ffffff', '#fff4d6', '#ffd6f5', '#c8b0ff', '#ffe680'],
+  ['#ff3b5c', '#ff8aa0', '#ffd36b', '#ffffff'],
 ];
-const PARTICLES_PER_SECOND = [6, 10, 70, 100, 140];
+const PARTICLES_PER_SECOND = [6, 18, 80, 110, 150];
+
+/** A four-pointed glint for the sparkles. */
+let starTexture = null;
+function star() {
+  starTexture ??= (() => {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const c = size / 2;
+    const glow = ctx.createRadialGradient(c, c, 0, c, c, c);
+    glow.addColorStop(0, 'rgba(255,255,255,1)');
+    glow.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#ffffff';
+    for (const [w, h] of [[3, c], [c, 3]]) {
+      ctx.beginPath();
+      ctx.ellipse(c, c, w, h, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return new THREE.CanvasTexture(canvas);
+  })();
+  return starTexture;
+}
+
+// The gameplay camera always looks along this direction, so the sparkle quads face it once and for all.
+const FACING = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, -1, 1).normalize());
 
 const additive = (color, opacity) =>
   new THREE.MeshBasicMaterial({
@@ -102,10 +148,10 @@ function auraShell(color, opacity, height) {
   return new THREE.Mesh(geometry, material);
 }
 
-/** Spiky golden crest on Tode's head. Local -Y is where he looks. */
-function crest() {
+/** Spiky crest on Tode's head, like flame-shaped hair. Local -Y is where he looks. */
+function crest({ color, glow, size }) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb000', emissiveIntensity: 0.6, flatShading: true });
+  const material = new THREE.MeshStandardMaterial({ color, emissive: glow, emissiveIntensity: 0.7, flatShading: true });
   const spikes = [
     [0, 0, 9, -0.35],
     [-4, 1, 7, -0.6],
@@ -116,8 +162,11 @@ function crest() {
     [-5, 4, 6, -1.1],
     [5, 4, 6, -1.1],
   ];
-  for (const [x, y, length, tilt] of spikes) {
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(1.8, length, 5), material);
+  // Higher stages grow more and longer spikes.
+  if (size > 1.1) spikes.push([-7, 6, 7, -1.3], [7, 6, 7, -1.3], [-3.5, 6, 9, -1.25], [3.5, 6, 9, -1.25], [0, 7, 12, -1.4]);
+  for (const [x, y, baseLength, tilt] of spikes) {
+    const length = baseLength * size;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(1.8 * Math.sqrt(size), length, 5), material);
     spike.geometry.translate(0, length / 2, 0);
     spike.position.set(x, y, 0);
     spike.rotation.set(Math.PI / 2 + tilt, 0, x * -0.06);
@@ -216,16 +265,34 @@ export class Ascension {
     this.parts = new THREE.Group();
     adornments.add(this.parts);
 
-    // Flame aura: two shells flickering against each other.
-    const auraColor = tier === 4 ? '#fff0d0' : '#ffc93c';
-    this.shells = [auraShell(auraColor, 0.45 + tier * 0.12, 28 + tier * 5), auraShell('#ffffff', 0.2 + tier * 0.05, 22 + tier * 3)];
+    // Flame aura: two shells flickering against each other, in the stage's colours.
+    const stage = STAGES[tier];
+    this.shells = [auraShell(stage.aura[0], stage.opacity[0], 28 + tier * 6), auraShell(stage.aura[1], stage.opacity[1], 22 + tier * 3)];
     this.parts.add(...this.shells);
 
-    if (tier >= 2) {
-      this.crest = crest();
+    if (stage.crest) {
+      this.crest = crest(stage.crest);
       this.crest.position.set(0, 1, 11.5);
       this.parts.add(this.crest);
-      if (tier === 4) this.crest.children[0].material.emissive.set('#ffffff');
+    }
+    if (stage.sparkles) {
+      // Twinkling star glints swirling around him (one instanced mesh, facing the camera).
+      this.sparkles = new THREE.InstancedMesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ map: star(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: new THREE.Color(1.6, 1.4, 1.5) }),
+        stage.sparkles
+      );
+      this.sparkles.frustumCulled = false;
+      this.sparkleData = Array.from({ length: stage.sparkles }, () => ({
+        angle: Math.random() * Math.PI * 2,
+        radius: 14 + Math.random() * 30,
+        height: Math.random() * 50,
+        speed: 0.6 + Math.random() * 1.4,
+        rise: 6 + Math.random() * 16,
+        size: 3 + Math.random() * 6,
+        phase: Math.random() * 10,
+      }));
+      player.group.add(this.sparkles);
     }
 
     if (tier >= 3) {
@@ -243,7 +310,8 @@ export class Ascension {
     }
 
     if (tier === 4) {
-      this.halo = new THREE.Mesh(new THREE.TorusGeometry(9, 0.9, 8, 40), additive('#fff3c4', 0.95));
+      // A thin golden halo (a thick bright one blooms into a glare that hides Tode).
+      this.halo = new THREE.Mesh(new THREE.TorusGeometry(9, 0.45, 8, 48), additive('#ffd36b', 0.5));
       this.halo.position.set(0, 2, 25);
       this.halo.rotation.x = 0.25;
       this.parts.add(this.halo);
@@ -273,7 +341,12 @@ export class Ascension {
     };
     dispose(this.parts);
     dispose(this.runes);
-    this.parts = this.runes = this.halo = this.crest = this.shards = this.shells = null;
+    if (this.sparkles) {
+      this.sparkles.removeFromParent();
+      this.sparkles.geometry.dispose();
+      this.sparkles.material.dispose();
+    }
+    this.parts = this.runes = this.halo = this.crest = this.shards = this.shells = this.sparkles = null;
   }
 
   /** Post-processing settings for the current tier. */
@@ -330,16 +403,34 @@ export class Ascension {
       });
     }
 
-    // Crackling lightning around a Radiant or divine Tode.
-    if (tier >= 3) {
+    // Crackling lightning around a Radiant or divine Tode: short jagged arcs hugging his body.
+    const { arc } = STAGES[tier];
+    if (arc) {
       this.arcTimer -= delta;
       if (this.arcTimer <= 0) {
-        this.arcTimer = tier === 4 ? 0.07 : 0.14;
+        this.arcTimer = arc.every * (0.6 + Math.random() * 0.8);
         const angle = Math.random() * Math.PI * 2;
-        const from = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * 10, Math.sin(angle) * 10, 4 + Math.random() * 16));
-        const to = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 16));
-        this.effects.bolt(from, to, { color: tier === 4 ? '#e0c8ff' : '#ffe680', width: 1.2, life: 0.12, jitter: 4 });
+        const from = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * 9, Math.sin(angle) * 9, 3 + Math.random() * 20));
+        const to = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 34, (Math.random() - 0.5) * 34, (Math.random() - 0.3) * 22));
+        this.effects.bolt(from, to, { color: arc.color, width: 1.1, life: 0.1, jitter: 5 });
       }
+    }
+
+    // The god form's sparkles: they spiral up around him, twinkling.
+    if (this.sparkles) {
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const scale = new THREE.Vector3();
+      this.sparkleData.forEach((sparkle, i) => {
+        const angle = sparkle.angle + time * sparkle.speed;
+        const height = (sparkle.height + time * sparkle.rise) % 60;
+        const twinkle = Math.max(0, Math.sin(time * 6 + sparkle.phase)) ** 3;
+        position.set(Math.cos(angle) * sparkle.radius, Math.sin(angle) * sparkle.radius, height + 2);
+        scale.setScalar(sparkle.size * (0.25 + twinkle) * (1 - height / 75));
+        matrix.compose(position, FACING, scale);
+        this.sparkles.setMatrixAt(i, matrix);
+      });
+      this.sparkles.instanceMatrix.needsUpdate = true;
     }
   }
 }

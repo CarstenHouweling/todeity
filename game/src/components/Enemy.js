@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
-import { buildBee } from './BeeModels.js';
+import { buildBee, buildNest } from './BeeModels.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
@@ -51,6 +51,8 @@ export const ENEMY_TYPES = {
     boss: true,
     attackDelayScale: 0.7,
   },
+  // A hive that keeps letting out bees until it is smashed (a side objective).
+  nest: { name: 'Wild Hive', scale: 11, hp: 30, speed: 0, damage: 0, score: 150, knockback: 0, structure: true },
   // Sage Mountain's boss: armoured, fast, and fond of charging.
   shogun: {
     name: 'Hornet Shogun',
@@ -243,7 +245,12 @@ export class Enemy {
     // Own materials per enemy, so a hit flash only lights up the one that got hit.
     this.materials = [];
     let model;
-    if (graphicsLevel > 0) {
+    if (type.structure) {
+      this.rig = buildNest(graphicsLevel);
+      model = this.rig.root;
+      model.scale.setScalar(type.scale / ENEMY_TYPES.drone.scale);
+      this.materials.push(...this.rig.materials);
+    } else if (graphicsLevel > 0) {
       // A new species for every arena after the garden (see BeeModels.js).
       this.rig = buildBee(kind, graphicsLevel);
       model = this.rig.root;

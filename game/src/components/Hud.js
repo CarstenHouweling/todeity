@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BLENDS, RARITIES, describe } from './PowerUps.js';
 import { ULTIMATES } from './Ultimates.js';
-import { SKILLS, SKILL_KEY_LABELS } from './Skills.js';
+import { MAX_SKILLS, SKILLS, SKILL_KEY_LABELS } from './Skills.js';
 import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { TIERS } from './Ascension.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js';
@@ -11,7 +11,8 @@ const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
   { id: 'dash', key: 'Shift', name: 'Hop dash', icon: '💨' },
   { id: 'splash', key: 'Space', name: 'Tea bomb', icon: '💥' },
-  ...SKILL_KEY_LABELS.map((key, i) => ({ id: `skill${i}`, key, name: 'Skill', icon: '✨' })),
+  // Skill slots: the first three have Q/E/F, the rest always cast themselves.
+  ...Array.from({ length: MAX_SKILLS }, (_, i) => ({ id: `skill${i}`, key: SKILL_KEY_LABELS[i] ?? 'auto', name: 'Skill', icon: '✨', skill: true })),
   { id: 'ultimate', key: 'R', name: 'Ultimate', icon: '✨' },
 ];
 const DAMAGE_NUMBER_DURATION = 0.8; // seconds
@@ -65,6 +66,17 @@ export class Hud {
     this.top = element('top-center', this.root);
     this.wave = element('wave', this.top);
     this.weather = element('weather', this.top);
+    this.modifiers = element('weather modifiers', this.top);
+    this.modifiers.hidden = true;
+    this.objective = element('weather objective', this.top);
+    this.objective.hidden = true;
+    // Arrows at the screen edge pointing at objectives out of view.
+    this.arrows = [0, 1, 2].map(() => {
+      const arrow = element('objective-arrow', this.root);
+      arrow.textContent = '➤';
+      arrow.hidden = true;
+      return arrow;
+    });
     this.waiting = element('waiting', this.top);
     this.boss = element('boss-bar', this.top);
     this.bossName = element('boss-name', this.boss);
@@ -85,21 +97,15 @@ export class Hud {
     this.bossIntro = element('boss-intro', document.body);
     this.bossIntro.hidden = true;
 
-    // Experience: tea leaves fill the bar; each level offers an infusion (see Infusions.js).
+    // Experience: tea leaves fill the bar; every level is a new skill or a skill upgrade.
     this.xpBar = element('xp-bar', this.root);
     this.xpFill = element('xp-fill', this.xpBar);
     this.xpLevel = element('xp-level', this.xpBar);
-    this.infusions = element('infusions', this.root);
-    this.infusions.hidden = true;
-    this.infusions.addEventListener('click', (event) => {
-      const target = event.target.closest('[data-action]');
-      if (target) this.onAction(target.dataset.action, target.dataset);
-    });
 
     this.bar = element('ability-bar', this.root);
     this.slots = {};
     for (const ability of ABILITIES) {
-      const slot = element(`ability ability-${ability.id}`, this.bar);
+      const slot = element(`ability ability-${ability.id}${ability.skill ? ' skill' : ''}`, this.bar);
       slot.title = ability.name;
       const icon = element('ability-icon', slot);
       icon.textContent = ability.icon;
@@ -110,7 +116,7 @@ export class Hud {
       this.slots[ability.id] = { slot, icon, cover, timer, badge };
     }
     this.slots.ultimate.slot.hidden = true;
-    SKILL_KEY_LABELS.forEach((_, i) => (this.slots[`skill${i}`].slot.hidden = true));
+    for (let i = 0; i < MAX_SKILLS; i++) this.slots[`skill${i}`].slot.hidden = true;
 
     this.owned = element('owned', this.root);
 
@@ -157,8 +163,9 @@ export class Hud {
     this.muteButton.textContent = muted ? '🔇' : '🔊';
   }
 
-  setScore(score, best) {
-    setText(this.score, `Score: ${score}   Best: ${best}`);
+  /** `time`: the run's play time in seconds (menus and pauses don't count). */
+  setScore(score, best, time = 0) {
+    setText(this.score, `Score: ${score}   Best: ${best}   ⏱ ${formatTime(time)}`);
   }
 
   setHealth(hp, maxHp, shield = false) {
@@ -190,6 +197,39 @@ export class Hud {
   setWeather(info) {
     this.weather.hidden = !info.text;
     this.weather.textContent = `${info.icon} ${info.name} · ${info.text}`;
+  }
+
+  /** The arena's side objective, e.g. "🐝 Smash the wild hives 1/3" (null hides it). */
+  setObjective(text, urgent = false) {
+    setProp(this.objective, 'hidden', !text);
+    if (text) setText(this.objective, text);
+    this.objective.classList.toggle('urgent', urgent);
+  }
+
+  /** Points the edge arrows at objective positions that are off screen. */
+  setObjectiveArrows(points) {
+    this.arrows.forEach((arrow, i) => {
+      const point = points[i];
+      let show = false;
+      if (point) {
+        const p = this.projected.set(point.x, point.y, 20).project(this.camera);
+        if (p.z > 1) p.multiplyScalar(-1);
+        if (Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.88) {
+          show = true;
+          const scale = Math.max(Math.abs(p.x) / 0.9, Math.abs(p.y) / 0.82);
+          const x = ((p.x / scale + 1) / 2) * window.innerWidth;
+          const y = ((1 - p.y / scale) / 2) * window.innerHeight;
+          setStyle(arrow, 'transform', `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -50%) rotate(${Math.atan2(-p.y, p.x).toFixed(2)}rad)`);
+        }
+      }
+      setProp(arrow, 'hidden', !show);
+    });
+  }
+
+  /** Wave modifiers: [{ icon, name, text }]. */
+  setModifiers(list) {
+    this.modifiers.hidden = !list.length;
+    setText(this.modifiers, list.map((mod) => `${mod.icon} ${mod.name} · ${mod.text}`).join('   '));
   }
 
   setBoss(enemy) {
@@ -232,19 +272,20 @@ export class Hud {
 
   /** Learned skills: [{ id, level, cooldownLeft }]; `auto` shows they cast themselves. */
   setSkills(slots, auto) {
-    SKILL_KEY_LABELS.forEach((key, i) => {
+    for (let i = 0; i < MAX_SKILLS; i++) {
+      const key = SKILL_KEY_LABELS[i];
       const slot = slots[i];
       const ui = this.slots[`skill${i}`];
       setProp(ui.slot, 'hidden', !slot);
-      if (!slot) return;
+      if (!slot) continue;
       const skill = SKILLS[slot.id];
       setText(ui.icon, skill.icon);
       setProp(ui.slot, 'title', `${skill.name} (level ${slot.level})`);
       setText(ui.badge, slot.level > 1 ? slot.level : '');
       ui.keyLabel ??= ui.slot.querySelector('.ability-key');
-      setText(ui.keyLabel, auto ? 'auto' : key);
+      setText(ui.keyLabel, auto || !key ? 'auto' : key);
       this.setCooldown(`skill${i}`, slot.cooldownLeft, skill.cooldown(slot.level));
-    });
+    }
   }
 
   /** The brews picked this run: [{ icon, name, level, blend }]. */
@@ -346,26 +387,10 @@ export class Hud {
     setTimeout(() => toast.remove(), 4800);
   }
 
-  setXp(fraction, level) {
+  /** `pending`: levels whose skill pick is still to come (co-op saves them for the end of the wave). */
+  setXp(fraction, level, pending = 0) {
     setStyle(this.xpFill, 'width', `${(Math.min(1, fraction) * 100).toFixed(1)}%`);
-    setText(this.xpLevel, `Lv ${level}`);
-  }
-
-  /** A compact, non-blocking level-up pick: [{ icon, name, text, rare }]. */
-  showInfusions(options, level, touch) {
-    const cards = options
-      .map(
-        (option, index) => `<button class="infusion${option.rare ? ' rare' : ''}" data-action="infuse" data-index="${index}">
-          <span class="infusion-key">${touch ? '' : index + 1}</span><span class="infusion-icon">${option.icon}</span>
-          <b>${option.name}</b><small>${option.text}</small></button>`
-      )
-      .join('');
-    this.infusions.innerHTML = `<div class="infusions-title">Level ${level}! Infuse your tea</div><div class="infusions-cards">${cards}</div>`;
-    this.infusions.hidden = false;
-  }
-
-  hideInfusions() {
-    this.infusions.hidden = true;
+    setText(this.xpLevel, pending > 0 ? `Lv ${level} (+${pending})` : `Lv ${level}`);
   }
 
   /** `progress` 0–1: how far Tode has pushed the clash toward the boss. */
@@ -481,7 +506,7 @@ export class Hud {
         <h1>Todeity</h1>
         <p class="subtitle">Rise of the Tea God</p>
         <p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
-        Brew mighty powers, rise from frog to god, and topple the Empress of the hive.</p>
+        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>
 ${
           document.body.classList.contains('touch')
             ? `<div class="controls">
@@ -630,7 +655,8 @@ ${
     this.typeDialogue();
   }
 
-  showSkills(offers, auto) {
+  /** `level`: shown as a level-up (the skill pick that every level brings). */
+  showSkills(offers, auto, level = 0) {
     const cards = offers
       .map(({ skill, level }, index) =>
         this.card({ action: 'skill', index, brew: skill, level, text: skill.text(level), kind: 'skill' })
@@ -639,7 +665,7 @@ ${
     const how = auto ? 'Skills cast themselves when the moment is right' : 'Cast skills with <b>Q</b>, <b>E</b> and <b>F</b>';
     this.showMenu(
       'powerups skills',
-      `<h2>Learn a skill</h2>${this.dialogue(kettleDialogue('skill'))}<p class="sub">${how}</p><div class="cards">${cards}</div>`
+      `<h2>${level ? `Level ${level}! ` : ''}Learn a skill</h2>${this.dialogue(kettleDialogue('skill'))}<p class="sub">${how}</p><div class="cards">${cards}</div>`
     );
     this.typeDialogue();
   }
@@ -675,23 +701,30 @@ ${
     );
   }
 
-  /** Rows of a leaderboard; `highlight` marks the player's own new entry (1-based rank). */
-  scoreTable(scores, highlight = null) {
+  /**
+   * Rows of a leaderboard; `highlight` marks the player's own new entry (1-based rank). The columns follow the
+   * board: score, depth (wave and level) or speed (time to beat Bee-zebub).
+   */
+  scoreTable(scores, highlight = null, board = 'all') {
     if (!scores) return '<p class="sub">The leaderboard is not reachable right now.</p>';
-    if (!scores.length) return '<p class="sub">No scores yet. Be the first legend!</p>';
+    if (!scores.length) return `<p class="sub">${board === 'speed' ? 'Nobody has beaten Bee-zebub yet. Will you be the first?' : 'No scores yet. Be the first legend!'}</p>`;
+    const columns = {
+      all: [['Score', (e) => e.score.toLocaleString()], ['Wave', (e) => `W${e.wave}`], ['Form', (e) => TIERS[e.tier]?.name ?? '']],
+      daily: [['Score', (e) => e.score.toLocaleString()], ['Wave', (e) => `W${e.wave}`], ['Form', (e) => TIERS[e.tier]?.name ?? '']],
+      depth: [['Wave', (e) => `W${e.wave}`], ['Level', (e) => `Lv ${e.level ?? 0}`], ['Score', (e) => e.score.toLocaleString()]],
+      speed: [['Time', (e) => formatTime(e.clear)], ['Level', (e) => `Lv ${e.level ?? 0}`], ['Score', (e) => e.score.toLocaleString()]],
+    }[board] ?? [];
     const rows = scores
       .map(
         (entry, i) => `
         <tr class="${i + 1 === highlight ? 'me' : ''}">
           <td>${i + 1}</td>
           <td class="name">${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}</td>
-          <td>${entry.score.toLocaleString()}</td>
-          <td>W${entry.wave}</td>
-          <td class="form-cell">${TIERS[entry.tier]?.name ?? ''}</td>
+          ${columns.map(([, value], c) => `<td class="${c === 2 ? 'form-cell' : ''}">${value(entry)}</td>`).join('')}
         </tr>`
       )
       .join('');
-    return `<table class="scores"><tr><th>#</th><th>Name</th><th>Score</th><th>Wave</th><th>Form</th></tr>${rows}</table>`;
+    return `<table class="scores"><tr><th>#</th><th>Name</th>${columns.map(([title]) => `<th>${title}</th>`).join('')}</tr>${rows}</table>`;
   }
 
   showLeaderboard(board, scores) {
@@ -701,22 +734,25 @@ ${
       <div class="panel">
         <h2>🏆 Leaderboard</h2>
         <div class="tabs">
-          <button class="menu-button ${board === 'all' ? 'primary' : ''}" data-action="leaderboard" data-board="all">All time</button>
-          <button class="menu-button ${board === 'daily' ? 'primary' : ''}" data-action="leaderboard" data-board="daily">📅 Today's Daily Brew</button>
+          <button class="menu-button ${board === 'all' ? 'primary' : ''}" data-action="leaderboard" data-board="all">🏆 Score</button>
+          <button class="menu-button ${board === 'depth' ? 'primary' : ''}" data-action="leaderboard" data-board="depth">🌊 Deepest run</button>
+          <button class="menu-button ${board === 'speed' ? 'primary' : ''}" data-action="leaderboard" data-board="speed">⏱ Fastest Bee-zebub</button>
+          <button class="menu-button ${board === 'daily' ? 'primary' : ''}" data-action="leaderboard" data-board="daily">📅 Daily Brew</button>
         </div>
-        ${scores === undefined ? '<p class="sub">Loading…</p>' : this.scoreTable(scores)}
+        ${scores === undefined ? '<p class="sub">Loading…</p>' : this.scoreTable(scores, null, board)}
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
       </div>`
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, time, leaves, line, victory, daily, name }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name }) {
     this.showMenu(
       `game-over ${victory ? 'victory' : ''}`,
       `
       <h1>${victory ? 'Victory!' : 'Game Over'}</h1>
       <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}</p>
-      <p class="stats">Reached wave ${wave} · ${kills} bees defeated · ${Math.floor(time)}s</p>
+      <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated · ${formatTime(time)}</p>
+      ${clear ? `<p class="stats">⏱ Bee-zebub banished in <b>${formatTime(clear)}</b></p>` : ''}
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
       <p class="line">“${line}”</p>
       <form class="submit-score">
@@ -734,11 +770,11 @@ ${
   }
 
   /** Shows the result of a score submission and the board on the game-over screen. */
-  showSubmitted(message, scores, rank) {
+  showSubmitted(message, scores, rank, board = 'all') {
     const form = this.menu.querySelector('.submit-score');
     if (form) form.innerHTML = `<p class="sub">${message}</p>`;
     const slot = this.menu.querySelector('.board-slot');
-    if (slot) slot.innerHTML = this.scoreTable(scores, rank);
+    if (slot) slot.innerHTML = this.scoreTable(scores, rank, board);
   }
 
   showVictory() {
@@ -800,6 +836,12 @@ ${
     for (const label of this.damageNumbers) label.node.remove();
     this.damageNumbers = [];
   }
+}
+
+/** Seconds as m:ss. */
+export function formatTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function escapeHtml(text) {

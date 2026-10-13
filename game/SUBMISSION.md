@@ -17,7 +17,7 @@ Tode just wanted his morning tea. Then the bees came.
 
 Brew powers from five tea spirits, combine them into Duo brews, unleash a colossal **Steeping Beam**, and watch Tode
 transform: *Awakened → Golden → Radiant → God of Tea*. Every transformation reshapes the garden, until it floats
-above the clouds. Solo, phone-friendly, or **co-op with up to 4 friends**. Daily Brew leaderboard included.
+above the clouds. Solo, phone-friendly, or **co-op with up to 4 friends**. Leaderboards for score, deepest run, fastest Bee-zebub kill and a Daily Brew.
 
 ▶ Play: <your link here>
 🎬 Video: <your link here>
@@ -33,10 +33,13 @@ world, music and sound all generated in code.
   reality-warping god form. The spit evolves from green to radiant gold.
 - **The world transforms:** blossoms and lanterns, crystals and floating islands, and finally a marble garden
   floating above a sea of clouds.
-- **Ultimates:** Steeping Beam, Thunder Tea Storm, Grand Teapot Drop, Summoning: Great Tode.
+- **Ultimates:** Steeping Beam (keep moving while you sweep it), Thunder Tea Storm, Summoning: Great Tode.
 - **Roguelite bullet hell:** bees and bosses fire fans, rings and spirals; tea bombs cancel bullets; kills drop
-  tea leaves for mid-wave level-ups with stacking infusions and critical hits.
-- **8 skills** that auto-cast (Ember Comet, Tea Turret, Mirror Tode, Tea Tornado…) so the action never stops.
+  tea leaves: every level is a new skill or a skill upgrade. Wave modifiers, meteor showers, falling boulders
+  and bee squads that surround you, march in a phalanx or fire together.
+- **14 skills** that auto-cast (Ember Comet, Leaf Glaive, Firefly Swarm, Tea Tornado, Orbiting Teacups…), up to six
+  at once, so the action never stops.
+- **Side objectives** open the way to each bigger arena: smash the hives, ring the temple bells, seal the rifts.
 - **Bosses:** one per arena with cinematic entrances and rage phases: Queen Buzzbelle, the Hornet Shogun, the
   Seraph Queen, the Empress at wave 20, then a fall into the
   Underworld for the true finale against Bee-zebub, with huge beam clashes you win by mashing.
@@ -51,13 +54,13 @@ world, music and sound all generated in code.
 
 ## Gameplay video shot list (60–90 s)
 
-1. **0:00** Title screen orbiting Golden Tode (3 s), click Start, the story cut-scene's "Not. On. My. Watch." (5 s).
-2. **0:08** Wave 1–2 action: spit fans, tea bombs, a level-up infusion, kill-streak callout.
+1. **0:00** Title screen orbiting plain Tode (3 s), click Start, the story cut-scene's "Not. On. My. Watch." (5 s).
+2. **0:08** Wave 1–2 action: spit fans, tea bombs, a level-up skill pick, kill-streak callout.
 3. **0:20** Brew screen with a Duo exchange between two spirits; pick it.
 4. **0:28** Ultimate pick → fire the **Steeping Beam** through a swarm.
 5. **0:38** Ascension cut-scene to **Golden Tode**; the garden bursts into blossom.
 6. **0:48** Queen Buzzbelle's cinematic entrance; dodge the red charge lane; slow-motion boss kill.
-7. **1:00** God of Tea: the floating marble garden, halo, Grand Teapot Drop.
+7. **1:00** God of Tea: crimson flame, sparkles, and the Great Tode summon.
 8. **1:10** Co-op clip with a friend (two frogs, name tags), then the leaderboard.
 9. **1:20** End card: title + "Play free in your browser" + link.
 

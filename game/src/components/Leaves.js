@@ -107,3 +107,6 @@ export class Leaves {
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 }
+
+/** Tea leaves needed to go from `level` to the next one. */
+export const leavesForLevel = (level) => Math.round(6 + level * 3 + level * level * 0.4);

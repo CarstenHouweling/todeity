@@ -2,16 +2,16 @@ import * as THREE from 'three';
 import { additive, createTeapot, disposeTree } from './Ultimates.js';
 
 /**
- * Skills: active abilities Tode learns during a run (up to three).
- * By default they cast themselves when the moment is right, so the player can keep running and
- * shooting; in manual mode they fire on Q / E / F toward the cursor.
+ * Skills: abilities Tode learns during a run, picked on every level-up (tea leaves are the experience).
+ * Up to six; by default they cast themselves when the moment is right, so the player can keep running and
+ * shooting. In manual mode the first three fire on Q / E / F toward the cursor; the rest always cast themselves.
  *
  * Each skill: `cooldown(level)`, `autoTarget(ctx)` → a target point (or null to wait),
  * and `cast(ctx, target, level)`. Levels go up when the same skill is picked again.
  */
 
-export const MAX_SKILLS = 3;
-export const MAX_SKILL_LEVEL = 3;
+export const MAX_SKILLS = 6;
+export const MAX_SKILL_LEVEL = 5;
 export const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyF'];
 export const SKILL_KEY_LABELS = ['Q', 'E', 'F'];
 
@@ -364,6 +364,206 @@ class TongueLash extends TimedEffect {
   }
 }
 
+/** A spinning leaf blade that bounces from bee to bee. */
+class LeafGlaive extends TimedEffect {
+  constructor(ctx, target, level) {
+    super(ctx, 4);
+    this.level = level;
+    this.bounces = 3 + level;
+    this.damage = Math.round(6 * power(level));
+    this.position = ctx.player.position.clone().setZ(14);
+    this.hit = new Set();
+    this.target = target.clone().setZ(14);
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 1.2, 3), additive('#9be33a', 0.95));
+    const edge = new THREE.Mesh(new THREE.TorusGeometry(11, 1.4, 6, 3), additive('#e8ffb0', 0.8));
+    edge.rotation.x = Math.PI / 2;
+    this.blade = new THREE.Group();
+    this.blade.add(blade, edge);
+    this.root.add(this.blade);
+    ctx.play('dash');
+  }
+
+  tick(delta) {
+    const { ctx } = this;
+    const to = this.target.clone().sub(this.position);
+    const step = 620 * delta;
+    if (to.length() <= step) {
+      this.position.copy(this.target);
+      this.strike();
+    } else {
+      this.position.addScaledVector(to.normalize(), step);
+    }
+    this.blade.position.copy(this.position);
+    this.blade.rotation.y += delta * 25;
+    ctx.particles.burst(this.position.clone().setZ(0), { count: 1, colors: ['#9be33a', '#e8ffb0'], speed: 10, up: 0, gravity: 0, height: 14, size: 1.6, life: 0.25, glow: true });
+  }
+
+  strike() {
+    const { ctx } = this;
+    const victim = near(ctx, this.position.clone().setZ(0), 30).find((enemy) => !this.hit.has(enemy));
+    if (victim) {
+      this.hit.add(victim);
+      ctx.damageEnemy(victim, this.damage, null, 0, 'skill');
+      this.bounces--;
+    }
+    // On to the nearest bee not hit yet; back to Tode when there is none.
+    const next = ctx.aliveEnemies()
+      .filter((enemy) => !this.hit.has(enemy) && enemy.position.distanceTo(this.position) < 260)
+      .sort((a, b) => a.position.distanceTo(this.position) - b.position.distanceTo(this.position))[0];
+    if (this.bounces > 0 && next) this.target.copy(next.position).setZ(14);
+    else this.life = this.age; // done
+  }
+}
+
+/** Fireflies that seek out bees and burst. */
+class FireflySwarm extends TimedEffect {
+  constructor(ctx, level) {
+    super(ctx, 4);
+    this.damage = Math.round(5 * power(level));
+    this.flies = Array.from({ length: 3 + level }, (_, i) => {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(3, 10, 8), additive('#fff27a', 1));
+      const angle = (i / (3 + level)) * Math.PI * 2;
+      mesh.position.copy(ctx.player.position).add(new THREE.Vector3(Math.cos(angle) * 20, Math.sin(angle) * 20, 18));
+      this.root.add(mesh);
+      return { mesh, velocity: new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0.6).multiplyScalar(160), target: null, done: false };
+    });
+    ctx.play('pick');
+  }
+
+  tick(delta) {
+    const { ctx } = this;
+    let flying = 0;
+    for (const fly of this.flies) {
+      if (fly.done) continue;
+      flying++;
+      if (!fly.target || fly.target.dying) fly.target = nearest({ ...ctx, player: { position: fly.mesh.position } }, 500);
+      if (fly.target) {
+        const want = fly.target.position.clone().setZ(10).sub(fly.mesh.position).normalize().multiplyScalar(420);
+        fly.velocity.lerp(want, 1 - Math.exp(-5 * delta));
+      }
+      fly.mesh.position.addScaledVector(fly.velocity, delta);
+      ctx.particles.burst(fly.mesh.position.clone().setZ(0), { count: 1, colors: ['#fff27a', '#ffd36b'], speed: 5, up: 0, gravity: 0, height: fly.mesh.position.z, size: 1.4, life: 0.3, glow: true });
+      if (fly.target && fly.target.position.distanceTo(fly.mesh.position.clone().setZ(0)) < fly.target.radius + 6) {
+        fly.done = true;
+        fly.mesh.visible = false;
+        ctx.effects.blast(fly.target.position.clone(), { radius: 40, damage: this.damage, knockback: 120, color: '#fff27a', source: 'skill' });
+      }
+    }
+    if (!flying) this.life = this.age;
+  }
+}
+
+/** Sugar-cube mines dropped around Tode; bees that touch one set it off. */
+class SugarMines extends TimedEffect {
+  constructor(ctx, level) {
+    super(ctx, 9);
+    this.damage = Math.round(11 * power(level));
+    const count = 2 + level;
+    this.mines = Array.from({ length: count }, (_, i) => {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const position = ctx.player.position.clone().add(new THREE.Vector3(Math.cos(angle) * 60, Math.sin(angle) * 60, 0));
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(7, 7, 7), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ff9ec7', emissiveIntensity: 0.4, roughness: 0.6 }));
+      cube.position.copy(position).setZ(4);
+      cube.rotation.set(Math.random(), Math.random(), Math.random());
+      this.root.add(cube);
+      return { cube, position: position.setZ(0), armed: 0.4, done: false };
+    });
+    ctx.play('pick');
+  }
+
+  tick(delta) {
+    const { ctx } = this;
+    let left = 0;
+    for (const mine of this.mines) {
+      if (mine.done) continue;
+      left++;
+      mine.armed -= delta;
+      mine.cube.rotation.z += delta * 2;
+      mine.cube.material.emissiveIntensity = 0.4 + 0.4 * Math.sin(this.age * 8);
+      if (mine.armed > 0) continue;
+      if (near(ctx, mine.position, 18).length || this.age > this.life - 0.05) {
+        mine.done = true;
+        mine.cube.visible = false;
+        ctx.play('boom');
+        ctx.shake(4);
+        ctx.particles.burst(mine.position, { count: 22, colors: ['#ffffff', '#ff9ec7', '#ffe0f0'], speed: 200, up: 140, size: 2, height: 4, glow: true });
+        ctx.effects.blast(mine.position, { radius: 65, damage: this.damage, knockback: 300, color: '#ff9ec7', source: 'skill' });
+      }
+    }
+    if (!left) this.life = this.age;
+  }
+}
+
+/** Steam erupts under the bees: a warning ring, then a scalding column. */
+class SteamGeyser extends TimedEffect {
+  constructor(ctx, position, damage, delay) {
+    super(ctx, delay + 0.7);
+    this.position = position.clone().setZ(0);
+    this.damage = damage;
+    this.delay = delay;
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 36), additive('#e8f4ff', 0.7));
+    this.ring.scale.setScalar(45);
+    this.ring.position.copy(this.position).setZ(0.8);
+    this.root.add(this.ring);
+  }
+
+  tick() {
+    const { ctx } = this;
+    if (this.age < this.delay) {
+      this.ring.material.opacity = 0.3 + 0.4 * Math.sin(this.age * 30);
+      return;
+    }
+    if (!this.erupted) {
+      this.erupted = true;
+      this.ring.visible = false;
+      ctx.play('splash');
+      ctx.particles.burst(this.position, { count: 40, colors: ['#ffffff', '#e8f4ff', '#c9e6ff'], speed: 50, up: 380, gravity: 200, size: 3.2, height: 2, life: 0.9 });
+      for (const enemy of near(ctx, this.position, 45)) {
+        enemy.applySlow(0.6, 1.5);
+        ctx.damageEnemy(enemy, this.damage, null, 0, 'skill');
+      }
+    }
+  }
+}
+
+/** Teacups circling Tode, smashing into bees. */
+class OrbitingCups extends TimedEffect {
+  constructor(ctx, level) {
+    super(ctx, 6 + level);
+    this.damage = Math.round(4 * power(level));
+    this.radius = 55 + level * 4;
+    this.cooldowns = new WeakMap();
+    this.cups = Array.from({ length: 2 + level }, () => {
+      const cup = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(5, 3.6, 6, 14), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#5b8fd6', emissiveIntensity: 0.3, roughness: 0.3 }));
+      body.rotation.x = Math.PI / 2;
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.8, 6, 12), body.material);
+      handle.position.x = 5.5;
+      cup.add(body, handle);
+      this.root.add(cup);
+      return cup;
+    });
+    ctx.play('shield');
+  }
+
+  tick(delta) {
+    const { ctx } = this;
+    const center = ctx.player.position;
+    const fade = Math.min(1, this.age * 4, (this.life - this.age) * 3);
+    this.cups.forEach((cup, i) => {
+      const angle = this.age * 3.2 + (i / this.cups.length) * Math.PI * 2;
+      cup.position.set(center.x + Math.cos(angle) * this.radius, center.y + Math.sin(angle) * this.radius, 14);
+      cup.rotation.z = angle * 2;
+      cup.scale.setScalar(fade);
+      for (const enemy of near(ctx, cup.position.clone().setZ(0), 12)) {
+        if ((this.cooldowns.get(enemy) ?? 0) > this.age) continue;
+        this.cooldowns.set(enemy, this.age + 0.45);
+        ctx.damageEnemy(enemy, this.damage, enemy.position.clone().sub(center).setZ(0).normalize(), 220, 'skill');
+      }
+    });
+  }
+}
+
 // --- The skills ------------------------------------------------------------------
 
 export const SKILLS = {
@@ -474,6 +674,67 @@ export const SKILLS = {
       }
     },
   },
+  glaive: {
+    id: 'glaive',
+    name: 'Leaf Glaive',
+    icon: '🍃',
+    text: (level) => `Throw a spinning leaf that bounces through ${3 + level} bees for ${Math.round(6 * power(level))} damage each.`,
+    cooldown: (level) => faster(4, level),
+    autoTarget: (ctx) => nearest(ctx, 380)?.position ?? null,
+    cast: (ctx, target, level) => ctx.effects.addEffect(new LeafGlaive(ctx, target, level)),
+  },
+  fireflies: {
+    id: 'fireflies',
+    name: 'Firefly Swarm',
+    icon: '✨',
+    text: (level) => `Release ${3 + level} fireflies that hunt bees down and burst for ${Math.round(5 * power(level))} damage.`,
+    cooldown: (level) => faster(6, level),
+    autoTarget: (ctx) => (nearest(ctx, 450) ? ctx.player.position : null),
+    cast: (ctx, target, level) => ctx.effects.addEffect(new FireflySwarm(ctx, level)),
+  },
+  mines: {
+    id: 'mines',
+    name: 'Sugar Mines',
+    icon: '🍬',
+    text: (level) => `Scatter ${2 + level} sugar-cube mines around you that explode for ${Math.round(11 * power(level))} damage.`,
+    cooldown: (level) => faster(8, level),
+    autoTarget: (ctx) => (near(ctx, ctx.player.position, 200).length >= 2 ? ctx.player.position : null),
+    cast: (ctx, target, level) => ctx.effects.addEffect(new SugarMines(ctx, level)),
+  },
+  geyser: {
+    id: 'geyser',
+    name: 'Steam Geysers',
+    icon: '♨️',
+    text: (level) => `Steam bursts out under ${2 + level} bees: ${Math.round(8 * power(level))} damage and slowed.`,
+    cooldown: (level) => faster(7, level),
+    autoTarget: (ctx) => (nearest(ctx, 400) ? ctx.player.position : null),
+    cast: (ctx, target, level) => {
+      const bees = near(ctx, ctx.player.position, 400).sort(() => Math.random() - 0.5).slice(0, 2 + level);
+      const damage = Math.round(8 * power(level));
+      bees.forEach((bee, i) => ctx.effects.addEffect(new SteamGeyser(ctx, bee.position, damage, 0.45 + i * 0.08)));
+    },
+  },
+  thunder: {
+    id: 'thunder',
+    name: 'Thunder Aura',
+    icon: '⚡',
+    text: (level) => `Lightning leaps from you through ${3 + level} bees for ${Math.round(5 * power(level))} damage.`,
+    cooldown: (level) => faster(3.2, level),
+    autoTarget: (ctx) => nearest(ctx, 220)?.position ?? null,
+    cast: (ctx, target, level) => {
+      ctx.effects.ring(ctx.player.position, { radius: 40, color: '#cfe0ff', duration: 0.3 });
+      ctx.effects.chain(ctx.player.position, 3 + level, Math.round(5 * power(level)), { range: 220 });
+    },
+  },
+  cups: {
+    id: 'cups',
+    name: 'Orbiting Teacups',
+    icon: '☕',
+    text: (level) => `${2 + level} teacups circle you for ${6 + level} seconds, smashing bees for ${Math.round(4 * power(level))} damage.`,
+    cooldown: (level) => faster(12, level),
+    autoTarget: (ctx) => (near(ctx, ctx.player.position, 250).length >= 1 ? ctx.player.position : null),
+    cast: (ctx, target, level) => ctx.effects.addEffect(new OrbitingCups(ctx, level)),
+  },
   orb: {
     id: 'orb',
     name: 'Ball Lightning',
@@ -522,13 +783,14 @@ export class SkillBook {
 
   /** Counts down cooldowns; in auto mode casts every ready skill that has a good target. */
   update(delta, auto) {
-    for (const slot of this.slots) {
+    this.slots.forEach((slot, index) => {
       slot.cooldownLeft = Math.max(0, slot.cooldownLeft - delta);
-      if (auto && slot.cooldownLeft === 0) {
+      // Skills past the Q/E/F keys always cast themselves.
+      if ((auto || index >= SKILL_KEYS.length) && slot.cooldownLeft === 0) {
         const target = SKILLS[slot.id].autoTarget(this.ctx);
         if (target) this.fire(slot, target);
       }
-    }
+    });
   }
 
   /** Manual cast toward `point` (the cursor on the ground). */

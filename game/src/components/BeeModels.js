@@ -403,3 +403,66 @@ export function buildBee(kind, styleId) {
     },
   };
 }
+
+// --- Hives: side objectives that keep spawning bees until they are smashed ---------------------
+
+const NEST_LOOKS = {
+  0: { base: '#6b4423', body: '#d9a74a', band: '#a8742a', hole: '#2a1a08', glow: '#ffb020' },
+  2: { base: '#f2eee6', body: '#e8c25a', band: '#fff1b8', hole: '#2f4fb0', glow: '#7fd8ff' },
+};
+
+/** A big wild hive (garden) or golden hive altar (Sky Citadel); Y-up like the bees. */
+export function buildNest(styleId) {
+  const key = `nest:${styleId}`;
+  const look = NEST_LOOKS[styleId] ?? NEST_LOOKS[0];
+  if (!geometryCache.has(key)) {
+    const seg = 14 + styleId * 3;
+    const body = [];
+    const glow = [];
+    body.push(piece(new THREE.CylinderGeometry(15, 18, 5, seg), look.base, { position: [0, 2.5, 0] }));
+    // A lumpy skep of stacked bands.
+    for (let i = 0; i < 6; i++) {
+      const t = i / 6;
+      const r = 13.5 * Math.sqrt(1 - t * t * 0.85) + 1;
+      body.push(piece(new THREE.SphereGeometry(r, seg, 8), i % 2 ? look.band : look.body, { position: [0, 7 + i * 4.2, 0], scale: [1, 0.42, 1] }));
+    }
+    body.push(piece(new THREE.SphereGeometry(4, seg, 8), look.body, { position: [0, 31, 0] }));
+    // Entrance holes glowing from inside.
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + 0.4;
+      const y = 10 + (i % 2) * 8;
+      glow.push(piece(new THREE.SphereGeometry(2.2, 10, 8), look.glow, { position: [Math.cos(angle) * 12.4, y, Math.sin(angle) * 12.4], scale: [1, 0.7, 1] }));
+    }
+    if (styleId === 2) {
+      glow.push(piece(new THREE.TorusGeometry(10, 0.6, 8, 48), look.glow, { position: [0, 40, 0], rotation: [Math.PI / 2, 0, 0] }));
+    } else {
+      // Honey dripping down the sides.
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        glow.push(piece(new THREE.CapsuleGeometry(0.9, 6, 3, 8), look.glow, { position: [Math.cos(angle) * 12.8, 15 - i, Math.sin(angle) * 12.8] }));
+      }
+    }
+    geometryCache.set(key, { body: merge(body), glow: merge(glow) });
+  }
+  const parts = geometryCache.get(key);
+  const surface = upgradeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: styleId === 2 ? 0.4 : 0 }), Math.max(1, styleId));
+  surface.color.set('#ffffff');
+  const root = new THREE.Group();
+  const inner = new THREE.Group(); // throbs (the Enemy scales the root)
+  root.add(inner);
+  const body = new THREE.Mesh(parts.body, surface);
+  body.userData.keepGeometry = true;
+  body.castShadow = true;
+  inner.add(body, sharedMesh(parts.glow, shared(Math.max(1, styleId)).glow));
+  return {
+    root,
+    materials: [surface],
+    animate(time, delta, enemy) {
+      // Throbs, harder just after it lets out a bee.
+      enemy.pulse = Math.max(0, (enemy.pulse ?? 0) - delta * 3);
+      const throb = 1 + 0.03 * Math.sin(time * 4) + 0.12 * enemy.pulse;
+      inner.scale.set(throb, 1 / throb, throb);
+      if (enemy.dying) inner.rotation.y += delta * 6;
+    },
+  };
+}

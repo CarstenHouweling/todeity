@@ -283,7 +283,7 @@ export class Player {
         this.unstoppableLeft = Math.max(this.unstoppableLeft, DASH_GRACE);
       }
     } else {
-      targetVelocity.copy(direction).multiplyScalar(this.stats.moveSpeed * this.speedFactor);
+      targetVelocity.copy(direction).multiplyScalar(this.stats.moveSpeed * this.speedFactor * (this.channeling ? 0.45 : 1));
       this.velocity.lerp(targetVelocity, 1 - Math.exp(-ACCELERATION * delta));
     }
 
@@ -323,6 +323,7 @@ export class Player {
     this.hopPhase = 0;
     this.rooted = false;
     this.speedFactor = 1; // swimming, rift boosts (set by the game each frame)
+    this.channeling = false; // firing the beam: slower, but still moving
     this.shield = false;
     this.shieldTimer = 0;
     this.gauge = 0; // ultimate charge, 0–100

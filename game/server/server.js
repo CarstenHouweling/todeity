@@ -1,8 +1,11 @@
 // Todeity game server: serves the built game (../dist), the leaderboard API and the co-op relay.
 // Runs on any Node 18+ host (Azure App Service, a VM, locally). Its only dependency is `ws`.
 //
-//   GET  /api/scores?board=all|daily&date=YYYY-MM-DD&limit=10
-//   POST /api/scores  { name, score, wave, tier, kills, time, victory, daily }
+//   GET  /api/scores?board=all|daily|depth|speed&date=YYYY-MM-DD&limit=10
+//   POST /api/scores  { name, score, wave, level, tier, kills, time, clear, victory, daily }
+//
+// Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
+// beat Bee-zebub, by clear time: play time, menus and pauses excluded).
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
 //
 // Scores are kept in a JSON file in DATA_DIR (default ./data; on Azure App Service use /home/data,
@@ -37,14 +40,14 @@ const MIME = {
 
 // --- Score storage ---------------------------------------------------------------
 
-let boards = { all: [], daily: {} };
+let boards = { all: [], daily: {}, depth: [], speed: [] };
 let saving = Promise.resolve();
 
 async function loadScores() {
   try {
-    boards = JSON.parse(await readFile(SCORES_FILE, 'utf8'));
+    boards = { all: [], daily: {}, depth: [], speed: [], ...JSON.parse(await readFile(SCORES_FILE, 'utf8')) };
   } catch {
-    boards = { all: [], daily: {} };
+    boards = { all: [], daily: {}, depth: [], speed: [] };
   }
 }
 
@@ -57,9 +60,15 @@ function saveScores() {
   return saving;
 }
 
-function insert(board, entry) {
+const ORDERS = {
+  score: (a, b) => b.score - a.score || a.at - b.at,
+  depth: (a, b) => b.wave - a.wave || (b.level ?? 0) - (a.level ?? 0) || b.score - a.score || a.at - b.at,
+  speed: (a, b) => a.clear - b.clear || a.at - b.at,
+};
+
+function insert(board, entry, order = ORDERS.score) {
   board.push(entry);
-  board.sort((a, b) => b.score - a.score || a.at - b.at);
+  board.sort(order);
   board.length = Math.min(board.length, KEEP);
   const rank = board.indexOf(entry);
   return rank >= 0 ? rank + 1 : null;
@@ -84,10 +93,12 @@ function parseEntry(body) {
     name: cleanName(body.name),
     score: clampInt(body.score, 0, 10_000_000),
     wave: clampInt(body.wave, 1, 999),
+    level: clampInt(body.level, 0, 999),
     tier: clampInt(body.tier, 0, 4),
     kills: clampInt(body.kills, 0, 1_000_000),
     time: clampInt(body.time, 0, 86_400),
     victory: Boolean(body.victory),
+    clear: clampInt(body.clear, 0, 86_400), // seconds to beat Bee-zebub (0: not beaten)
     at: Date.now(),
   };
   // A loose sanity check: scores grow with time and kills, not out of nowhere.
@@ -128,10 +139,10 @@ function readBody(req) {
 async function handleScores(req, res, url) {
   if (req.method === 'GET') {
     const limit = clampInt(url.searchParams.get('limit') ?? 10, 1, KEEP);
-    const daily = url.searchParams.get('board') === 'daily';
+    const name = ['daily', 'depth', 'speed'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'all';
     const date = url.searchParams.get('date') || today();
-    const board = daily ? boards.daily[date] ?? [] : boards.all;
-    return send(res, 200, { board: daily ? 'daily' : 'all', date, scores: board.slice(0, limit) });
+    const board = name === 'daily' ? boards.daily[date] ?? [] : boards[name];
+    return send(res, 200, { board: name, date, scores: board.slice(0, limit) });
   }
 
   if (req.method === 'POST') {
@@ -149,6 +160,8 @@ async function handleScores(req, res, url) {
     if (!entry) return send(res, 400, { error: 'That score looks a bit too good to be true.' });
 
     const rank = insert(boards.all, entry);
+    const depthRank = insert(boards.depth, { ...entry }, ORDERS.depth);
+    const speedRank = entry.victory && entry.clear > 0 ? insert(boards.speed, { ...entry }, ORDERS.speed) : null;
     let dailyRank = null;
     if (body.daily) {
       const date = today();
@@ -158,7 +171,7 @@ async function handleScores(req, res, url) {
       for (const old of Object.keys(boards.daily).sort().slice(0, -14)) delete boards.daily[old];
     }
     await saveScores();
-    return send(res, 201, { rank, dailyRank });
+    return send(res, 201, { rank, dailyRank, depthRank, speedRank });
   }
 
   return send(res, 405, { error: 'Method not allowed.' });

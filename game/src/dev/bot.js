@@ -44,11 +44,6 @@ export function makeBot(game) {
         document.querySelector('[data-action="retire"]').click();
         break;
       }
-      if (game.infusion) {
-        const pick = game.infusion[Math.floor(Math.random() * game.infusion.length)];
-        bot.log.push(`+${pick.name} (Lv ${game.level})`);
-        game.chooseInfusion(game.infusion.indexOf(pick));
-      }
       if (['choosing', 'ultimate', 'skill'].includes(game.phase)) {
         const cards = [...document.querySelectorAll('.card')];
         const card = cards[Math.floor(Math.random() * cards.length)];
@@ -68,6 +63,17 @@ export function makeBot(game) {
       // and stay out of the corners where bees spawn.
       let fx = -p.x * 0.05;
       let fy = -p.y * 0.05;
+      // Shrine objectives: walk into the nearest unfinished circle.
+      const shrine = game.objectiveZones?.[0];
+      if (shrine) {
+        const dx = shrine.x - p.x;
+        const dy = shrine.y - p.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance > 30) {
+          fx += (dx / distance) * 6;
+          fy += (dy / distance) * 6;
+        }
+      }
       for (const [cx, cy] of [[-330, -330], [330, -330], [-330, 330], [330, 330]]) {
         const dx = p.x - cx;
         const dy = p.y - cy;

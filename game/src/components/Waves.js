@@ -13,9 +13,9 @@ export function waveConfig(wave) {
     isBoss,
     // Every arena has its own boss.
     boss: wave >= HELL_WAVE ? 'beezebub' : wave >= FINAL_WAVE ? 'empress' : wave === 15 ? 'seraph' : wave === 10 ? 'shogun' : 'queen',
-    count: isBoss ? 4 + wave : Math.min(60, 5 + Math.round(wave * 2.6)),
+    count: isBoss ? 4 + wave : Math.min(75, 6 + Math.round(wave * 3)),
     // Bees toughen up faster later on, to keep pace with a powered-up Tode.
-    hpScale: 1 + 0.15 * (wave - 1) + 0.014 * (wave - 1) ** 2,
+    hpScale: 1 + 0.2 * (wave - 1) + 0.024 * (wave - 1) ** 2,
     speedScale: Math.min(1.45, 1 + 0.035 * (wave - 1)),
     spawnInterval: Math.max(0.3, 1.5 - wave * 0.09),
     weights: {
@@ -38,4 +38,26 @@ export function buildSpawnQueue(config) {
     queue.push(kind);
   }
   return queue;
+}
+
+/**
+ * Wave modifiers, like the curses and artifacts of other roguelites: from wave 4 a wave may get one, more often
+ * the deeper the run, and from wave 14 sometimes two.
+ */
+export const MODIFIERS = {
+  frenzy: { name: 'Frenzy', icon: '😡', text: 'Bees fly 25% faster' },
+  horde: { name: 'Horde', icon: '🐝', text: 'Half again as many bees' },
+  elites: { name: 'Elite Surge', icon: '💀', text: 'Elite bees everywhere' },
+  meteors: { name: 'Meteor Shower', icon: '☄️', text: 'Meteors rain down: watch the red circles' },
+  vengeful: { name: 'Vengeful Swarm', icon: '💢', text: 'Bees burst into stingers when they die' },
+  armored: { name: 'Armoured', icon: '🛡️', text: 'Bees are 50% tougher but drop twice the leaves' },
+};
+
+export function rollModifiers(wave, isBoss) {
+  if (wave < 4) return [];
+  const chance = Math.min(0.85, 0.25 + wave * 0.03) * (isBoss ? 0.5 : 1);
+  if (Math.random() > chance) return [];
+  const pool = Object.keys(MODIFIERS).sort(() => Math.random() - 0.5);
+  const count = wave >= 14 && Math.random() < 0.35 + (wave - 14) * 0.05 ? 2 : 1;
+  return pool.slice(0, count);
 }

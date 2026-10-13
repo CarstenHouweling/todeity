@@ -444,8 +444,47 @@ const faceCenter = (x, y) => Math.atan2(x, -y);
 const corners = (inset = 38) =>
   [-1, 1].flatMap((sx) => [-1, 1].map((sy) => ({ x: sx * (MAP_HALF_SIZE + inset), y: sy * (MAP_HALF_SIZE + inset), rotation: Math.atan2(-sx, sy) })));
 
-/** Adds a prop that blocks movement. */
+/**
+ * Every arena is bigger than the one before. Layouts are designed for the garden's size; `spread` stretches
+ * positions to the current size (set at the start of each build), `far` pushes landmarks out beyond the edge.
+ */
+let spread = 1;
+const GARDEN_HALF = 375;
+const at = (x, y) => [x * spread, y * spread];
+const xy = (x, y) => ({ x: x * spread, y: y * spread });
+const far = (x, y) => {
+  const push = 1 + (spread - 1) * 0.7;
+  return [x * push, y * push];
+};
+
+function startBuild(seed, level) {
+  reseed(seed);
+  setDetail(level);
+  spread = MAP_HALF_SIZE / GARDEN_HALF;
+}
+
+/** Fills a bigger arena with more of its props: `choices` [[geometry, radius, minScale, maxScale, look]]. */
+function fillProps(group, obstacles, choices, perGarden) {
+  const count = Math.round(perGarden * (spread * spread - 1));
+  if (count <= 0) return;
+  const avoid = [
+    ...obstacles.map((o) => ({ ...o, radius: o.radius + 50 })),
+    { x: 0, y: 0, radius: 130 },
+    ...corners(0).map((c) => ({ ...c, radius: 160 })),
+  ];
+  for (const { x, y } of scatterPoints(count, { inside: insideArena(60), spacing: 110, avoid })) {
+    const [geometry, radius, min, max, look] = pick(choices);
+    // These are laid out at full size already: no spreading.
+    const mesh = single(geometry, { x, y, scale: range(min, max), rotation: range(0, Math.PI * 2), look });
+    group.add(mesh);
+    obstacles.push({ x, y, radius: radius * mesh.scale.x });
+  }
+}
+
+/** Adds a prop (positions in garden-sized layout coordinates). Nothing blocks movement any more; obstacles
+ * are kept for spacing decoration and objectives. */
 function solid(group, obstacles, geometry, { x, y, radius, scale = 1, rotation = range(0, Math.PI * 2), look }) {
+  [x, y] = at(x, y);
   const mesh = single(geometry, { x, y, scale, rotation, look });
   group.add(mesh);
   obstacles.push({ x, y, radius: radius * scale });
@@ -602,8 +641,7 @@ function floatingIsland(size, top = '#7ed957', earth = '#8a7a6a') {
 // --- Sage Mountain ---------------------------------------------------------------------
 
 function buildMountain() {
-  reseed(6101);
-  setDetail(1);
+  startBuild(6101, 1);
   const group = new THREE.Group();
   const obstacles = [];
   const updates = [];
@@ -717,9 +755,10 @@ function buildMountain() {
   solid(group, obstacles, boulder, { x: 290, y: 110, radius: 12, scale: 1 });
   solid(group, obstacles, pine, { x: -280, y: 250, radius: 13, scale: 1.1 });
   solid(group, obstacles, pine, { x: 240, y: 300, radius: 13, scale: 0.95 });
+  fillProps(group, obstacles, [[statue, 24, 0.9, 1.1], [mushroomRed, 13, 0.8, 1.3], [mushroomTeal, 13, 0.8, 1.3], [boulder, 12, 0.9, 1.4], [pine, 13, 0.9, 1.2]], 10);
 
   // The sacred oil spring.
-  const spring = { x: -170, y: -170, radius: 56 };
+  const spring = { ...xy(-170, -170), radius: 56 };
   const bank = new THREE.Mesh(new THREE.CircleGeometry(spring.radius + 12, 48), new THREE.MeshStandardMaterial({ color: '#8c8a7e', roughness: 0.8 }));
   bank.position.set(spring.x, spring.y, 0.3);
   bank.receiveShadow = true;
@@ -756,9 +795,11 @@ function buildMountain() {
   group.add(instanced(giantMushroom(pick(['#d6463a', '#2fa3a0', '#c85bd6'])), wildMushrooms.map((s) => ({ ...s, scale: range(0.6, 1.4) }))));
 
   // (The camera looks toward -x, +y, so landmarks go that way.)
-  const peak = single(rockSpire(300), { x: -760, y: 620, scale: 1 });
-  const guardian = single(giantTodeStatue(['#8e9188', '#7d8278'], '#c23b22'), { x: -760, y: 620, z: 300, scale: 4, rotation: faceCenter(-760, 620) });
-  const peak2 = single(rockSpire(420), { x: -560, y: 900, scale: 1.1 });
+  const [px, py] = far(-760, 620);
+  const peak = single(rockSpire(300), { x: px, y: py, scale: 1 });
+  const guardian = single(giantTodeStatue(['#8e9188', '#7d8278'], '#c23b22'), { x: px, y: py, z: 300, scale: 4, rotation: faceCenter(px, py) });
+  const [qx, qy] = far(-560, 900);
+  const peak2 = single(rockSpire(420), { x: qx, y: qy, scale: 1.1 });
   group.add(peak, guardian, peak2);
 
   // Grass, ferns and pebbles on the field (no collisions).
@@ -802,8 +843,7 @@ function buildMountain() {
 // --- Sky Citadel -----------------------------------------------------------------------
 
 function buildSkyCitadel() {
-  reseed(6202);
-  setDetail(2);
+  startBuild(6202, 2);
   const group = new THREE.Group();
   const obstacles = [];
   const updates = [];
@@ -954,8 +994,9 @@ function buildSkyCitadel() {
   for (const [geometry, x, y, scale] of spots) solid(group, obstacles, geometry, { x, y, radius: 12, scale, rotation: 0 });
   solid(group, obstacles, statue, { x: 240, y: -250, radius: 24, rotation: Math.PI * 0.75 });
   solid(group, obstacles, statue, { x: -250, y: 240, radius: 24, rotation: -Math.PI * 0.25 });
+  fillProps(group, obstacles, [[tall, 12, 1, 1], [broken, 12, 1, 1], [statue, 24, 0.9, 1.1]], 8);
 
-  const fountain = { x: 160, y: 120, radius: 46 };
+  const fountain = { ...xy(160, 120), radius: 46 };
   const basin = model([
     part(new THREE.CylinderGeometry(50, 52, 10, 32, 1, true), '#f4f0e8', { position: [0, 5, 0] }),
     part(new THREE.TorusGeometry(51, 3, 8, 48), '#e8c25a', { position: [0, 10, 0], rotation: [Math.PI / 2, 0, 0] }),
@@ -993,7 +1034,7 @@ function buildSkyCitadel() {
       new THREE.TorusGeometry(260 + i * 120, 6, 12, 120),
       new THREE.MeshStandardMaterial({ color: '#ffd36b', emissive: '#a06a00', emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.2 })
     );
-    ring.position.set(-760, 760, 60);
+    ring.position.set(...far(-760, 760), 60);
     ring.rotation.set(0.9 + i * 0.35, 0.3 * i, 0);
     group.add(ring);
     return ring;
@@ -1019,8 +1060,7 @@ function buildSkyCitadel() {
 // --- Tournament of the Gods ---------------------------------------------------------------
 
 function buildCosmos() {
-  reseed(6303);
-  setDetail(3);
+  startBuild(6303, 3);
   const group = new THREE.Group();
   const obstacles = [];
   const updates = [];
@@ -1133,18 +1173,19 @@ function buildCosmos() {
   const tallObelisk = obelisk(70, '#7ff9ff');
   for (const [x, y] of [[210, -110], [-210, 110], [110, 250], [-110, -250]]) {
     solid(group, obstacles, tallObelisk.stone, { x, y, radius: 14, rotation: 0 });
-    group.add(single(tallObelisk.runes, { x, y, rotation: 0, look: runeGlow }));
+    group.add(single(tallObelisk.runes, { ...xy(x, y), rotation: 0, look: runeGlow }));
   }
+  fillProps(group, obstacles, [[tallObelisk.stone, 14, 0.8, 1.1]], 4);
   const boulderGeometry = rock(14, ['#5a5266', '#4a4458', '#6a6278']);
   const floaters = [];
-  for (const [x, y] of [[260, 180], [-260, -170], [-40, 280]]) {
+  for (const [x, y] of [[260, 180], [-260, -170], [-40, 280]].map(([a, b]) => at(a, b))) {
     obstacles.push({ x, y, radius: 16 });
     const boulder = single(boulderGeometry, { x, y, z: 14, scale: 1.3 });
     boulder.userData.phase = range(0, Math.PI * 2);
     group.add(boulder);
     floaters.push(boulder);
   }
-  const well = { x: -180, y: -40, radius: 44 };
+  const well = { ...xy(-180, -40), radius: 44 };
   const wellRim = model([part(new THREE.TorusGeometry(46, 6, 12, 64), '#4a4458', { rotation: [Math.PI / 2, 0, 0], position: [0, 3, 0] })]);
   group.add(single(wellRim, { x: well.x, y: well.y, rotation: 0, prop: false }));
   const wellDisc = portalDisc(44, '#ffffff', '#18c0ff');
@@ -1157,8 +1198,10 @@ function buildCosmos() {
   // Two colossal Tode gods watch the tournament from the void.
   const godStone = ['#d9d2e6', '#bfb6d2'];
   const god = toadStatue(godStone, '#ff8a2a', '#7ff9ff');
-  const leftGod = single(god, { x: -1000, y: 420, z: -260, scale: 11, rotation: faceCenter(-1000, 420) });
-  const rightGod = single(god, { x: -420, y: 1000, z: -260, scale: 11, rotation: faceCenter(-420, 1000) });
+  const [lx, ly] = far(-1000, 420);
+  const [rx, ry] = far(-420, 1000);
+  const leftGod = single(god, { x: lx, y: ly, z: -260, scale: 11, rotation: faceCenter(lx, ly) });
+  const rightGod = single(god, { x: rx, y: ry, z: -260, scale: 11, rotation: faceCenter(rx, ry) });
   group.add(leftGod, rightGod);
 
   // Asteroids drifting past.
@@ -1207,8 +1250,7 @@ function buildCosmos() {
 // --- The Underworld -------------------------------------------------------------------
 
 function buildUnderworld() {
-  reseed(6404);
-  setDetail(4);
+  startBuild(6404, 4);
   const group = new THREE.Group();
   const obstacles = [];
   const updates = [];
@@ -1314,16 +1356,17 @@ function buildUnderworld() {
   const skullGeometry = skull();
   solid(group, obstacles, skullGeometry, { x: 260, y: 210, radius: 18, rotation: Math.PI * 0.8 });
   solid(group, obstacles, skullGeometry, { x: -250, y: -230, radius: 18, rotation: -Math.PI * 0.2 });
+  fillProps(group, obstacles, [[spire, 14, 0.8, 1.3, spireLook], [skullGeometry, 18, 0.9, 1.1]], 8);
   const bowl = brazier();
   const fires = [];
   for (const [x, y] of [[120, -230], [-120, 230], [270, 40], [-280, -40]]) {
     solid(group, obstacles, bowl, { x, y, radius: 9, rotation: 0 });
-    fires.push({ x, y, z: 26 });
+    fires.push({ ...xy(x, y), z: 26 });
   }
   const flames = motes({ count: 120, colors: ['#ff6a00', '#ffb020', '#ff8a2a'], size: 7, height: 34, speed: 40, sway: 2, emitters: fires, spread: 4, opacity: 0.45 });
   group.add(flames.points);
 
-  const pool = { x: 150, y: 140, radius: 50 };
+  const pool = { ...xy(150, 140), radius: 50 };
   const poolRim = model([part(new THREE.TorusGeometry(52, 7, 10, 64), '#2a1d1d', { rotation: [Math.PI / 2, 0, 0], position: [0, 2, 0], jitter: 1.5 })]);
   group.add(single(poolRim, { x: pool.x, y: pool.y, rotation: 0, prop: false }));
   const poolLava = new THREE.Mesh(new THREE.CircleGeometry(50, 48), lavaMaterial('#ff4a10', 5000, 6000));
@@ -1344,7 +1387,8 @@ function buildUnderworld() {
     part(new THREE.ConeGeometry(260, 420, 16, 4, true), '#2a1d1d', { position: [0, 210, 0], jitter: 14 }),
     part(new THREE.CylinderGeometry(52, 52, 6, 24), '#ff6a14', { position: [0, 396, 0] }),
   ]);
-  const volcanoes = [[-1100, 700, 1], [-650, 1150, 0.85], [-1350, 150, 0.75]].map(([x, y, s]) => {
+  const volcanoes = [[-1100, 700, 1], [-650, 1150, 0.85], [-1350, 150, 0.75]].map(([fx, fy, s]) => {
+    const [x, y] = far(fx, fy);
     const volcano = single(volcanoGeometry, { x, y, z: -60, scale: s, rotation: 0 });
     group.add(volcano);
     return { x, y, z: -60 + 400 * s };
@@ -1356,7 +1400,7 @@ function buildUnderworld() {
       part(new THREE.TorusGeometry(140 - i * 8, 9, 8, 24, Math.PI), '#d8cdb4', { position: [0, 0, i * 60 - 180], rotation: [0, 0, 0] })
     ).concat([part(new THREE.CylinderGeometry(12, 12, 400, 10), '#cfc3a8', { position: [0, 140, 0], rotation: [Math.PI / 2, 0, 0] })])
   );
-  group.add(single(rib, { x: -640, y: 640, z: -70, scale: 1.2, rotation: 0.7 }));
+  group.add(single(rib, { ...xy(-640, 640), z: -70, scale: 1.2, rotation: 0.7 }));
 
   const embers = motes({ count: 260, colors: ['#ff6a00', '#ffb020', '#ff3b1f'], size: 3.5, height: 220, speed: 30, sway: 25 });
   const ash = motes({ count: 140, colors: ['#5a4a48', '#3a302e'], size: 4, height: 220, speed: -14, sway: 30, additive: false, opacity: 0.7 });

@@ -10,19 +10,13 @@ export const ULTIMATES = {
     id: 'beam',
     name: 'Steeping Beam',
     icon: '☄️',
-    text: 'Gather your power, then unleash a colossal beam of boiling tea that follows your aim.',
+    text: 'Gather your power, then unleash a colossal beam of boiling tea. Keep moving and sweep it across the swarm.',
   },
   storm: {
     id: 'storm',
     name: 'Thunder Tea Storm',
     icon: '🌩️',
     text: 'Turn the sky black and call 24 lightning strikes down on the bees.',
-  },
-  teapot: {
-    id: 'teapot',
-    name: 'Grand Teapot Drop',
-    icon: '🫖',
-    text: 'A colossal teapot crashes down where you aim, flattening everything.',
   },
   summon: {
     id: 'summon',
@@ -56,10 +50,11 @@ export function disposeTree(root) {
 // --- Steeping Beam ------------------------------------------------------------
 
 const BEAM_CHARGE = 0.75; // seconds of gathering power
-const BEAM_FIRE = 1.9; // seconds of firing
-const BEAM_LENGTH = 900;
-const BEAM_TURN_RATE = 1.8; // radians per second it can follow the aim
-const BEAM_DPS = 40;
+const BEAM_FIRE = 2.6; // seconds of firing
+const BEAM_LENGTH = 1100;
+const BEAM_TURN_RATE = 4.5; // radians per second it can follow the aim
+const BEAM_DPS = 30;
+const BEAM_WIDTH = 1.6; // the beam is enormous
 
 class SteepingBeam {
   constructor(ctx) {
@@ -86,8 +81,8 @@ class SteepingBeam {
     this.group.add(this.orb);
     ctx.scene.add(this.group);
 
-    // Tode stands his ground while firing, and nothing can interrupt him.
-    ctx.player.rooted = true;
+    // Tode keeps moving (slowly) and aiming while firing, and nothing can interrupt him.
+    ctx.player.channeling = true;
     ctx.player.unstoppableLeft = BEAM_CHARGE + BEAM_FIRE;
     ctx.play('beamCharge');
   }
@@ -129,15 +124,15 @@ class SteepingBeam {
     const t = this.age - BEAM_CHARGE;
     const swell = t < 0.15 ? t / 0.15 : t > BEAM_FIRE - 0.3 ? Math.max(0, (BEAM_FIRE - t) / 0.3) : 1;
     const width = swell * (1 + 0.08 * Math.sin(this.age * 45));
-    for (const { mesh, width: base } of this.layers) mesh.scale.set(BEAM_LENGTH, base * width, base * width);
-    this.orb.scale.setScalar(18 * width);
+    for (const { mesh, width: base } of this.layers) mesh.scale.set(BEAM_LENGTH, base * width * BEAM_WIDTH, base * width * BEAM_WIDTH);
+    this.orb.scale.setScalar(18 * width * BEAM_WIDTH);
     ctx.shake(4);
     ctx.postfx.pulse({ bloom: 1.3, aberration: 0.5 });
 
     this.tick -= delta;
     if (this.tick <= 0) {
       this.tick = 0.1;
-      const reach = 16 * width;
+      const reach = 16 * width * BEAM_WIDTH;
       for (const enemy of ctx.aliveEnemies()) {
         const offset = enemy.position.clone().sub(origin).setZ(0);
         const along = offset.dot(this.direction);
@@ -154,16 +149,16 @@ class SteepingBeam {
   }
 
   dispose() {
-    this.ctx.player.rooted = false;
+    this.ctx.player.channeling = false;
     disposeTree(this.group);
   }
 }
 
 // --- Thunder Tea Storm ----------------------------------------------------------
 
-const STORM_STRIKES = 24;
-const STORM_INTERVAL = 0.1;
-const STORM_DAMAGE = 12;
+const STORM_STRIKES = 20;
+const STORM_INTERVAL = 0.12;
+const STORM_DAMAGE = 10;
 
 class ThunderTeaStorm {
   constructor(ctx) {
@@ -206,12 +201,7 @@ class ThunderTeaStorm {
   dispose() {}
 }
 
-// --- Grand Teapot Drop ------------------------------------------------------------
-
-const TEAPOT_DROP_TIME = 0.8;
-const TEAPOT_HEIGHT = 700;
-const TEAPOT_DAMAGE = 35;
-const TEAPOT_RADIUS = 190;
+// --- The teapot model (Tea Turret, the golden teapot in the heavens) ---------------
 
 export function createTeapot() {
   const porcelain = new THREE.MeshStandardMaterial({ color: '#fbfaf5', roughness: 0.3, flatShading: true });
@@ -238,84 +228,15 @@ export function createTeapot() {
   return holder;
 }
 
-class GrandTeapotDrop {
-  constructor(ctx) {
-    this.ctx = ctx;
-    this.age = 0;
-    const limit = MAP_HALF_SIZE - 40;
-    this.target = ctx.aimGround.clone().setZ(0);
-    this.target.x = THREE.MathUtils.clamp(this.target.x, -limit, limit);
-    this.target.y = THREE.MathUtils.clamp(this.target.y, -limit, limit);
-
-    this.teapot = createTeapot();
-    this.teapot.position.set(this.target.x, this.target.y, TEAPOT_HEIGHT);
-    this.teapot.rotation.z = Math.random() * Math.PI * 2;
-    this.shadow = new THREE.Mesh(
-      new THREE.CircleGeometry(1, 40),
-      new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0, depthWrite: false })
-    );
-    this.shadow.position.set(this.target.x, this.target.y, 0.7);
-    ctx.scene.add(this.teapot, this.shadow);
-    ctx.play('whistle');
-  }
-
-  update(delta) {
-    const { ctx } = this;
-    this.age += delta;
-    if (!this.landed) {
-      const t = Math.min(1, this.age / TEAPOT_DROP_TIME);
-      this.teapot.position.z = TEAPOT_HEIGHT * (1 - t * t);
-      this.teapot.rotation.z += delta * 3;
-      this.shadow.scale.setScalar(30 + 110 * t);
-      this.shadow.material.opacity = 0.45 * t;
-      if (t >= 1) this.impact();
-      return true;
-    }
-
-    const after = this.age - TEAPOT_DROP_TIME;
-    if (after > 1.1) {
-      this.teapot.position.z -= 90 * delta;
-      this.teapot.scale.multiplyScalar(Math.exp(-2 * delta));
-      this.shadow.material.opacity *= Math.exp(-4 * delta);
-    }
-    return after < 2;
-  }
-
-  impact() {
-    const { ctx, target } = this;
-    this.landed = true;
-    ctx.play('boom');
-    ctx.shake(26);
-    ctx.postfx.flash('#fff1d0', 0.7);
-    ctx.postfx.pulse({ bloom: 1.5, aberration: 1 });
-    ctx.effects.ring(target, { radius: TEAPOT_RADIUS * 1.25, color: '#ffe1a0', duration: 0.7, thickness: 0.2 });
-    ctx.effects.ring(target, { radius: TEAPOT_RADIUS * 0.8, color: '#ffffff', duration: 0.45 });
-    ctx.particles.burst(target, { count: 90, colors: TEA, speed: 420, up: 260, size: 3.2, height: 6, life: 0.9 });
-    ctx.effects.pool(target, { radius: 150, dps: 4, duration: 4.5, color: '#c98a2b', opacity: 0.45, particleColors: ['#ffffff', '#f3d29a'] });
-
-    const damage = Math.round(TEAPOT_DAMAGE * ctx.player.stats.ultimatePower);
-    for (const enemy of ctx.aliveEnemies()) {
-      const away = enemy.position.clone().sub(target).setZ(0);
-      if (away.length() > TEAPOT_RADIUS + enemy.radius * 0.5) continue;
-      ctx.damageEnemy(enemy, damage, away.normalize(), 650, 'ultimate');
-    }
-  }
-
-  dispose() {
-    disposeTree(this.teapot);
-    disposeTree(this.shadow);
-  }
-}
-
 // --- Summoning: Great Tode ---------------------------------------------------------
 
 const SUMMON_SCALE = 6.5; // times Tode's size
 const SUMMON_STOMP_RADIUS = 210;
-const SUMMON_STOMP_DAMAGE = 25;
+const SUMMON_STOMP_DAMAGE = 18;
 const SUMMON_TONGUE_LENGTH = 420;
-const SUMMON_TONGUE_DAMAGE = 22;
+const SUMMON_TONGUE_DAMAGE = 16;
 const SUMMON_SLAM_RADIUS = 300;
-const SUMMON_SLAM_DAMAGE = 40;
+const SUMMON_SLAM_DAMAGE = 30;
 const SMOKE = ['#ffffff', '#e8e4dc', '#cfc8bc'];
 // Timeline (seconds): seal, appear, three tongue sweeps, a body slam, vanish.
 const SUMMON = { appear: 0.6, sweeps: [1.4, 2.4, 3.4], sweepTime: 0.75, jump: 4.5, slam: 5.2, vanish: 6.4, end: 7 };
@@ -531,7 +452,7 @@ class GreatTodeSummon {
   }
 }
 
-const EFFECTS = { beam: SteepingBeam, storm: ThunderTeaStorm, teapot: GrandTeapotDrop, summon: GreatTodeSummon };
+const EFFECTS = { beam: SteepingBeam, storm: ThunderTeaStorm, summon: GreatTodeSummon };
 
 /** Fires an ultimate. `ctx` provides the game hooks (see main.js). */
 export function startUltimate(id, ctx) {

@@ -177,6 +177,88 @@ class Strike extends Effect {
   }
 }
 
+// Looks of falling hazards: meteors from space, brimstone from the Underworld, boulders from the mountain.
+const METEOR_LOOKS = {
+  meteor: { rock: '#3a2a4a', glow: '#c070ff', trail: ['#c070ff', '#9ff4ff', '#ffffff'], scorch: '#2a1a3a' },
+  brimstone: { rock: '#2a1210', glow: '#ff5a10', trail: ['#ff6a00', '#ffb020', '#ffe066'], scorch: '#1a0804' },
+  boulder: { rock: '#7d7a72', glow: null, trail: ['#d9c9a0', '#a8a598'], scorch: '#4a4638' },
+};
+const meteorGeometry = new THREE.DodecahedronGeometry(1, 1);
+
+/**
+ * A rock from the sky: a warning circle, a fall at an angle, an impact that hurts bees and (when
+ * `hurtsPlayer`) Tode, and a scorch mark that fades. Like strikes, everyone simulates it; only the caller
+ * deals damage to bees (`hitsBees`).
+ */
+class Meteor extends Effect {
+  constructor(effects, position, { radius = 55, delay = 1.2, damage = 10, kind = 'meteor', hurtsPlayer = true, hitsBees = true }) {
+    super(effects);
+    Object.assign(this, { radius, delay, damage, hurtsPlayer, hitsBees });
+    this.look = METEOR_LOOKS[kind] ?? METEOR_LOOKS.meteor;
+    this.position = position.clone().setZ(0);
+    this.disc = this.add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), glowMaterial('#ff3020', 0.2)));
+    this.edge = this.add(new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 48), glowMaterial('#ff4040', 0.8)));
+    for (const mesh of [this.disc, this.edge]) {
+      mesh.scale.setScalar(radius);
+      mesh.position.set(position.x, position.y, 0.75);
+    }
+    this.from = this.position.clone().add(new THREE.Vector3(-220 + random(60), 220 + random(60), 650));
+    this.rock = this.add(new THREE.Mesh(meteorGeometry.clone(), new THREE.MeshStandardMaterial({ color: this.look.rock, roughness: 0.8, flatShading: true, emissive: this.look.glow ?? '#000000', emissiveIntensity: this.look.glow ? 0.6 : 0 })));
+    this.rock.scale.setScalar(radius * 0.32);
+    this.rock.castShadow = true;
+    this.rock.visible = false;
+    this.fallTime = Math.min(0.6, delay * 0.6);
+  }
+
+  update(delta) {
+    this.age += delta;
+    const { ctx } = this.effects;
+    if (this.age < this.delay) {
+      const t = this.age / this.delay;
+      this.disc.material.opacity = 0.12 + 0.2 * Math.abs(Math.sin(this.age * (6 + t * 26)));
+      this.edge.scale.setScalar(this.radius * (0.6 + 0.4 * t));
+      // The rock falls in during the last part of the warning.
+      const fall = (this.age - (this.delay - this.fallTime)) / this.fallTime;
+      if (fall > 0) {
+        this.rock.visible = true;
+        this.rock.position.lerpVectors(this.from, this.position, fall * fall);
+        this.rock.rotation.x += delta * 6;
+        this.rock.rotation.y += delta * 4;
+        ctx.particles.burst(this.rock.position.clone().setZ(0), { count: 3, colors: this.look.trail, speed: 20, up: 0, gravity: 0, height: this.rock.position.z, size: 3, life: 0.4, glow: Boolean(this.look.glow) });
+      }
+      return true;
+    }
+    if (!this.landed) this.impact();
+    // The scorch fades away.
+    const fade = Math.max(0, 1 - (this.age - this.delay) / 1.5);
+    this.disc.material.opacity = 0.5 * fade;
+    return fade > 0;
+  }
+
+  impact() {
+    this.landed = true;
+    const { ctx } = this.effects;
+    this.rock.visible = false;
+    this.edge.visible = false;
+    this.disc.material.dispose();
+    this.disc.material = new THREE.MeshBasicMaterial({ color: this.look.scorch, transparent: true, opacity: 0.5, depthWrite: false });
+    this.disc.scale.setScalar(this.radius * 0.8);
+    ctx.play('boom');
+    ctx.shake(8);
+    this.effects.ring(this.position, { radius: this.radius * 1.5, color: this.look.glow ?? '#d9c9a0', duration: 0.5, thickness: 0.2 });
+    ctx.particles.burst(this.position, { count: 36, colors: this.look.trail, speed: 260, up: 220, size: 2.6, height: 4, glow: Boolean(this.look.glow) });
+    ctx.particles.burst(this.position, { count: 14, colors: [this.look.rock, '#5a4a40'], speed: 180, up: 260, size: 2.2, height: 4 });
+    if (this.hitsBees) {
+      for (const enemy of ctx.aliveEnemies()) {
+        if (enemy.position.distanceTo(this.position) > this.radius + enemy.radius * 0.6) continue;
+        const away = enemy.position.clone().sub(this.position).setZ(0).normalize();
+        ctx.damageEnemy(enemy, this.damage, away, 260, 'blast');
+      }
+    }
+    if (this.hurtsPlayer && ctx.player.position.distanceTo(this.position) < this.radius + ctx.player.radius * 0.6) ctx.hurtPlayer(1);
+  }
+}
+
 /** A pulsing warning circle; calls `onDone` when time is up (e.g. an exploding elite bee). */
 class Warning extends Effect {
   constructor(effects, position, { radius, delay, color = '#ff4040', onDone }) {
@@ -264,6 +346,10 @@ export class Effects {
 
   warning(position, options) {
     return this.addEffect(new Warning(this, position, options));
+  }
+
+  meteor(position, options) {
+    return this.addEffect(new Meteor(this, position, options));
   }
 
   /** Damages every bee within `radius` and shows a ring of the given colour. */

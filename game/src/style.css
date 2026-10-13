@@ -526,6 +526,36 @@ canvas.game {
   display: none;
 }
 
+.weather.objective {
+  background: rgba(30, 60, 20, 0.6);
+  color: #e8ffb0;
+}
+
+.weather.objective.urgent {
+  background: rgba(140, 90, 0, 0.75);
+  color: #fff3c4;
+  animation: clash-throb 0.5s ease-in-out infinite alternate;
+}
+
+.objective-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 28px;
+  color: #fff3c4;
+  text-shadow: 0 0 10px #ffb020, 0 0 2px #000;
+  pointer-events: none;
+}
+
+.objective-arrow[hidden] {
+  display: none;
+}
+
+.weather.modifiers {
+  background: rgba(120, 10, 10, 0.55);
+  color: #ffd0c0;
+}
+
 .ability[hidden] {
   display: none;
 }
@@ -919,7 +949,14 @@ canvas.game {
   100% { opacity: 0; transform: translate(-50%, -80%) scale(1.1) rotate(-3deg); }
 }
 
-/* Experience and infusions */
+/* Skill slots are a bit smaller: up to six of them sit in the bar */
+.ability.skill {
+  width: 52px;
+  height: 52px;
+  align-self: flex-end;
+}
+
+/* Experience */
 .xp-bar {
   position: absolute;
   bottom: 14px;
@@ -949,91 +986,6 @@ canvas.game {
   font-weight: 800;
   color: #c8f77a;
   text-shadow: 0 1px 2px #000;
-}
-
-.infusions {
-  position: absolute;
-  bottom: 124px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  pointer-events: auto;
-  animation: infusions-in 0.25s ease-out;
-}
-
-.infusions[hidden] {
-  display: none;
-}
-
-@keyframes infusions-in {
-  from { opacity: 0; transform: translate(-50%, 20px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-
-.infusions-title {
-  font-size: 20px;
-  font-weight: 900;
-  font-style: italic;
-  color: #c8f77a;
-  text-shadow: 0 0 12px #5fbf2a, 0 2px 0 #1a3a0a;
-}
-
-.infusions-cards {
-  display: flex;
-  gap: 10px;
-}
-
-.infusion {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 150px;
-  padding: 10px 8px 8px;
-  border: 2px solid #7ed957;
-  border-radius: 12px;
-  background: rgba(16, 32, 16, 0.88);
-  color: #f2ffe6;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 0 14px rgba(126, 217, 87, 0.45);
-}
-
-.infusion:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 0 22px rgba(200, 247, 122, 0.8);
-}
-
-.infusion.rare {
-  border-color: #ffd36b;
-  box-shadow: 0 0 18px rgba(255, 211, 107, 0.7);
-}
-
-.infusion-icon {
-  font-size: 26px;
-}
-
-.infusion b {
-  font-size: 14px;
-}
-
-.infusion small {
-  font-size: 12px;
-  opacity: 0.85;
-  text-align: center;
-}
-
-.infusion-key {
-  position: absolute;
-  top: 4px;
-  left: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  color: #c8f77a;
 }
 
 .damage-number.crit {
