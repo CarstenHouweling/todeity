@@ -259,14 +259,27 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   buttons and in its own scrolling box (`.pause .build`), so Resume stays reachable. The body has
   `touch-action: none` for the sticks, so every scrolling menu box sets `touch-action: pan-y`; panel heights use
   `dvh` (tablet `vh` includes the browser bars).
+- **Screen size:** everything is sized from the layout viewport (`viewWidth`/`viewHeight` in `Viewport.js`), never
+  `window.innerWidth`: on phones that grows when the browser zooms out, and a canvas sized from it made the page wider
+  than the screen and kept it zoomed out (menus cut off on the right). The canvas is pinned to the screen by CSS
+  (`position: fixed`, the renderer only sets its resolution) and the viewport can't be zoomed. Long menus and popups
+  scroll, but their last `.menu-buttons` row (Back, Done, Close) is sticky at the bottom, so it's always on screen.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
 - **Title screen layout:** in order of importance: a big Start run; the ways to play (Daily Brew, Co-op,
   Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping); then small pills (save code, fullscreen,
   What's new with the version). Keep new entries in that order rather than adding full-size buttons.
-- **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari);
-  hidden where the browser can't do it (iPhone Safari). Menus redraw on `fullscreenchange` (`refreshMenu`).
+- **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari).
+  iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
+  Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
+  installable (`public/manifest.webmanifest` with `display: fullscreen`, Apple's `apple-mobile-web-app-*` meta tags,
+  `apple-touch-icon.png` and icons rendered from the voxel Tode) and runs without browser bars from the Home Screen.
+  `viewport-fit=cover` lets the game fill the screen around the notch; the HUD, menus, popups, corner and touch
+  buttons, toasts and the resting thumbsticks keep clear of it with the safe-area insets (`--safe-*` in `style.css`,
+  `safeInsets()` in TouchControls.js), while the world-anchored layers (labels, arrows, the hurt flash) are pushed
+  back out to the full screen so they stay over their bees. Zoomed widgets (short screens) divide the inset by the
+  zoom. Menus redraw on `fullscreenchange` (`refreshMenu`).
 - **Healing and the ultimate:** Stolen Honey and Herbal Remedy share a 12 s cooldown (`LIFESTEAL_COOLDOWN`);
   Petal Shield and Stolen Honey upgrades always improve the current value (their card text depends on the level).
   The ultimate gauge fills by the health actually taken off bees divided by the wave's `hpScale`, so it charges at

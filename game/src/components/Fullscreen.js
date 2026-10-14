@@ -7,6 +7,16 @@ export const canFullscreen = () => Boolean(document.fullscreenEnabled || documen
 
 export const isFullscreen = () => Boolean(document.fullscreenElement || document.webkitFullscreenElement);
 
+/** Started from the Home Screen as an app: no browser bars at all. */
+export const isStandalone = () =>
+  window.navigator.standalone === true || Boolean(window.matchMedia?.('(display-mode: fullscreen), (display-mode: standalone)').matches);
+
+/**
+ * iPhone Safari can't make a page fullscreen (only videos); Add to Home Screen is the way to play without its bars.
+ * True there (and not when it already runs from the Home Screen). iPads report themselves as Macs and have the API.
+ */
+export const needsHomeScreen = () => !canFullscreen() && /iPhone|iPod/.test(navigator.userAgent) && !isStandalone();
+
 export function toggleFullscreen() {
   const request = isFullscreen()
     ? (document.exitFullscreen ?? document.webkitExitFullscreen)?.call(document)

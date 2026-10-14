@@ -40,6 +40,7 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.glb': 'model/gltf-binary',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
   '.ico': 'image/x-icon',
 };
 

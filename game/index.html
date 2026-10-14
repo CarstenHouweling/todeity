@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/tode.svg" />
-    <meta name="viewport" content="width=device-width" />
+    <!-- viewport-fit=cover: the game fills the whole screen, under the iPhone's notch too (the HUD keeps clear of it). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <!-- Installable: added to the Home Screen it runs fullscreen (the only way to play fullscreen on iPhone). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Todeity" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Todeity: Rise of the Tea God</title>
     <meta name="description" content="A frog. A cup of tea. A thousand bees. A 3D roguelite where Tode the Frog ascends from garden frog to God of Tea. Free in your browser, solo or co-op." />
     <meta name="theme-color" content="#0d2614" />

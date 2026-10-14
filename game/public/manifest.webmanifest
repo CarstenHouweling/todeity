@@ -1,0 +1,16 @@
+{
+  "name": "Todeity: Rise of the Tea God",
+  "short_name": "Todeity",
+  "description": "A frog. A cup of tea. A thousand bees. A 3D roguelite where Tode the Frog ascends from garden frog to God of Tea.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0d2614",
+  "theme_color": "#0d2614",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

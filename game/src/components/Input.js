@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { viewHeight, viewWidth } from './Viewport.js';
 
 const GAME_KEYS = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
@@ -32,8 +33,8 @@ export class Input {
 
     window.addEventListener('pointermove', (event) => {
       this.pointer.set(
-        (event.clientX / window.innerWidth) * 2 - 1,
-        -(event.clientY / window.innerHeight) * 2 + 1
+        (event.clientX / viewWidth()) * 2 - 1,
+        -(event.clientY / viewHeight()) * 2 + 1
       );
     });
     canvas.addEventListener('pointerdown', (event) => {

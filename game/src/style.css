@@ -6,14 +6,30 @@ body {
   user-select: none;
 }
 
+/* The canvas is pinned to the screen by CSS (the renderer only sets its resolution), so it can never make the page
+   wider than the screen. */
 canvas.game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   display: block;
   cursor: crosshair;
 }
 
+/* The iPhone's notch and home bar (viewport-fit=cover in index.html lets the game itself run under them). */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* The HUD keeps clear of them; its world-anchored layers (labels, arrows, the hurt flash) still cover the whole
+   screen, because they are placed in screen pixels. */
 .hud {
   position: fixed;
-  inset: 0;
+  inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
   pointer-events: none;
   color: #fff;
 }
@@ -146,7 +162,7 @@ canvas.game {
 /* World-anchored labels */
 .world-layer {
   position: absolute;
-  inset: 0;
+  inset: calc(-1 * var(--safe-top)) calc(-1 * var(--safe-right)) calc(-1 * var(--safe-bottom)) calc(-1 * var(--safe-left));
   overflow: hidden;
 }
 
@@ -178,7 +194,7 @@ canvas.game {
 
 .hurt-flash {
   position: absolute;
-  inset: 0;
+  inset: calc(-1 * var(--safe-top)) calc(-1 * var(--safe-right)) calc(-1 * var(--safe-bottom)) calc(-1 * var(--safe-left));
   opacity: 0;
   box-shadow: inset 0 0 120px 30px rgba(255, 0, 0, 0.7);
 }
@@ -331,7 +347,7 @@ canvas.game {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   background: rgba(10, 30, 15, 0.55);
   color: #fff;
   text-align: center;
@@ -539,8 +555,8 @@ canvas.game {
 
 .objective-arrow {
   position: absolute;
-  left: 0;
-  top: 0;
+  left: calc(-1 * var(--safe-left));
+  top: calc(-1 * var(--safe-top));
   font-size: 28px;
   color: #fff3c4;
   text-shadow: 0 0 10px #ffb020, 0 0 2px #000;
@@ -598,8 +614,8 @@ canvas.game {
 
 .corner-buttons {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: calc(16px + var(--safe-right));
+  bottom: calc(16px + var(--safe-bottom));
   z-index: 10;
   display: flex;
   gap: 8px;
@@ -771,6 +787,24 @@ canvas.game {
   overflow-y: auto;
   touch-action: pan-y;
   overscroll-behavior: contain;
+}
+
+/* A long menu or popup scrolls, but its closing row (Back, Done, Close…) stays pinned at the bottom of the screen,
+   with the list fading out under it: players never have to discover the scroll to leave. */
+.menu .panel > .menu-buttons:last-child,
+.modal .panel > .menu-buttons:last-child {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-bottom: 0;
+  padding: 18px 0 8px;
+  background: linear-gradient(rgba(10, 30, 15, 0), rgba(10, 30, 15, 0.9) 45%);
+}
+
+.modal .panel > .menu-buttons:last-child {
+  margin-bottom: -22px; /* down to the panel's edge */
+  padding-bottom: 22px;
+  background: linear-gradient(rgba(14, 40, 20, 0), rgba(14, 40, 20, 0.97) 45%);
 }
 
 .pause,
@@ -1498,8 +1532,8 @@ body.touch .hint {
 /* Action buttons sit in a row above the aim stick: dash on the outside, the ultimate nearest the middle. */
 .touch-buttons {
   position: fixed;
-  right: 24px;
-  bottom: 215px;
+  right: calc(24px + var(--safe-right));
+  bottom: calc(215px + var(--safe-bottom));
   z-index: 4;
   display: flex;
   flex-direction: row-reverse;
@@ -1650,7 +1684,7 @@ body.touch .owned {
 /* Achievements */
 .toasts {
   position: fixed;
-  top: 110px;
+  top: calc(110px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
@@ -1780,7 +1814,7 @@ body.touch .owned {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   background: rgba(5, 18, 8, 0.7);
   color: #fff;
   text-align: center;
@@ -1935,6 +1969,12 @@ body.touch .owned {
   .xp-bar,
   body.touch .ability-bar {
     zoom: 0.7;
+  }
+
+  /* Zoom scales the offsets too: the notch and home bar must still be cleared in full. */
+  .corner-buttons {
+    right: calc(16px + var(--safe-right) / 0.7);
+    bottom: calc(16px + var(--safe-bottom) / 0.7);
   }
 }
 
@@ -2619,4 +2659,25 @@ body.touch .steep-badge {
     padding: 12px 40px;
     font-size: 20px;
   }
+}
+
+/* iPhone: how to play fullscreen (Add to Home Screen) */
+.steps {
+  margin: 14px 0 6px;
+  padding-left: 22px;
+  text-align: left;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.steps li + li {
+  margin-top: 6px;
+}
+
+.step-icon {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 700;
 }

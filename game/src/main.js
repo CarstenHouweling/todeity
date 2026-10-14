@@ -30,7 +30,7 @@ import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/R
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
-import { isFullscreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
+import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
 import { cloud, initCloud, loadCode, reportBuy, reportRun } from './components/CloudSave.js';
 import { Bullets } from './components/Bullets.js';
@@ -38,6 +38,7 @@ import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
 import { applyRenderer } from './components/Graphics.js';
 import { cycleVow, clearVows, runVows, steepBonus, steepLevel } from './components/Steeping.js';
+import { viewHeight, viewWidth } from './components/Viewport.js';
 import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
 import { chooseClass, chosenClass, classById, classOfTheDay } from './components/Classes.js';
 import { buildFrog } from './components/FrogModels.js';
@@ -6428,6 +6429,10 @@ const MENU_ACTIONS = {
     showPauseMenu();
   },
   'toggle-fullscreen': toggleFullscreen,
+  'fullscreen-help': () => {
+    play('click');
+    hud.showFullscreenHelp();
+  },
   changelog: () => {
     play('click');
     hud.showChangelog();
@@ -6483,10 +6488,10 @@ music.start();
 window.addEventListener('blur', () => autoPause && !coop && pause());
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = viewWidth() / viewHeight();
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  postfx.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(viewWidth(), viewHeight(), false);
+  postfx.setSize(viewWidth(), viewHeight());
 });
 
 // --- Animation loop ---
@@ -6715,6 +6720,13 @@ Promise.all([player.load(chosenClass().id), loadEnemyModel(), loadHouse(HOME)])
     hud.showTitle(bestScore);
     openInvite();
     initCloud();
+    // iPhone: once, how to play fullscreen (Add to Home Screen).
+    meta.tips ??= [];
+    if (needsHomeScreen() && !meta.tips.includes('homescreen') && !hud.modalOpen) {
+      meta.tips.push('homescreen');
+      saveMeta();
+      hud.showFullscreenHelp();
+    }
   })
   .catch((error) => {
     console.error(error);

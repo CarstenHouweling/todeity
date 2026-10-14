@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { viewHeight, viewWidth } from './Viewport.js';
 
 export function createCamera() {
   const camera = new THREE.PerspectiveCamera(
     30,
-    window.innerWidth / window.innerHeight,
+    viewWidth() / viewHeight(),
     1,
     9000
   );

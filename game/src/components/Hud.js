@@ -8,13 +8,14 @@ import { ACHIEVEMENTS, isUnlocked } from './Achievements.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 import { cloud } from './CloudSave.js';
 import { CHANGELOG, VERSION } from './Changelog.js';
-import { canFullscreen, isFullscreen } from './Fullscreen.js';
+import { canFullscreen, isFullscreen, needsHomeScreen } from './Fullscreen.js';
 import { KEEPSAKES, currentKeepsake, isKeepsakeUnlocked, unlockHint } from './Keepsakes.js';
 import { STEEP_MAX, VOWS, steepBonus, steepLevel, vowRank } from './Steeping.js';
 import { CHARM_RARITIES } from './Charms.js';
 import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
+import { viewHeight, viewWidth } from './Viewport.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
@@ -258,8 +259,8 @@ export class Hud {
         if (Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.88) {
           show = true;
           const scale = Math.max(Math.abs(p.x) / 0.9, Math.abs(p.y) / 0.82);
-          const x = ((p.x / scale + 1) / 2) * window.innerWidth;
-          const y = ((1 - p.y / scale) / 2) * window.innerHeight;
+          const x = ((p.x / scale + 1) / 2) * viewWidth();
+          const y = ((1 - p.y / scale) / 2) * viewHeight();
           setStyle(arrow, 'transform', `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -50%) rotate(${Math.atan2(-p.y, p.x).toFixed(2)}rad)`);
         }
       }
@@ -669,6 +670,23 @@ export class Hud {
     return !this.modal.hidden;
   }
 
+  /** iPhone: how to play fullscreen (Safari there can't do it for a web page; the Home Screen can). */
+  showFullscreenHelp() {
+    this.showModal(
+      'fullscreen-help',
+      `<h2>⛶ Play fullscreen on iPhone</h2>
+      <p class="sub">Safari on iPhone can't show a web game fullscreen, but Todeity can live on your Home Screen like an app,
+      without any browser bars:</p>
+      <ol class="steps">
+        <li>Tap <b>Share</b> <span class="step-icon">⬆︎</span> in Safari's toolbar (at the bottom, or behind <b>⋯</b>).</li>
+        <li>Scroll down and tap <b>Add to Home Screen</b> <span class="step-icon">⊞</span>.</li>
+        <li>Tap <b>Add</b>, then open <b>Todeity</b> from your Home Screen.</li>
+      </ol>
+      <p class="sub">Your progress comes along: it's kept by your save code (☁️ on the title screen).</p>
+      <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Got it</button></div>`
+    );
+  }
+
   showChangelog() {
     const entries = CHANGELOG.map(
       ({ version, date, title, changes }) => `
@@ -709,6 +727,7 @@ export class Hud {
 
   /** A menu button that switches fullscreen; nothing where the browser can't do it. */
   fullscreenButton() {
+    if (needsHomeScreen()) return '<button class="menu-button" data-action="fullscreen-help">⛶ Fullscreen</button>';
     if (!canFullscreen()) return '';
     return `<button class="menu-button" data-action="toggle-fullscreen">⛶ Fullscreen: ${isFullscreen() ? 'on' : 'off'}</button>`;
   }
@@ -761,7 +780,7 @@ ${
         <p class="prompt">or press Space</p>
         <div class="title-footer">
           ${this.saveChip()}
-          ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : ''}
+          ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
           <button type="button" data-action="changelog">📜 What's new · v${VERSION}</button>
         </div>
       </div>`
@@ -1179,8 +1198,8 @@ ${
   place(node, position, height) {
     const p = this.projected.set(position.x, position.y, height).project(this.camera);
     if (p.z > 1) return false;
-    const x = ((p.x + 1) / 2) * window.innerWidth;
-    const y = ((1 - p.y) / 2) * window.innerHeight;
+    const x = ((p.x + 1) / 2) * viewWidth();
+    const y = ((1 - p.y) / 2) * viewHeight();
     node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     return true;
   }

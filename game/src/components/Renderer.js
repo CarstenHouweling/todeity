@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { viewHeight, viewWidth } from './Viewport.js';
 
 export function createRenderer() {
   const canvas = document.querySelector('canvas.game');
@@ -11,7 +12,7 @@ export function createRenderer() {
   });
   // Retina screens at full resolution plus bloom are heavy; main.js adapts this to the frame rate.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(viewWidth(), viewHeight(), false); // CSS keeps the canvas on the screen (style.css)
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   return renderer;

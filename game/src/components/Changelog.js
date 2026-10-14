@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.17.1',
+    date: '2026-10-14',
+    title: 'Fullscreen on iPhone',
+    changes: [
+      '📱 iPhone: Safari can\'t play web games fullscreen, but Todeity can now live on your Home Screen like an app, fullscreen without browser bars. The ⛶ Fullscreen button explains how (Share → Add to Home Screen)',
+      '🖼 The game fills the whole screen around the iPhone\'s notch, and the HUD, buttons and thumbsticks stay clear of it and of the home bar',
+      '🐸 A Todeity app icon for your Home Screen (Android can install it too)',
+      'Fix: on some phones the game was laid out wider than the screen, cutting off the right side of menus',
+      'Fix: long menus (Choose your frog, Pantry, Keepsakes, Steeping, What\'s new) keep their Done or Back button on screen while the list scrolls',
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-10-14',
     title: 'Choose your frog',

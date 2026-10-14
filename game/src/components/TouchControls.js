@@ -1,3 +1,5 @@
+import { viewHeight, viewWidth } from './Viewport.js';
+
 // Touch controls for phones and tablets: twin sticks (left half moves, right half aims) and action buttons on
 // the right edge. Tode keeps spitting on his own in touch mode: where the right stick points, or at the nearest
 // bee when it's let go (see main.js).
@@ -5,6 +7,18 @@
 const STICK_RADIUS = 60; // px the knob can travel
 const DEAD_ZONE = 8; // px before a stick counts as pushed
 const REST_INSET = 130; // px from the bottom corner where an untouched stick waits
+
+/** The screen's safe-area insets in pixels (the notch and the home bar; 0 elsewhere). */
+let probe = null;
+function safeInsets() {
+  if (!probe) {
+    probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+    document.body.append(probe);
+  }
+  const style = getComputedStyle(probe);
+  return { left: parseFloat(style.paddingLeft) || 0, right: parseFloat(style.paddingRight) || 0, bottom: parseFloat(style.paddingBottom) || 0 };
+}
 
 /** Phones and tablets: a coarse primary pointer, or touch without a hovering mouse. */
 export const isTouchDevice = () =>
@@ -36,10 +50,11 @@ class Stick {
     this.rest();
   }
 
-  /** Back to its corner, so players can see where their thumbs go. */
+  /** Back to its corner (clear of the iPhone's notch and home bar), so players can see where their thumbs go. */
   rest() {
-    const x = this.side === 'left' ? REST_INSET : window.innerWidth - REST_INSET;
-    this.place(x, window.innerHeight - REST_INSET);
+    const safe = safeInsets();
+    const x = this.side === 'left' ? REST_INSET + safe.left : viewWidth() - REST_INSET - safe.right;
+    this.place(x, viewHeight() - REST_INSET - safe.bottom);
   }
 
   place(x, y) {

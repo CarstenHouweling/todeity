@@ -17,6 +17,7 @@ import {
   surface,
 } from './Environment.js';
 import { MAP_HALF_SIZE } from './Map.js';
+import { viewHeight } from './Viewport.js';
 
 /**
  * The playing fields of a run. Tode starts in his garden; every 5 waves he travels somewhere grander, and after
@@ -439,7 +440,7 @@ function motes({ count, colors, size = 3, area = MAP_HALF_SIZE + 200, height = 1
     new THREE.ShaderMaterial({
       uniforms: {
         size: { value: size },
-        scale: { value: window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.5) * 0.5 },
+        scale: { value: viewHeight() * Math.min(window.devicePixelRatio || 1, 1.5) * 0.5 },
         maxSize: { value: size > 20 ? 220 : 28 },
         opacity: { value: opacity },
       },
