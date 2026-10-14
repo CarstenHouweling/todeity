@@ -3,8 +3,7 @@ import { additive, createTeapot, disposeTree } from './Ultimates.js';
 
 /**
  * Skills: abilities Tode learns during a run, picked on every level-up (tea leaves are the experience).
- * Up to six; by default they cast themselves when the moment is right, so the player can keep running and
- * shooting. In manual mode the first three fire on Q / E / F toward the cursor; the rest always cast themselves.
+ * Up to six; they always cast themselves when the moment is right, so the player can keep running and shooting.
  *
  * Each skill: `cooldown(level)`, `autoTarget(ctx)` → a target point (or null to wait),
  * and `cast(ctx, target, level)`. Levels go up when the same skill is picked again.
@@ -12,8 +11,6 @@ import { additive, createTeapot, disposeTree } from './Ultimates.js';
 
 export const MAX_SKILLS = 6;
 export const MAX_SKILL_LEVEL = 5;
-export const SKILL_KEYS = ['KeyQ', 'KeyE', 'KeyF'];
-export const SKILL_KEY_LABELS = ['Q', 'E', 'F'];
 
 const power = (level) => 1 + 0.45 * (level - 1); // damage multiplier per level
 const faster = (seconds, level) => seconds * (1 - 0.12 * (level - 1));
@@ -634,16 +631,6 @@ export const SKILLS = {
       }
       return null;
     },
-    manualTarget: (ctx, point) => {
-      // Leap toward the cursor, at most 220 units, to a free spot.
-      const offset = point.clone().sub(ctx.player.position).setZ(0);
-      if (offset.length() > 220) offset.setLength(220);
-      for (let scale = 1; scale > 0.1; scale -= 0.15) {
-        const spot = ctx.player.position.clone().addScaledVector(offset, scale);
-        if (ctx.isFree(spot, ctx.player.radius)) return spot;
-      }
-      return null;
-    },
     cast: (ctx, target, level) => ctx.effects.addEffect(new LilyPadLeap(ctx, target, Math.round(8 * power(level)))),
   },
   tornado: {
@@ -781,25 +768,15 @@ export class SkillBook {
     else this.slots.push({ id, level: 1, cooldownLeft: 0 });
   }
 
-  /** Counts down cooldowns; in auto mode casts every ready skill that has a good target. */
-  update(delta, auto) {
-    this.slots.forEach((slot, index) => {
+  /** Counts down cooldowns and casts every ready skill that has a good target. */
+  update(delta) {
+    for (const slot of this.slots) {
       slot.cooldownLeft = Math.max(0, slot.cooldownLeft - delta);
-      // Skills past the Q/E/F keys always cast themselves.
-      if ((auto || index >= SKILL_KEYS.length) && slot.cooldownLeft === 0) {
+      if (slot.cooldownLeft === 0) {
         const target = SKILLS[slot.id].autoTarget(this.ctx);
         if (target) this.fire(slot, target);
       }
-    });
-  }
-
-  /** Manual cast toward `point` (the cursor on the ground). */
-  castManual(index, point) {
-    const slot = this.slots[index];
-    if (!slot || slot.cooldownLeft > 0) return;
-    const skill = SKILLS[slot.id];
-    const target = skill.manualTarget ? skill.manualTarget(this.ctx, point) : point.clone();
-    if (target) this.fire(slot, target);
+    }
   }
 
   fire(slot, target) {

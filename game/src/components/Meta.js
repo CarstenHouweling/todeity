@@ -5,13 +5,17 @@
 
 const STORAGE_KEY = 'tode-meta';
 
+// Costs climb steeply: the first level of something is a run or two away, maxing the whole Pantry (~6,000)
+// takes many good runs.
 export const PANTRY = [
-  { id: 'heart', name: 'Sturdy Shell', icon: '❤️', text: '+1 max heart', costs: [30, 70, 140] },
-  { id: 'damage', name: 'Strong Brew', icon: '💪', text: '+10% damage', costs: [40, 90, 170] },
-  { id: 'luck', name: 'Lucky Leaves', icon: '🍀', text: 'Rare and Epic brews show up more often', costs: [35, 80, 150] },
-  { id: 'reroll', name: 'Second Steep', icon: '🔄', text: '+1 reroll of the brew offers per run', costs: [25, 60, 120] },
-  { id: 'gauge', name: 'Hot Kettle', icon: '♨️', text: 'Your ultimate charges 15% faster', costs: [40, 90] },
-  { id: 'revive', name: 'Lily Pad Blessing', icon: '🪷', text: 'Once per run, rise again with 2 hearts', costs: [150] },
+  { id: 'heart', name: 'Sturdy Shell', icon: '❤️', text: '+1 max heart', costs: [60, 150, 300, 520] },
+  { id: 'damage', name: 'Strong Brew', icon: '💪', text: '+8% damage', costs: [70, 170, 320, 520, 760] },
+  { id: 'luck', name: 'Lucky Leaves', icon: '🍀', text: 'Rare and Epic brews show up more often', costs: [60, 160, 320] },
+  { id: 'reroll', name: 'Second Steep', icon: '🔄', text: '+1 reroll of the brew offers per run', costs: [50, 140, 280] },
+  { id: 'gauge', name: 'Hot Kettle', icon: '♨️', text: 'Your ultimate charges 12% faster', costs: [80, 200, 380] },
+  { id: 'magnet', name: 'Long Tongue', icon: '👅', text: 'Tea leaves fly to you from 25% farther', costs: [40, 110, 240] },
+  { id: 'spring', name: 'Springy Legs', icon: '🦵', text: 'Hop dash recharges 10% faster', costs: [90, 220, 420] },
+  { id: 'revive', name: 'Lily Pad Blessing', icon: '🪷', text: 'Once per run, rise again with 2 hearts', costs: [450] },
 ];
 
 const defaults = () => ({
@@ -73,11 +77,11 @@ export function buy(id) {
 }
 
 /**
- * Golden Leaves for a run: mostly for progress (waves, bosses, victory), a little for score. The whole Pantry
- * (about 1,300) takes several good runs: a wave-5 run pays ~40, a wave-20 run ~250.
+ * Golden Leaves for a run: mostly for progress (waves, bosses, victory), a little for score. A wave-5 run pays
+ * ~12, a wave-10 run ~35, a wave-20 run ~85 and a victory ~160, so the Pantry (~6,000) fills over many runs.
  */
 export function leavesForRun({ score, wave, bossKills, victory }) {
-  return wave * 4 + bossKills * 15 + (victory ? 80 : 0) + Math.floor(score / 500);
+  return wave * 2 + Math.max(0, wave - 10) * 1 + bossKills * 8 + (victory ? 50 : 0) + Math.floor(score / 4000);
 }
 
 const LINES = [

@@ -3,7 +3,7 @@ import { MAP_HALF_SIZE } from './Map.js';
 
 /**
  * Ultimates: chosen once per run, charged by fighting (like the God Gauge in Hades)
- * and fired with R / Q / middle mouse.
+ * and fired with E / middle mouse.
  */
 export const ULTIMATES = {
   beam: {

@@ -30,19 +30,20 @@ export const ENEMY_TYPES = {
   queen: {
     name: 'Queen Buzzbelle',
     scale: 14,
-    hp: 32,
+    hp: 56,
     speed: 0.55,
     damage: 1,
     score: 300,
     tint: '#ffc43d',
     knockback: 0.08,
     boss: true,
+    attackDelayScale: 0.85,
   },
   // The final boss on the last wave: bigger, faster and meaner than the Queen.
   empress: {
     name: 'Empress Buzzbelle',
     scale: 18,
-    hp: 75,
+    hp: 105,
     speed: 0.6,
     damage: 2,
     score: 1000,
@@ -62,7 +63,7 @@ export const ENEMY_TYPES = {
   shogun: {
     name: 'Hornet Shogun',
     scale: 15,
-    hp: 38,
+    hp: 66,
     speed: 0.65,
     damage: 2,
     score: 1400,
@@ -75,7 +76,7 @@ export const ENEMY_TYPES = {
   seraph: {
     name: 'Seraph Queen',
     scale: 16,
-    hp: 46,
+    hp: 78,
     speed: 0.6,
     damage: 2,
     score: 1800,
@@ -88,7 +89,7 @@ export const ENEMY_TYPES = {
   beezebub: {
     name: 'Bee-zebub',
     scale: 23,
-    hp: 120,
+    hp: 150,
     speed: 0.58,
     damage: 2,
     score: 3000,

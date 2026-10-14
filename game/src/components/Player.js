@@ -33,7 +33,7 @@ export const BASE_STATS = {
   boltEvery: 0, // every Nth spit is a chain-lightning bolt
   spitHealEvery: 0, // heal a heart every N spit hits
 
-  // Tea bomb (space): lobbed at the aim, explodes into a splash that also washes away stingers
+  // Tea bomb (thrown by itself at the thickest crowd): explodes into a splash that also washes away stingers
   splashDamage: 8,
   splashRadius: 100,
   splashCooldown: 2.2, // seconds per charge
@@ -44,7 +44,7 @@ export const BASE_STATS = {
   splashBolts: 0, // lightning bolts called by each splash
   lavaPool: 0, // damage per second of the lava pool it leaves
 
-  // Hop dash (shift): Tode can't be hurt mid-hop and bumps bees aside
+  // Hop dash (Space / Shift / right mouse): Tode can't be hurt mid-hop and bumps bees aside
   dashSpeed: 800,
   dashDuration: 0.22,
   dashCooldown: 1,

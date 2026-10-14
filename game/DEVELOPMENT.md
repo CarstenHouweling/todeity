@@ -55,8 +55,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 
 ## Gameplay summary
 
-- WASD move (camera-relative), mouse aims, hold LMB to spit, Shift/RMB hop-dash, Space tea bomb,
-  R/middle mouse fires the ultimate, Q/E/F cast skills (when auto-cast is off), Esc/P pauses, M mutes.
+- WASD move (camera-relative), mouse aims, hold LMB to spit, Space/Shift/RMB hop-dash, E/middle mouse fires the
+  ultimate, Esc/P pauses, M mutes. Skills and the tea bomb always cast themselves (there are no manual casts).
 - Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups), offered by a tea
   spirit with a line of dialogue. After the first boss (wave 5) you pick an **ultimate**. **Skills** come from
   levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
@@ -71,9 +71,16 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Chaos:** bee health and numbers grow steeply (`waveConfig`). From wave 4 waves may get **modifiers**
   (`MODIFIERS` in `Waves.js`: Frenzy, Horde, Elite Surge, Meteor Shower, Vengeful Swarm, Armoured; two at once
   from wave 14), shown under the weather. Each arena past the garden has a **hazard** from its second wave on
-  (`HAZARDS` in main.js: falling boulders, holy lightning, meteors, brimstone; `effects.meteor()`), and from wave 6
+  (`HAZARDS` in main.js: falling boulders, holy lightning, meteors, brimstone; `effects.meteor()`), and from wave 4
   coordinated **squads** appear (`spawnSquad`: an encirclement, a phalanx marching across, a firing squad of
-  stingers that volley together).
+  stingers that volley together, from wave 8 a bombing run of zippers dropping stingers sideways, from wave 11 a
+  pincer of two phalanxes).
+- **Arena events** ("Arena events" section in main.js, `ARENA_EVENTS`, host only, bullets shared via
+  `sharedStinger`): from wave 7 patterns of stingers sweep the field every 15 s (down to 5 s; rarer in boss waves):
+  bullet curtains (`curtainLine`, any direction incl. diagonals, gap near a Tode), Lighthouse (turning arms of
+  stingers), The Noose (two rings closing in), Crossfire, Double Curtain, Closing Walls, Stinger Rain (diagonal
+  lines) and Starburst. Timed ones run as `arenaEvents` entries (`later(delay, fn)` schedules a step). Bullets
+  outside the arena only die when flying away from it, so events can start them outside.
 - **Experience:** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to Tode within his magnet range;
   every level is a pick of 3 **skills**, new ones or upgrades (14 skills, up to 6 slots, level 5 each). Solo, the
   game pauses for the pick (`openLevelUp`, back to the fight afterwards, possibly via a mid-wave transformation);
@@ -94,9 +101,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   props/obstacles, corner spawners, sky dome, lighting palette, particles and post-processing boost, and is built
   at a higher **graphics level** (see below). Between arenas a `travel` cut-scene plays (leap through a flash, a
   swoop over the new arena that shows off its sky, a landing shockwave); into the Underworld Tode *falls*.
-- **Skills auto-cast** by default (the owner mostly runs, aims and shoots); the pause menu switches to manual.
-  The tea bomb also auto-casts at the thickest crowd in range.
-- **Tea bomb** (Space; replaced the tea splash): lobs a boiling kettle bomb at the aim (up to 430 away); it explodes
+- **Skills always auto-cast** (the owner mostly runs, aims and shoots; manual Q/E/F casting was removed in v0.15).
+- **Tea bomb** (automatic; replaced the tea splash): lobs a boiling kettle bomb at the thickest crowd within 430
+  (3+ bees, a boss counts 3); it explodes
   into a splash (radius 100, 8 damage, knockback, stingers cancelled) and keeps all the old splash brews (burn,
   chill, lightning, lava pool). 2 charges, 2.2 s each. **Hop dash**
   (~175 units, 1 s recharge) passes through bees, hurting and bumping them (2 damage base), and leaves Tode
@@ -123,7 +130,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Raid bosses** (`BOSS_SCRIPTS`, `MECHANICS` and the "Raid bosses" / "Boss stages" sections in main.js): every
   boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic; a **phase lock**
   (`stageFloor`, in `damageEnemy`) keeps its health at the threshold until that stage has begun, so damage can't
-  skip stages (except during a ritual, which must be breakable). An **enrage timer** per boss (2:00 to 3:40 of
+  skip stages (except during a ritual, which must be breakable). Every stage also lasts at least `stageTime`
+  (13–15 s): the boss holds at the next threshold until then, and can't die before its last stage has run that long
+  (a ⏳ shows on blocked hits; `stageDone`). An **enrage timer** per boss (3:00 to 5:00 of
   fighting, shown under the boss bar) makes it much faster and harder hitting with stinger rain (`ENRAGE`).
   Mechanics:
   - Shields (`startWard`, `startGuardians`, `updateRaid`): the boss is immune (`Enemy.setShield`; `damageEnemy`
@@ -145,8 +154,11 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Hive tactics** (`TACTICS`, `updateTactics`, host only): from wave 4 chasers may be flankers (`assignFlank`:
   they spiral in from the sides), from wave 7 packs near a Tode lunge together along telegraphed lines
   (`startPounce`/`updatePounce`), from wave 11 stingers fire synchronized volleys (`tactics.volleyIn`), from wave 15
-  elites and every other stinger lead their shots (`todeMotion` tracks each Tode's velocity). The Hive Mind vow
-  (`tacticsWave()`) brings all of it in from wave 2.
+  elites and every other stinger lead their shots (`todeMotion` tracks each Tode's velocity). **Manoeuvres**
+  (`MANOEUVRES`, every 14 s down to 6 s): from wave 4 a pack circles a Tode on a ring and collapses on him with
+  telegraphed lunges (`startSurround`, ai mode `surround`), from wave 6 stingers take posts around him, wind up
+  and fire together (`startCrossfire`, `updatePost`), from wave 9 a rolling strike (a pounce whose lunges come one
+  after another). The Hive Mind vow (`tacticsWave()`) brings all of it in from wave 2.
 - **Beam clash** (solo): when the Empress or Bee-zebub hits a rage phase they fire a beam at Tode, he answers, and
   the player mashes Space/click/tap to push the clash point back (`CLASH` in main.js). Winning deals 10% of the
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
@@ -154,15 +166,19 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Ultimates** (picked after wave 5, the gauge fills slowly): Steeping Beam (an enormous beam; Tode keeps moving
   at 45% speed and steering it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
-- **Achievements** (`components/Achievements.js`): 16, each worth 15 Golden Leaves, shown in the Pantry.
+- **Achievements** (`components/Achievements.js`): 35, each with its own `reward` (3 to 60 Golden Leaves), shown
+  in the Pantry. The server checks each against the run report (`earned()` in `server/saves.js`), so a new
+  achievement needs a rule there too. Run bookkeeping for them lives in `feats` (main.js).
   First-run **tips** appear once each (`meta.tips`).
 - **Cursed tiles** ("Forbidden tiles" section in main.js, `CURSED`): from wave 3 every non-boss wave lays out
   2×2-grid tiles (more each wave, rolled away from Tode and the objectives; seeded for the Daily Brew; the host
-  shares them in co-op). Stepping on one (not while hop-dashing) calls a ring of bees (`ambush`, the host spawns;
-  guests send `ambush`); it re-arms after 9 s.
+  shares them in co-op). Stepping on one (not while hop-dashing) costs a heart (two from wave 16), **hexes** Tode
+  (`hexLeft`: half speed for 2.6 s, no dash for the first 0.8 s), closes a ring of stingers in on the tile
+  (`curseTode`) and calls a ring of bees led by an elite from wave 6 (`ambush`, the host spawns; guests send
+  `ambush`); it re-arms after 7 s.
 - **Difficulty curve** (`waveConfig`): past wave 10 swarms grow quadratically and more of them are stingers; from
-  wave 16 bees hit for an extra heart; hazards fall in growing numbers (up to 8 at once) and from wave 13 **bullet
-  curtains** (`bulletCurtain`: a wall of stingers sweeping across with a gap near a Tode) come more and more often.
+  wave 16 bees hit for an extra heart; hazards fall in growing numbers (up to 8 at once) and arena events come more
+  and more often.
   **Endless** (waves past 21): bees +10% health per wave, always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`),
   +1 contact damage every 10 waves.
 - **Co-op objectives:** a circle (arena objective or a boss's circles of light) only fills while every standing
@@ -173,7 +189,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
   the Daily Brew and co-op. The level is sent to the leaderboard (`steep`) and shown there, in the HUD and on shares.
 - **Keepsakes** (`components/Keepsakes.js`, title screen): one trinket per run (`meta.keepsake`). The teacup is free,
-  the other 10 unlock with achievements (`unlock`), and the achievement toast says so. `apply({ stats, player,
+  the other 10 unlock with the harder achievements (`unlock`: Shogun, Mastery, Untouchable, Tea Scholar, Boiling
+  Over, Elite Hunter, Living Legend, Flawless, Empress, Bee-zebub), and the achievement toast says so. `apply({ stats, player,
   grant })`: `grant` holds the hooks for effects that aren't stats (a skill pick, a charm, starting Awakened…).
 - **Charms** (`components/Charms.js`): stacking trinkets without a cap, dropped by elites (35%), hives and held
   shrines (always), bosses (3, at least Uncommon) and plain bees (0.4%). They lie on the ground (`CharmDrops`, emoji
@@ -234,7 +251,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   `package.json` for every major change.** Popups use `hud.showModal()` over the current menu; while one is open
   Esc closes it and no other key reaches the game.
 - **Meta progression:** each run earns Golden Leaves (`leavesForRun`: mostly waves, bosses and victory; a wave-10
-  run pays ~90, the whole Pantry costs ~1,300) for permanent upgrades in Tode's Pantry (title screen),
+  run pays ~35, a wave-20 run ~85, the whole Pantry of 8 upgrades costs ~6,000) for permanent upgrades in Tode's
+  Pantry (title screen),
   and Tode says a story line after each run. **Cloud saves** (`components/CloudSave.js`, `server/saves.js`): the
   server owns leaves, Pantry levels, achievements and run stats. Every browser gets a save code (`MINT-FROG-42`,
   two words and a number) on its first visit. A ☁️ pill on the title screen and in the Pantry opens the save
@@ -308,7 +326,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Leaves.js` | Tea-leaf experience orbs and the level curve (`leavesForLevel`). |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
 | `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Summoning: Great Tode (and the teapot model). |
-| `components/Skills.js` | 14 skills (`SKILLS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting, manual Q/E/F for the first three). |
+| `components/Skills.js` | 14 skills (`SKILLS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting). |
 | `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges, memories of past runs, voices) and the bosses' taunts. |
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
@@ -390,12 +408,14 @@ game.coop                 // co-op state (remotes, host flag)
 game.renderer.info        // draw calls, triangles, GPU textures/geometries (watch for leaks)
 game.setArena('hell')     // show an arena right away; game.startWave(21) travels there instead
 game.arena                // the current arena id
-game.ultimate('summon')   // then press R for the Great Tode
+game.ultimate('summon')   // then press E for the Great Tode
 game.charm('spoon', 5)    // gain charms (no id: a random one); game.charmCounts
 game.shrine('bitter')     // put a shrine in the arena now: 'chance', 'bitter' or 'cursed'
 game.bullets.list         // enemy bullets in flight
 game.level                // Tode's level (tea leaves)
-game.settings.autoCast = false
+game.event('lighthouse')  // start an arena event now (see ARENA_EVENTS)
+game.tactic('surround')   // start a hive manoeuvre now: 'surround', 'crossfire' or 'rolling'
+game.squad()              // spawn a random squad
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
 game.persist = false      // don't save progress or the best score this session (use it before bot runs)
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death

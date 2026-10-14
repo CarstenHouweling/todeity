@@ -3,7 +3,7 @@ import { ACHIEVEMENTS, isUnlocked } from './Achievements.js';
 
 /**
  * Keepsakes: one trinket Tode carries into every run, chosen on the title screen. New ones unlock with
- * achievements, so every achievement opens up a new way to start a run.
+ * the harder achievements, so mastering the game opens up new ways to start a run.
  * `apply(run)` gets { stats, player, grant } where `grant` holds hooks for the special effects (see main.js).
  */
 export const KEEPSAKES = [
@@ -12,11 +12,11 @@ export const KEEPSAKES = [
     apply: ({ stats }) => (stats.maxHp += 1),
   },
   {
-    id: 'whisk', icon: '🎋', name: 'Bamboo Whisk', unlock: 'awakened', text: 'Start the run with a skill pick.',
+    id: 'whisk', icon: '🎋', name: 'Bamboo Whisk', unlock: 'mastery', text: 'Start the run with a skill pick.',
     apply: ({ grant }) => grant.level(),
   },
   {
-    id: 'coal', icon: '🔥', name: 'Ember Coal', unlock: 'queen', text: 'Spit sets bees on fire (1 damage per second).',
+    id: 'coal', icon: '🔥', name: 'Ember Coal', unlock: 'shogun', text: 'Spit sets bees on fire (1 damage per second).',
     apply: ({ stats }) => (stats.spitBurn = Math.max(stats.spitBurn, 1)),
   },
   {
@@ -24,11 +24,11 @@ export const KEEPSAKES = [
     apply: ({ stats }) => (stats.shieldEvery = stats.shieldEvery ? Math.min(stats.shieldEvery, 18) : 18),
   },
   {
-    id: 'honeyjar', icon: '🍯', name: 'Honey Jar', unlock: 'skills3', text: 'Tea leaves are worth 30% more: level up faster.',
+    id: 'honeyjar', icon: '🍯', name: 'Honey Jar', unlock: 'level25', text: 'Tea leaves are worth 30% more: level up faster.',
     apply: ({ stats }) => (stats.leafValue *= 1.3),
   },
   {
-    id: 'feather', icon: '🪶', name: 'Storm Feather', unlock: 'combo50', text: 'Every 6th spit is a bolt of chain lightning.',
+    id: 'feather', icon: '🪶', name: 'Storm Feather', unlock: 'combo150', text: 'Every 6th spit is a bolt of chain lightning.',
     apply: ({ stats }) => (stats.boltEvery = stats.boltEvery ? Math.min(stats.boltEvery, 6) : 6),
   },
   {
@@ -39,14 +39,14 @@ export const KEEPSAKES = [
     },
   },
   {
-    id: 'goldleaf', icon: '🪙', name: 'Golden Leaf', unlock: 'duo', text: '+50% Golden Leaves from runs, but 1 heart fewer.',
+    id: 'goldleaf', icon: '🪙', name: 'Golden Leaf', unlock: 'legendary2', text: '+50% Golden Leaves from runs, but 1 heart fewer.',
     apply: ({ stats, grant }) => {
       stats.maxHp -= 1;
       grant.leaves(1.5);
     },
   },
   {
-    id: 'root', icon: '🥀', name: 'Bitter Root', unlock: 'legendary', text: '+30% damage, but 2 hearts fewer.',
+    id: 'root', icon: '🥀', name: 'Bitter Root', unlock: 'flawless', text: '+30% damage, but 2 hearts fewer.',
     apply: ({ stats }) => {
       stats.maxHp -= 2;
       stats.damageMultiplier *= 1.3;
@@ -60,7 +60,7 @@ export const KEEPSAKES = [
     },
   },
   {
-    id: 'teapot', icon: '🫖', name: "Grandma's Teapot", unlock: 'god', text: 'Start the run Awakened.',
+    id: 'teapot', icon: '🫖', name: "Grandma's Teapot", unlock: 'beezebub', text: 'Start the run Awakened.',
     apply: ({ grant }) => grant.awaken(),
   },
 ];

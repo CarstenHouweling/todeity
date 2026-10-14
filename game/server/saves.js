@@ -13,7 +13,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PANTRY, leavesForRun } from '../src/components/Meta.js';
-import { ACHIEVEMENTS, ACHIEVEMENT_REWARD } from '../src/components/Achievements.js';
+import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 
 const FLAVOURS = [
@@ -95,16 +95,32 @@ const int = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(v
 function earned(id, run, progress) {
   const tierFor = { awakened: 1, golden: 2, radiant: 3, god: 4, infinite: 5 };
   if (tierFor[id]) return run.maxTier >= tierFor[id];
+  // Endless mode brings every boss back, so a deep run can beat one it skipped (never more than one per 5 waves).
+  const beat = (bossWave, kills) => run.wave >= bossWave && run.bossKills >= kills;
   switch (id) {
     case 'queen': return run.bossKills >= 1 || progress.bossKills >= 1;
-    case 'empress': return run.wave >= 20 && run.bossKills >= 4;
+    case 'shogun': return beat(10, 2);
+    case 'seraph': return beat(15, 3);
+    case 'empress': return beat(20, 4);
     case 'beezebub': return run.victory;
-    case 'untouchable': return run.wave >= 5;
-    case 'elites': return progress.eliteKills + run.eliteKills >= 10;
-    case 'coop': return run.coop;
-    case 'daily': return run.daily && run.wave >= 5;
+    case 'flawless': return run.bossKills >= 1;
+    case 'breaker': return beat(10, 1);
+    case 'combo150': return run.wave >= 8 && run.kills >= 150;
+    case 'kills1000': return run.kills >= 1000;
+    case 'elites': return progress.eliteKills + run.eliteKills >= 50;
+    case 'untouchable': return run.wave >= 7;
+    case 'lightfeet': return run.wave >= 10;
+    case 'legendary2': return run.wave >= 8;
+    case 'skills6': case 'mastery': case 'charms': return run.wave >= 6;
+    case 'level25': return run.wave >= 15;
+    case 'wave30': return run.wave >= 30 && run.bossKills >= 5;
+    case 'steep5': return run.steep >= 5 && beat(10, 2);
+    case 'steep12': return run.steep >= 12 && beat(20, 4);
+    case 'shrines': return run.wave >= 6;
+    case 'coop': return run.coop && run.bossKills >= 1;
+    case 'daily': return run.daily && run.wave >= 10;
     case 'photo': return true;
-    default: return run.wave >= 2; // combo50, duo, legendary, skills3
+    default: return run.wave >= 2; // combo50, duo, legendary, skills3, whisker, bitter
   }
 }
 
@@ -135,19 +151,19 @@ function applyRun(save, body, now) {
   if (run.eliteKills > run.wave * 15) return 'Too many elites for that run.';
   const bonus = steepBonus(run.steep);
   if (run.score > (2_000 + run.kills * 200 + run.wave * 2_000) * bonus) return 'That score looks a bit too good to be true.';
-  // The Golden Leaf keepsake unlocks with the Duo achievement.
+  // The Golden Leaf keepsake unlocks with the Living Legend achievement.
   const claimed = [...new Set((Array.isArray(body.achievements) ? body.achievements : []).map(String))];
   const fresh = claimed.filter(
     (id) => ACHIEVEMENTS.some((a) => a.id === id) && !progress.achievements.includes(id) && earned(id, run, progress)
   );
-  const goldLeaf = run.goldLeaf && (progress.achievements.includes('duo') || fresh.includes('duo'));
+  const goldLeaf = run.goldLeaf && (progress.achievements.includes('legendary2') || fresh.includes('legendary2'));
 
   const leaves = Math.round(
     leavesForRun({ score: run.score / bonus, wave: run.wave, bossKills: run.bossKills, victory: run.victory }) *
       bonus *
       (goldLeaf ? GOLDEN_LEAF : 1)
   );
-  progress.leaves += leaves + fresh.length * ACHIEVEMENT_REWARD;
+  progress.leaves += leaves + fresh.reduce((sum, id) => sum + rewardFor(id), 0);
   progress.achievements.push(...fresh);
   progress.runs++;
   progress.bossKills += run.bossKills;

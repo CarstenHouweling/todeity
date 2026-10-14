@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { BLENDS, RARITIES, describe } from './PowerUps.js';
 import { ULTIMATES } from './Ultimates.js';
-import { MAX_SKILLS, SKILLS, SKILL_KEY_LABELS } from './Skills.js';
+import { MAX_SKILLS, SKILLS } from './Skills.js';
 import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { TIERS } from './Ascension.js';
-import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js';
+import { ACHIEVEMENTS, isUnlocked } from './Achievements.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 import { cloud } from './CloudSave.js';
 import { CHANGELOG, VERSION } from './Changelog.js';
@@ -15,11 +15,11 @@ import { CHARM_RARITIES } from './Charms.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
-  { id: 'dash', key: 'Shift', name: 'Hop dash', icon: '💨' },
-  { id: 'splash', key: 'Space', name: 'Tea bomb', icon: '💥' },
-  // Skill slots: the first three have Q/E/F, the rest always cast themselves.
-  ...Array.from({ length: MAX_SKILLS }, (_, i) => ({ id: `skill${i}`, key: SKILL_KEY_LABELS[i] ?? 'auto', name: 'Skill', icon: '✨', skill: true })),
-  { id: 'ultimate', key: 'R', name: 'Ultimate', icon: '✨' },
+  { id: 'dash', key: 'Space', name: 'Hop dash', icon: '💨' },
+  { id: 'splash', key: 'auto', name: 'Tea bomb', icon: '💥' },
+  // Skills always cast themselves.
+  ...Array.from({ length: MAX_SKILLS }, (_, i) => ({ id: `skill${i}`, key: 'auto', name: 'Skill', icon: '✨', skill: true })),
+  { id: 'ultimate', key: 'E', name: 'Ultimate', icon: '✨' },
 ];
 const DAMAGE_NUMBER_DURATION = 0.8; // seconds
 const DAMAGE_NUMBER_RISE = 25; // world units
@@ -332,10 +332,9 @@ export class Hud {
     }
   }
 
-  /** Learned skills: [{ id, level, cooldownLeft }]; `auto` shows they cast themselves. */
-  setSkills(slots, auto) {
+  /** Learned skills: [{ id, level, cooldownLeft }] (they cast themselves). */
+  setSkills(slots) {
     for (let i = 0; i < MAX_SKILLS; i++) {
-      const key = SKILL_KEY_LABELS[i];
       const slot = slots[i];
       const ui = this.slots[`skill${i}`];
       setProp(ui.slot, 'hidden', !slot);
@@ -344,8 +343,6 @@ export class Hud {
       setText(ui.icon, skill.icon);
       setProp(ui.slot, 'title', `${skill.name} (level ${slot.level})`);
       setText(ui.badge, slot.level > 1 ? slot.level : '');
-      ui.keyLabel ??= ui.slot.querySelector('.ability-key');
-      setText(ui.keyLabel, auto || !key ? 'auto' : key);
       this.setCooldown(`skill${i}`, slot.cooldownLeft, skill.cooldown(slot.level));
     }
   }
@@ -493,9 +490,9 @@ export class Hud {
   }
 
   /** `keepsake`: the keepsake this achievement unlocks, if any. */
-  showAchievement({ icon, name, text }, keepsake = null) {
+  showAchievement({ icon, name, text, reward }, keepsake = null) {
     const unlocked = keepsake ? `<em class="toast-keepsake">🎒 New keepsake: ${keepsake.icon} ${keepsake.name}</em>` : '';
-    this.toast(`<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${ACHIEVEMENT_REWARD} 🍃</small><b>${name}</b><em>${text}</em>${unlocked}</span>`);
+    this.toast(`<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${reward} 🍃</small><b>${name}</b><em>${text}</em>${unlocked}</span>`);
   }
 
   /** A charm picked up: its icon, name and what the whole stack does now. */
@@ -729,17 +726,16 @@ ${
           <span><b>Right stick</b> aim</span>
           <span>Tode <b>spits</b> by himself</span>
           <span><b>💨</b> hop dash</span>
-          <span><b>💥</b> tea bomb</span>
           <span><b>✨</b> ultimate</span>
+          <span>Skills and bombs cast <b>themselves</b></span>
         </div>`
             : `<div class="controls">
           <span><b>WASD</b> move</span>
           <span><b>Mouse</b> aim</span>
           <span><b>Hold LMB</b> spit</span>
-          <span><b>Shift / RMB</b> hop dash</span>
-          <span><b>Space</b> tea bomb</span>
-          <span><b>R</b> ultimate</span>
-          <span><b>Q/E/F</b> skills (or auto)</span>
+          <span><b>Space / RMB</b> hop dash</span>
+          <span><b>E</b> ultimate</span>
+          <span>Skills and bombs cast <b>themselves</b></span>
           <span><b>Esc</b> pause</span>
         </div>`
         }
@@ -792,9 +788,9 @@ ${
         <p class="sub">Golden Leaves earned in every run buy upgrades that last forever.</p>
         <p class="leaves">🍃 ${meta.leaves} Golden Leaves</p>
         <div class="upgrades">${rows}</div>
-        <h3>🏆 Achievements <small>${ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length}/${ACHIEVEMENTS.length} · +${ACHIEVEMENT_REWARD} 🍃 each</small></h3>
+        <h3>🏆 Achievements <small>${ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length}/${ACHIEVEMENTS.length} · ${ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).reduce((sum, a) => sum + a.reward, 0)}/${ACHIEVEMENTS.reduce((sum, a) => sum + a.reward, 0)} 🍃</small></h3>
         <div class="achievements">${ACHIEVEMENTS.map(
-          (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text}">${a.icon}</span>`
+          (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text} (+${a.reward} 🍃)">${a.icon}</span>`
         ).join('')}</div>
         <div class="menu-buttons">${this.saveChip()}<button class="menu-button" data-action="title">Back</button></div>
       </div>`
@@ -978,19 +974,19 @@ ${
       .join('');
     this.showMenu(
       'powerups ultimates',
-      `<h2>Awaken your ultimate</h2>${this.dialogue(kettleDialogue('ultimate'))}<p class="sub">Charged by battle · unleash it with <b>R</b></p><div class="cards">${cards}</div>`
+      `<h2>Awaken your ultimate</h2>${this.dialogue(kettleDialogue('ultimate'))}<p class="sub">Charged by battle · unleash it with <b>E</b></p><div class="cards">${cards}</div>`
     );
     this.typeDialogue();
   }
 
   /** `level`: shown as a level-up (the skill pick that every level brings). */
-  showSkills(offers, auto, level = 0) {
+  showSkills(offers, level = 0) {
     const cards = offers
       .map(({ skill, level }, index) =>
         this.card({ action: 'skill', index, brew: skill, level, text: skill.text(level), kind: 'skill' })
       )
       .join('');
-    const how = auto ? 'Skills cast themselves when the moment is right' : 'Cast skills with <b>Q</b>, <b>E</b> and <b>F</b>';
+    const how = 'Skills cast themselves when the moment is right';
     this.showMenu(
       'powerups skills',
       `<h2>${level ? `Level ${level}! ` : ''}Learn a skill</h2>${this.dialogue(kettleDialogue('skill'))}<p class="sub">${how}</p><div class="cards">${cards}</div>`
@@ -998,7 +994,7 @@ ${
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, autoCast, coop, keepsake, steep, calmFx }) {
+  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx }) {
     const brews = build.length
       ? build
           .map(
@@ -1022,7 +1018,6 @@ ${
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-calm">✨ Effects: ${calmFx ? 'calm' : 'full'}</button>
-          ${document.body.classList.contains('touch') ? '' : `<button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>`}
           ${this.fullscreenButton()}
           <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>
           ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}

@@ -7,7 +7,6 @@ import { isPersisting, meta, saveMeta } from './Meta.js';
 
 const API = '/api/save';
 const CODE_KEY = 'tode-save-code';
-const REWARD = 15; // ACHIEVEMENT_REWARD (Achievements.js imports this module, so it can't be imported here)
 const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills'];
 
 const storage = (action, key, value) => {
@@ -26,10 +25,10 @@ export const cloud = { code: storage('get', CODE_KEY), status: 'connecting', onC
 
 // Achievements unlocked this session that the server hasn't confirmed yet: they go with the next run report.
 // Only in memory: kept in storage, they could be edited to unlock keepsakes early.
-const pending = new Set();
+const pending = new Map(); // id → its Golden Leaves (Achievements.js imports this module, so it passes them in)
 let eliteBase = meta.eliteKills ?? 0; // elite kills the server knows about
 
-export const notePending = (id) => pending.add(id);
+export const notePending = (id, reward) => pending.set(id, reward);
 
 /** Takes the server's progress, keeping achievements (and their leaves) that are still on their way. */
 function apply(data) {
@@ -38,8 +37,8 @@ function apply(data) {
   storage('set', CODE_KEY, data.code);
   for (const id of progress.achievements) pending.delete(id);
   for (const field of FIELDS) meta[field] = structuredClone(progress[field]);
-  meta.achievements.push(...pending);
-  meta.leaves += pending.size * REWARD;
+  meta.achievements.push(...pending.keys());
+  for (const reward of pending.values()) meta.leaves += reward;
   eliteBase = progress.eliteKills;
   cloud.status = 'online';
   saveMeta();
@@ -96,7 +95,7 @@ export async function loadCode(code) {
 export async function reportRun(run) {
   if (!cloud.code || !isPersisting() || cloud.status === 'offline') return;
   try {
-    const body = { ...run, eliteKills: Math.max(0, (meta.eliteKills ?? 0) - eliteBase), achievements: [...pending] };
+    const body = { ...run, eliteKills: Math.max(0, (meta.eliteKills ?? 0) - eliteBase), achievements: [...pending.keys()] };
     const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/run`, body);
     if (ok) pending.clear(); // the server decided about every one of them
     if (data.progress) apply(data);

@@ -115,9 +115,8 @@ export function makeBot(game) {
 
       const nearest = alive.sort((a, b) => a.position.distanceTo(p) - b.position.distanceTo(p))[0];
       if (nearest) aim(nearest.position);
-      if (alive.filter((e) => e.position.distanceTo(p) < 220).length >= 3) tap('Space'); // tea bomb at the aim
-      if (nearest && nearest.position.distanceTo(p) < nearest.radius + 25) tap('ShiftLeft');
-      if (game.player.gauge >= 100 && alive.length >= 3) tap('KeyR');
+      if (nearest && nearest.position.distanceTo(p) < nearest.radius + 25) tap('Space');
+      if (game.player.gauge >= 100 && alive.length >= 3) tap('KeyE');
 
       game.step(0.1);
       bot.time += 0.1;

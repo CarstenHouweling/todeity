@@ -3,6 +3,21 @@
 
 export const CHANGELOG = [
   {
+    version: '0.15.0',
+    date: '2026-10-14',
+    title: 'A sterner hive',
+    changes: [
+      '🎮 Simpler controls: every skill and the tea bomb cast themselves. Space (or right-click) hop-dashes, E fires the ultimate',
+      '🌀 New arena events that sweep the whole field: Lighthouse, The Noose, Crossfire, Double Curtain, Closing Walls, Stinger Rain and Starburst, from wave 7',
+      '🐝 Smarter swarms: bees circle you and collapse all at once, stingers take posts around you for a crossfire, packs lunge one after another, bombing runs and pincer squads',
+      '⛔ Cursed tiles really hurt now: a heart, a hex that slows you, a ring of stingers closing in and a bigger ambush',
+      '👑 Tougher bosses with more stages, and every stage lasts at least 15 seconds: no more bursting through a fight',
+      '🏆 35 achievements (18 new), each with its own reward: the hard ones pay much more',
+      '🎒 Keepsakes now unlock with the harder achievements',
+      '🍃 Golden Leaves come slower and the Pantry goes deeper: more levels and two new upgrades (Long Tongue, Springy Legs)',
+    ],
+  },
+  {
     version: '0.14.0',
     date: '2026-10-14',
     title: 'Cloud saves and sharing',

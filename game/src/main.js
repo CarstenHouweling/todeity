@@ -22,7 +22,7 @@ import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ul
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { boss as bossMemory, buy, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
-import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
+import { SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
@@ -273,7 +273,6 @@ const postfx = new PostFX(renderer, scene, camera);
 const input = new Input(renderer.domElement);
 const touch = new TouchControls(input);
 // Phones can't use Q/E/F, so skills always cast themselves there.
-const autoCasting = () => settings.autoCast || touch.enabled;
 const hud = new Hud(camera);
 const particles = new Particles();
 scene.add(particles.mesh);
@@ -304,7 +303,7 @@ let rerolls = 0;
 let luck = 0;
 let endless = false;
 let autoPause = true;
-const settings = { autoCast: true, calmFx: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+const settings = { calmFx: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
 
 let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
 let steep = 0; // their Steep level: more score and Golden Leaves
@@ -344,6 +343,8 @@ let combo = 0;
 let comboTimer = 0;
 let introBoss = null;
 let hitThisWave = false;
+// Achievement bookkeeping for this run.
+const feats = { cleanWaves: 0, tileWave: 0, legendaries: 0, shrines: 0, bitterWave: 0, bossHurt: false };
 
 // First-run tips: each one is shown once, ever.
 const TIPS = {
@@ -352,19 +353,16 @@ const TIPS = {
       ? 'Left stick moves, right stick aims. Tode spits all by himself!'
       : 'Move with WASD and hold the left mouse button to spit where you aim.',
   brew: () => 'Brews from two different Blends unlock Duo brews. Two from one Blend unlock a Legendary.',
-  ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press R!'),
-  skill: () =>
-    touch.enabled
-      ? 'Skills cast themselves at the right moment.'
-      : 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
+  ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press E!'),
+  skill: () => 'Skills and tea bombs cast themselves at the right moment.',
   tiles: () =>
     touch.enabled
-      ? 'Red cursed tiles call an ambush when you step on them. Walk around them, or tap 💨 to hop over.'
-      : 'Red cursed tiles call an ambush when you step on them. Walk around them, or hop-dash over them.',
+      ? 'Red cursed tiles burn a heart, hex you and call an ambush. Walk around them, or tap 💨 to hop over.'
+      : 'Red cursed tiles burn a heart, hex you and call an ambush. Walk around them, or hop-dash over them (Space).',
   dash: () =>
     touch.enabled
       ? 'Tap 💨 to hop-dash right through bees: it hurts them, not you.'
-      : 'Shift or right-click to hop-dash right through bees: it hurts them, not you.',
+      : 'Space or right-click to hop-dash right through bees: it hurts them, not you.',
 };
 
 function tip(id) {
@@ -531,7 +529,7 @@ function zoneAt(position) {
 
 function updateZone(delta) {
   const zone = player.isDashing ? null : zoneAt(player.position);
-  player.speedFactor = ZONE_SPEED[zone] ?? 1;
+  player.speedFactor = (ZONE_SPEED[zone] ?? 1) * (hexLeft > 0 ? CURSED.hexSlow : 1);
   if (!zone) {
     lavaTimer = 0;
     return;
@@ -699,6 +697,10 @@ function farthestCorner() {
 function rollElite(kind) {
   if (ENEMY_TYPES_BOSS.has(kind) || kind === 'nest' || wave < (vow('elite') ? 3 : ELITE_FROM_WAVE)) return null;
   if (Math.random() > (0.04 + wave * 0.009) * (waveMods.has('elites') ? 3 : 1) * (vow('elite') ? 2 : 1)) return null;
+  return randomEliteMod();
+}
+
+function randomEliteMod() {
   const mods = Object.keys(ELITE_MODS);
   return mods[Math.floor(Math.random() * mods.length)];
 }
@@ -777,7 +779,14 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
     const floor = stageFloor(enemy);
     if (floor && enemy.hp - damage < floor) {
       damage = Math.max(0, Math.ceil(enemy.hp - floor));
-      if (!damage) return;
+      if (!damage) {
+        // Holding at the threshold until the stage is over: show that the hits don't get through.
+        if (clock.elapsedTime - (enemy.lastShieldPing ?? 0) > 0.5) {
+          enemy.lastShieldPing = clock.elapsedTime;
+          hud.damageNumber(enemy.position, '⏳', enemy.height + 4, 'frost');
+        }
+        return;
+      }
     }
   }
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
@@ -806,7 +815,9 @@ function onEnemyKilled(enemy) {
   comboTimer = COMBO_WINDOW;
   if (!isGuest()) points += Math.round(enemy.score * (1 + Math.min(combo, 50) * COMBO_BONUS));
   if (combo >= 50) achieve('combo50');
-  if (enemy.elite && ++meta.eliteKills >= 10) achieve('elites');
+  if (combo >= 150) achieve('combo150');
+  if (kills >= 1000) achieve('kills1000');
+  if (enemy.elite && ++meta.eliteKills >= 50) achieve('elites');
   const streak = STREAKS.get(combo);
   if (streak) {
     hud.showCallout(streak);
@@ -851,8 +862,11 @@ function bossDefeated(name, score, kind) {
   clearBossMechanics();
   if (name.includes('zebub') && !beezebubTime) beezebubTime = Math.max(1, Math.floor(timeAlive));
   if (kind) bossMemory(kind).beaten++;
-  const achievement = name.includes('Empress') ? 'empress' : name.includes('zebub') ? 'beezebub' : name.includes('Buzzbelle') ? 'queen' : null;
-  if (achievement) achieve(achievement);
+  if (kind) achieve(kind); // queen, shogun, seraph, empress, beezebub
+  if (!feats.bossHurt) achieve('flawless');
+  if (steep >= 5 && kind === 'shogun') achieve('steep5');
+  if (steep >= 12 && kind === 'empress') achieve('steep12');
+  if (coop) achieve('coop');
   bossKills++;
   hud.setBoss(null);
   shake = BOSS_DEATH_SHAKE;
@@ -974,6 +988,7 @@ function hurtPlayer(amount, enemy = null) {
     effects.ring(player.position, { radius: 60, color: '#ff9ec7', duration: 0.4 });
   } else {
     hitThisWave = true;
+    feats.bossHurt = true;
     shake = Math.max(shake, HIT_SHAKE);
     hitStop(0.08);
     play('hurt');
@@ -1044,6 +1059,12 @@ function updateChaser(enemy, delta) {
     enemy.marchLeft -= delta;
     enemy.faceDirection(enemy.march.x, enemy.march.y);
     moveEnemy(enemy, enemy.march.x * enemy.speed * 1.4, enemy.march.y * enemy.speed * 1.4, delta);
+    // Bombers drop stingers to both sides, slow enough to step between.
+    if (enemy.bomber && !enemy.isFrozen && (enemy.bomber.timer -= delta) <= 0) {
+      enemy.bomber.timer = 0.32;
+      for (const sign of [1, -1]) fireStinger(enemy, fanDirection.copy(enemy.bomber.side).multiplyScalar(sign), 120, true);
+    }
+    if (enemy.marchLeft <= 0) enemy.bomber = null;
     return;
   }
   if (enemy.ai.mode) {
@@ -1070,6 +1091,7 @@ function updateChaser(enemy, delta) {
 /** Stingers keep their distance, circle around Tode and shoot. */
 function updateStinger(enemy, delta) {
   const { ranged } = enemy.type;
+  if (enemy.postLeft > 0 && updatePost(enemy, delta)) return;
   const target = targetFor(enemy.position);
   const distance = directionTo(enemy.position, target, chase);
   enemy.faceTowards(target);
@@ -1095,6 +1117,32 @@ function updateStinger(enemy, delta) {
     if (distance < ranged.distance + 150) stingerVolley(enemy, ranged.speed);
     if (Math.random() < 0.3) enemy.strafeSign *= -1;
   }
+}
+
+/** Crossfire: hurry to the post around Tode, wind up with the others, and all fire at once. False when done. */
+function updatePost(enemy, delta) {
+  const tode = enemy.postTode;
+  if (!tode || tode.downed || enemy.isFrozen) {
+    enemy.postLeft = 0;
+    return false;
+  }
+  enemy.postLeft -= delta;
+  flankPoint.set(tode.position.x + Math.cos(enemy.post) * CROSSFIRE.distance, tode.position.y + Math.sin(enemy.post) * CROSSFIRE.distance, 0);
+  const distance = directionTo(enemy.position, flankPoint, chase);
+  const speed = Math.min(enemy.speed * 1.8, distance * 5);
+  moveEnemy(enemy, chase.x * speed, chase.y * speed, delta);
+  enemy.faceTowards(tode.position);
+  enemy.glowColor.set(0xff4a8a);
+  enemy.glow = THREE.MathUtils.clamp(1 - enemy.postLeft / CROSSFIRE.time, 0, 1);
+  if (enemy.postLeft > 0) return true;
+  // Fire: a fan straight at Tode from every post, plus a second, slower one to cut off the dodge.
+  enemy.glow = 0;
+  directionTo(enemy.position, tode.position, chase);
+  const angle = Math.atan2(chase.y, chase.x);
+  fireFan(enemy, angle, 5, 0.5, enemy.type.ranged.speed * 1.1);
+  later(0.35, () => !enemy.dying && fireFan(enemy, angle, 4, 0.75, enemy.type.ranged.speed * 0.75));
+  enemy.attackTimer = enemy.type.ranged.cooldown;
+  return true;
 }
 
 // Ranged bees shoot harder patterns in every arena: [bullets per volley, spread in radians, speed factor].
@@ -1129,6 +1177,12 @@ function launchStinger(origin, direction, speed, quiet = false, range = STINGER.
   speed *= 1 + 0.15 * vow('stingers');
   bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range, color: arena.bullet ?? '#c070ff' });
   if (!quiet) play('sting');
+}
+
+/** A stinger that isn't fired by a bee (curtains, curses, arena events), launched for everyone. */
+function sharedStinger(origin, direction, speed, quiet = false, range = STINGER.range * 1.6) {
+  launchStinger(origin, direction, speed, quiet, range);
+  share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed, q: quiet, r: range });
 }
 
 const fanDirection = new THREE.Vector3();
@@ -1223,7 +1277,7 @@ function startClash(boss) {
 function updateClash(delta) {
   const { boss, beams } = clash;
   clash.time += delta;
-  const mashes = ['Space', 'MouseLeft', 'MouseRight', 'KeyR', 'KeyE', 'KeyQ', 'KeyF', 'ShiftLeft', 'ShiftRight'].filter((code) => input.wasPressed(code)).length;
+  const mashes = ['Space', 'MouseLeft', 'MouseRight', 'KeyE', 'ShiftLeft', 'ShiftRight'].filter((code) => input.wasPressed(code)).length;
   clash.progress += mashes * CLASH.push - delta * (CLASH.bossPush + 0.05 * (boss.ai.phase ?? 0));
   clash.progress = THREE.MathUtils.clamp(clash.progress, 0, 1);
   if (mashes) {
@@ -1329,13 +1383,15 @@ function stingerRain(boss) {
 // At each health fraction a boss enters its next stage: it roars, attacks a little faster and starts a mechanic.
 // Shield tasks ('wards', 'lights', 'guardians') make it immune until they are done; 'interrupt' is a damage race
 // against its channel; 'nurses', 'soak', 'mark' and 'blades' become attacks it keeps repeating; 'firering' closes
-// the arena for the rest of the fight. `enrage`: seconds of fighting before it enrages. [fraction, mechanic, count]
+// the arena for the rest of the fight. `enrage`: seconds of fighting before it enrages. `stageTime`: every stage
+// lasts at least this long (the boss holds at the next threshold until then, and can't fall before its last stage
+// has run that long), so a strong build can't burst through a fight. [fraction, mechanic, count]
 const BOSS_SCRIPTS = {
-  queen: { enrage: 120, stages: [[0.7, 'wards', 3], [0.4, 'nurses']] },
-  shogun: { enrage: 150, stages: [[0.8, 'interrupt'], [0.55, 'wards', 4], [0.3, 'blades']] },
-  seraph: { enrage: 170, stages: [[0.8, 'lights', 3], [0.6, 'mark'], [0.4, 'guardians', 2], [0.2, 'soak']] },
-  empress: { enrage: 190, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
-  beezebub: { enrage: 220, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
+  queen: { enrage: 180, stageTime: 15, stages: [[0.75, 'wards', 3], [0.5, 'nurses'], [0.25, 'interrupt']] },
+  shogun: { enrage: 220, stageTime: 15, stages: [[0.85, 'interrupt'], [0.62, 'wards', 4], [0.4, 'blades'], [0.18, 'guardians', 2]] },
+  seraph: { enrage: 250, stageTime: 15, stages: [[0.82, 'lights', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
+  empress: { enrage: 270, stageTime: 14, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
+  beezebub: { enrage: 300, stageTime: 13, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
 };
 // Titles for the stage banners; `every`: seconds between casts of a repeating mechanic.
 const MECHANICS = {
@@ -1349,7 +1405,7 @@ const MECHANICS = {
   blades: { title: 'Blade Storm', every: 15 },
   firering: { title: 'Ring of Fire' },
 };
-const RITUALS = { shogun: 'Thousand Cuts', beezebub: 'Infernal Feast' };
+const RITUALS = { queen: 'Royal Jelly Feast', shogun: 'Thousand Cuts', beezebub: 'Infernal Feast' };
 // Enraged: attacks come much faster, the boss moves faster and hits harder, and stingers rain down.
 const ENRAGE = { attackScale: 0.55, speedScale: 1.3, rainEvery: 3.5 };
 // Interrupt: deal `share` of the boss's health within `time` seconds, or the ritual heals and empowers it.
@@ -1656,14 +1712,24 @@ const CLOSING = { time: 22, to: 0.42 };
 function stageFloor(enemy) {
   if (!enemy.type.boss || ritual?.boss === enemy) return 0; // a ritual must be breakable
 
-  const stage = BOSS_SCRIPTS[enemy.kind]?.stages[enemy.ai.stage ?? 0];
-  return stage ? Math.floor(stage[0] * enemy.maxHp) : 0;
+  const script = BOSS_SCRIPTS[enemy.kind];
+  const stage = script?.stages[enemy.ai.stage ?? 0];
+  if (stage) return Math.floor(stage[0] * enemy.maxHp);
+  // The last stage: the boss can't fall before it has run its course.
+  return script && !stageDone(enemy) ? 1 : 0;
+}
+
+/** Whether the boss's current stage has lasted its minimum time (see `stageTime`). */
+function stageDone(boss) {
+  const script = BOSS_SCRIPTS[boss.kind];
+  return !script || (boss.ai.fightTime ?? 0) - (boss.ai.stageAt ?? 0) >= script.stageTime;
 }
 
 /** Host: the boss crosses into its next stage. */
 function startStage(boss, [, mechanic, count]) {
   const { ai } = boss;
   ai.stage = (ai.stage ?? 0) + 1;
+  ai.stageAt = ai.fightTime ?? 0;
   ai.stageSpeed = (ai.stageSpeed ?? 1) * 0.92; // every stage attacks a little faster
   const title = mechanic === 'interrupt' ? RITUALS[boss.kind] ?? MECHANICS.interrupt.title : MECHANICS[mechanic].title;
   stageEffects(boss, ai.stage, title);
@@ -1827,6 +1893,7 @@ function endRitual(broken) {
   hud.setBreakBar(null);
   if (broken === null || !boss) return;
   if (broken) {
+    achieve('breaker');
     postfx.shatter(0.6, 0.5);
     postfx.flash('#ffffff', 0.5);
     shake = Math.max(shake, 18);
@@ -2122,10 +2189,19 @@ function updateBossMechanics(delta) {
 
 // --- Hive tactics: bees work together, more and more as the run goes on --------------------------
 // From these waves: flankers spiral in from the sides, packs lunge together along telegraphed lines, stingers fire
-// in synchronized volleys, and some stingers lead their shots. The Hive Mind vow brings them all in from wave 2.
-const TACTICS = { flankFrom: 4, pounceFrom: 7, syncFrom: 11, leadFrom: 15 };
+// in synchronized volleys, and some stingers lead their shots. On top of that the hive plans manoeuvres
+// (`MANOEUVRES`): a pack circles Tode and collapses on him, stingers take posts around him for a crossfire, or a
+// pack lunges one after another. The Hive Mind vow brings them all in from wave 2.
+const TACTICS = { flankFrom: 4, pounceFrom: 7, syncFrom: 11, leadFrom: 15, manoeuvreFrom: 4 };
 const POUNCE = { windup: 0.85, speed: 520, recover: 0.6 };
-const tactics = { pounceTimer: 8, volleyIn: 2.5, sync: false };
+const SURROUND = { radius: 175, time: 2.4, spin: 0.7, windup: 0.6 };
+const CROSSFIRE = { time: 2.2, distance: 230 };
+const MANOEUVRES = [
+  { id: 'surround', from: 4 },
+  { id: 'crossfire', from: 6 },
+  { id: 'rolling', from: 9 },
+];
+const tactics = { pounceTimer: 8, volleyIn: 2.5, sync: false, manoeuvreTimer: 10 };
 const flankPoint = new THREE.Vector3();
 const todeMotion = new WeakMap(); // tode → { last, velocity }: where Todes are heading, for leading shots
 const motionStep = new THREE.Vector3();
@@ -2158,10 +2234,60 @@ function updateTactics(delta) {
     tactics.pounceTimer = Math.max(5, 12 - (tw - TACTICS.pounceFrom) * 0.5) * (0.8 + Math.random() * 0.4);
     startPounce(tw);
   }
+  if (tw >= TACTICS.manoeuvreFrom && (tactics.manoeuvreTimer -= delta) <= 0) {
+    tactics.manoeuvreTimer = Math.max(6, 14 - (tw - TACTICS.manoeuvreFrom) * 0.45) * (0.8 + Math.random() * 0.4);
+    const pool = MANOEUVRES.filter((m) => tw >= m.from);
+    const manoeuvre = pool[Math.floor(Math.random() * pool.length)];
+    if (manoeuvre) ({ surround: startSurround, crossfire: startCrossfire, rolling: () => startPounce(tw, true) })[manoeuvre.id](tw);
+  }
 }
 
-/** A pack near a Tode stops, marks its lines on the ground, then lunges all at once. */
-function startPounce(tw) {
+/** Chasers that are free to join a manoeuvre around `tode`, nearest first. */
+function freeChasers(tode, range) {
+  return aliveEnemies()
+    .filter(
+      (enemy) =>
+        !enemy.type.boss && !enemy.type.structure && !enemy.type.ranged && enemy.kind !== 'nurse' && !enemy.ai.mode && !(enemy.marchLeft > 0) && !enemy.isFrozen &&
+        distanceSqXY(enemy.position, tode.position) < range ** 2
+    )
+    .sort((a, b) => distanceSqXY(a.position, tode.position) - distanceSqXY(b.position, tode.position));
+}
+
+/** A pack spreads out in a ring around Tode, circles him, then collapses on him from every side at once. */
+function startSurround(tw) {
+  const todes = standingTodes();
+  const tode = todes[Math.floor(Math.random() * todes.length)];
+  if (!tode) return;
+  const pack = freeChasers(tode, 520).slice(0, Math.min(12, 5 + Math.floor((tw - TACTICS.manoeuvreFrom) / 2)));
+  if (pack.length < 4) return;
+  const turn = Math.random() * Math.PI * 2;
+  const spin = (Math.random() < 0.5 ? -1 : 1) * SURROUND.spin;
+  pack.forEach((bee, i) => Object.assign(bee.ai, { mode: 'surround', timer: SURROUND.time, slot: turn + (i / pack.length) * Math.PI * 2, spin, tode }));
+  play('roar');
+  hud.showCallout('Circled!');
+}
+
+/** Stingers take posts around Tode, wind up together and fire at once: a crossfire. */
+function startCrossfire(tw) {
+  const todes = standingTodes();
+  const tode = todes[Math.floor(Math.random() * todes.length)];
+  if (!tode) return;
+  const squad = aliveEnemies()
+    .filter((enemy) => enemy.type.ranged && !enemy.type.boss && !enemy.isFrozen && !(enemy.postLeft > 0) && distanceSqXY(enemy.position, tode.position) < 650 ** 2)
+    .slice(0, Math.min(6, 3 + Math.floor((tw - 6) / 4)));
+  if (squad.length < 2) return;
+  const turn = Math.random() * Math.PI * 2;
+  squad.forEach((bee, i) => {
+    bee.post = turn + (i / squad.length) * Math.PI * 2;
+    bee.postLeft = CROSSFIRE.time;
+    bee.postTode = tode;
+  });
+  play('charge');
+  hud.showCallout('Stingers take aim!');
+}
+
+/** A pack near a Tode stops, marks its lines on the ground, then lunges all at once (`rolling`: one after another). */
+function startPounce(tw, rolling = false) {
   const todes = standingTodes();
   const tode = todes[Math.floor(Math.random() * todes.length)];
   if (!tode) return;
@@ -2178,21 +2304,52 @@ function startPounce(tw) {
   const velocity = todeMotion.get(tode)?.velocity;
   const aim = tode.position.clone();
   if (velocity) aim.addScaledVector(velocity, 0.5);
-  for (const bee of pack) {
+  pack.forEach((bee, i) => {
     const direction = new THREE.Vector3();
     const distance = directionTo(bee.position, aim, direction);
     const length = Math.min(distance + 80, 380);
-    Object.assign(bee.ai, { mode: 'pounceWindup', timer: POUNCE.windup, direction, length });
+    Object.assign(bee.ai, { mode: 'pounceWindup', timer: POUNCE.windup + (rolling ? i * 0.28 : 0), direction, length });
     bee.ai.telegraph = addTelegraph(bee.position, direction, length, bee.radius * 1.6);
     share({ k: 'tele', id: bee.netId, o: [bee.position.x, bee.position.y], d: [direction.x, direction.y], l: length, w: bee.radius * 1.6 });
-  }
+  });
   play('charge');
-  hud.showCallout(pack.length >= 5 ? 'The swarm strikes as one!' : 'Coordinated strike!');
+  hud.showCallout(rolling ? 'Rolling strike!' : pack.length >= 5 ? 'The swarm strikes as one!' : 'Coordinated strike!');
+}
+
+/** Lines a bee up for a telegraphed lunge at `aim`. */
+function windUpLunge(bee, aim, windup = POUNCE.windup) {
+  const direction = new THREE.Vector3();
+  const distance = directionTo(bee.position, aim, direction);
+  const length = Math.min(distance + 90, 400);
+  Object.assign(bee.ai, { mode: 'pounceWindup', timer: windup, direction, length });
+  bee.ai.telegraph = addTelegraph(bee.position, direction, length, bee.radius * 1.6);
+  share({ k: 'tele', id: bee.netId, o: [bee.position.x, bee.position.y], d: [direction.x, direction.y], l: length, w: bee.radius * 1.6 });
 }
 
 function updatePounce(enemy, delta) {
   const { ai } = enemy;
   ai.timer -= delta;
+  if (ai.mode === 'surround') {
+    // Fly to a slot on the ring and circle with it; when the time is up, everyone lunges at once.
+    const tode = ai.tode;
+    if (!tode || tode.downed) {
+      ai.mode = null;
+      return;
+    }
+    ai.slot += ai.spin * delta;
+    flankPoint.set(tode.position.x + Math.cos(ai.slot) * SURROUND.radius, tode.position.y + Math.sin(ai.slot) * SURROUND.radius, 0);
+    const distance = directionTo(enemy.position, flankPoint, chase);
+    const speed = Math.min(enemy.speed * 1.6, distance * 6);
+    enemy.faceTowards(tode.position);
+    enemy.glowColor.set(0xff7a1f);
+    enemy.glow = 0.25 + 0.25 * Math.sin(ai.timer * 12);
+    moveEnemy(enemy, chase.x * speed, chase.y * speed, delta);
+    if (ai.timer <= 0) {
+      enemy.glow = 0;
+      windUpLunge(enemy, tode.position, SURROUND.windup);
+    }
+    return;
+  }
   if (ai.mode === 'pounceWindup') {
     enemy.faceDirection(ai.direction.x, ai.direction.y);
     enemy.glowColor.set(0xff3b1f);
@@ -2322,12 +2479,12 @@ function updateQueen(boss, delta) {
   // The next stage starts at its health fraction (see BOSS_SCRIPTS), once the boss is free to start it.
   const stage = script?.stages[ai.stage ?? 0];
   const busy = ['channel', 'interrupt', 'blades', 'windup', 'charge', 'spiral', 'volley', 'halo', 'brimstone', 'pillars'].includes(ai.mode);
-  if (stage && !raid && !cataclysm && !busy && boss.hp <= stageFloor(boss)) startStage(boss, stage);
+  if (stage && !raid && !cataclysm && !busy && boss.hp <= stageFloor(boss) && stageDone(boss)) startStage(boss, stage);
   const enraged = boss.hp < boss.maxHp / 2;
   const nextPhase = BOSS_PHASES[boss.kind]?.[ai.phase ?? 0];
   if (nextPhase && !boss.shielded && boss.hp / boss.maxHp < nextPhase) bossRoar(boss);
-  // Shielded bosses attack less often: the wards are the job (the first bosses go easier still).
-  const shieldCalm = boss.shielded ? (wave < 10 ? 1.7 : 1.35) : 1;
+  // Shielded bosses attack a little less often: the wards are the job.
+  const shieldCalm = boss.shielded ? 1.25 : 1;
   const delayScale =
     (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1) * shieldCalm * (ai.stageSpeed ?? 1) * (boss.enraged ? ENRAGE.attackScale : 1);
   const target = targetFor(boss.position);
@@ -2733,7 +2890,8 @@ function updateEnemyProjectiles(delta) {
   const limit = MAP_HALF_SIZE + 80;
   const reach = player.radius * 0.7; // a forgiving hitbox: bullet-hell games hit on the core only
   bullets.update(delta, (bullet) => {
-    if (Math.abs(bullet.x) > limit || Math.abs(bullet.y) > limit) {
+    // Out of the arena and flying away from it (arena events start some bullets outside and fly them in).
+    if ((Math.abs(bullet.x) > limit && bullet.x * bullet.dx > 0) || (Math.abs(bullet.y) > limit && bullet.y * bullet.dy > 0)) {
       bullet.dead = true;
       return;
     }
@@ -2938,25 +3096,16 @@ function splashVisual(center, radius, color = SPLASH_COLOR) {
   splashEffects.push({ ring, age: 0 });
 }
 
-// --- Tea Bomb (space): a boiling kettle bomb lobbed at the aim, exploding into a splash ---------
+// --- Tea Bomb: a boiling kettle bomb that throws itself at the thickest crowd, exploding into a splash ---
 const BOMB_RANGE = 430;
-const BOMB_MIN_RANGE = 50;
 const BOMB_ARC = 110; // peak height of the throw
 const bombs = []; // { mesh, from, to, age, flight, own }
 let bombCharges = 0;
 const bombGeometry = new THREE.SphereGeometry(7, 16, 12);
 const bombMaterial = new THREE.MeshStandardMaterial({ color: '#c98a2b', emissive: '#ff9a2a', emissiveIntensity: 0.9, roughness: 0.3, metalness: 0.3 });
 
-/** Where to throw: the aim (clamped to the range), or for auto-cast the thickest crowd in range. */
-function bombTarget(auto) {
-  if (!auto) {
-    const target = ctx.aimGround.clone().setZ(0);
-    const offset = target.sub(player.position);
-    const distance = offset.length();
-    if (distance < 1) offset.copy(player.facing);
-    offset.setLength(THREE.MathUtils.clamp(distance, BOMB_MIN_RANGE, BOMB_RANGE));
-    return player.position.clone().add(offset).setZ(0);
-  }
+/** Where to throw: the thickest crowd in range (at least 3 bees, a boss counts for 3), or nowhere yet. */
+function bombTarget() {
   const radius = player.stats.splashRadius * (weather.info.splashRadius ?? 1);
   let best = null;
   let bestScore = 0;
@@ -3047,6 +3196,7 @@ function kettleLanding() {
 }
 
 function tryDash(direction) {
+  if (hexLeft > CURSED.hex - CURSED.hexNoDash) return; // a fresh hex holds Tode's legs for a moment
   if (!player.startDash(direction)) return;
   play('dash');
   particles.burst(player.position, { count: 8, colors: DUST, speed: 50, up: 25, size: 2, height: 1 });
@@ -3258,6 +3408,7 @@ function gainCharm(charm) {
   effects.ring(player.position, { radius: 50, color: CHARM_RARITIES[charm.rarity].color, duration: 0.4 });
   hud.showCharm(charm, count, charm.text(count), player.position);
   refreshCharms();
+  if ([...charmCounts.values()].reduce((sum, n) => sum + n, 0) >= 12) achieve('charms');
 }
 
 function charmList() {
@@ -3377,6 +3528,10 @@ function updateShrines(delta) {
 
 function useShrine() {
   const { position, type } = shrine;
+  if (!shrine.counted) {
+    shrine.counted = true;
+    if (++feats.shrines >= 4) achieve('shrines');
+  }
   const color = SHRINES[type].color;
   effects.ring(position, { radius: 120, color, duration: 0.6, thickness: 0.2 });
   particles.burst(position, { count: 30, colors: ['#ffffff', color], speed: 160, up: 160, size: 2, glow: true });
@@ -3414,6 +3569,7 @@ function useShrine() {
     spawnQueue.push(...buildSpawnQueue({ ...config, count: Math.round(config.count * 0.5) }));
     spawnSquad();
     bonusPicks++;
+    feats.bitterWave = wave;
     hud.setModifiers([...waveMods].map((id) => MODIFIERS[id]));
     hud.showBanner('The hive is enraged!', 'Survive the wave for an Epic brew', 2.4);
     postfx.flash('#ff3b1f', 0.4);
@@ -3593,6 +3749,7 @@ function updateLeaves(delta) {
     playerLevel++;
     pendingLevels++;
     levelUpEffects();
+    if (playerLevel >= 25) achieve('level25');
   }
   hud.setXp(leafXp / leavesForLevel(playerLevel), playerLevel, pendingLevels);
   // Solo: the game pauses for the pick right away. Co-op: the picks wait until the wave is cleared.
@@ -3618,7 +3775,7 @@ function openLevelUp(resume = null) {
   }
   levelReturn = resume;
   setPhase('skill');
-  hud.showSkills(offers, settings.autoCast, playerLevel - pendingLevels + 1);
+  hud.showSkills(offers, playerLevel - pendingLevels + 1);
   return true;
 }
 
@@ -3839,11 +3996,13 @@ function beginWave(number, weatherKind, mods = []) {
   }
   spawnQueue = isGuest() ? [] : seeded(() => buildSpawnQueue(config));
   hitThisWave = false;
+  feats.bossHurt = false;
   skillPickedThisBreak = false;
   fightTime = 0;
   tactics.pounceTimer = 6 + Math.random() * 4;
   tactics.volleyIn = 2.5;
-  if (isDaily() && number >= 5) achieve('daily');
+  if (isDaily() && number >= 10) achieve('daily');
+  if (endless && number >= 30) achieve('wave30');
   spawnTimer = 0;
 
   weather.set(timeOfDay(number), weatherKind);
@@ -4026,10 +4185,12 @@ function updateNest(nest, delta) {
   spawnEnemy(Math.random() < 0.75 ? 'drone' : 'zipper', spot, { elite: null });
 }
 
-// --- Forbidden tiles: cursed ground that calls an ambush when Tode walks onto it -----------------------
-// From wave 3 every wave (but a boss's) lays out new cursed tiles, more the deeper the run. Stepping on one calls
-// a ring of bees; a hop-dash over it is safe. A tile re-arms after a while.
-const CURSED = { from: 3, size: TILE_SIZE * 2, rearm: 9 };
+// --- Forbidden tiles: cursed ground that punishes Tode for walking onto it -----------------------------
+// From wave 3 every wave (but a boss's) lays out new cursed tiles, more the deeper the run. Stepping on one burns
+// a heart (two from wave 16), hexes Tode (slow, no dash for a moment), closes a ring of stingers in on the tile and
+// calls an ambush of bees; a hop-dash over it is safe. A tile re-arms after a while.
+const CURSED = { from: 3, size: TILE_SIZE * 2, rearm: 7, hex: 2.6, hexSlow: 0.5, hexNoDash: 0.8, ring: 230, ringSpeed: 130 };
+let hexLeft = 0; // seconds Tode stays hexed by a cursed tile
 let cursedTiles = []; // { x, y, mesh, cooldown }
 let cursedWave = 0; // the wave the tiles were laid out for (guests may get them before their own wave starts)
 let cursedTexture = null;
@@ -4114,11 +4275,33 @@ function updateCursedTiles(delta) {
     if (tile.cooldown > 0 || phase !== 'fighting' || player.downed || player.isDashing) return;
     const half = CURSED.size / 2;
     if (Math.abs(player.position.x - tile.x) > half || Math.abs(player.position.y - tile.y) > half) return;
+    feats.tileWave = wave;
     if (isGuest()) net.queue('host', { k: 'ambush', i });
     else ambush(i);
     tileTriggered(i);
     share({ k: 'tileHit', i });
+    curseTode(tile);
   });
+  if (hexLeft > 0) {
+    hexLeft = Math.max(0, hexLeft - delta);
+    if (Math.random() < delta * 20) particles.burst(player.position, { count: 1, colors: ['#ff2a5a', '#3a0010', '#ff8aa0'], speed: 30, up: 70, size: 1.8, glow: true });
+  }
+}
+
+/** The curse lands on our own Tode: a heart, a hex, and a ring of stingers closing in on the tile. */
+function curseTode(tile) {
+  hurtPlayer(wave >= 16 ? 2 : 1);
+  hexLeft = CURSED.hex;
+  postfx.flash('#ff2a5a', 0.35);
+  shake = Math.max(shake, 12);
+  const count = Math.min(26, 14 + Math.floor(wave / 2));
+  const turn = Math.random() * Math.PI * 2;
+  for (let n = 0; n < count; n++) {
+    const angle = turn + (n / count) * Math.PI * 2;
+    const origin = new THREE.Vector3(tile.x + Math.cos(angle) * CURSED.ring, tile.y + Math.sin(angle) * CURSED.ring, 0);
+    sharedStinger(origin, new THREE.Vector3(-Math.cos(angle), -Math.sin(angle), 0), CURSED.ringSpeed, n > 0, CURSED.ring * 2.2);
+  }
+  hud.showCallout('Hexed! Get out!');
 }
 
 /** Everyone: the tile flares up and goes dormant for a while. */
@@ -4130,7 +4313,6 @@ function tileTriggered(i) {
   effects.ring(at, { radius: 90, color: '#ff2a5a', duration: 0.5, thickness: 0.25 });
   particles.burst(at, { count: 24, colors: ['#ff2a5a', '#ff8aa0', '#3a0010'], speed: 120, up: 120, size: 2, glow: true });
   play('roar');
-  hud.showCallout('Cursed ground! Ambush!');
 }
 
 /** Host: a ring of bees around the tile. */
@@ -4138,21 +4320,24 @@ function tileTriggered(i) {
 function ambush(i, fromGuest = false) {
   const tile = cursedTiles[i];
   if (!tile || (tile.cooldown > 0 && !fromGuest)) return;
-  const count = 3 + Math.floor(wave / 3) + (coop ? coop.size - 1 : 0);
-  const kinds = wave >= 12 ? ['drone', 'zipper', 'stinger', 'brute'] : wave >= 8 ? ['drone', 'zipper', 'stinger'] : ['drone', 'zipper'];
+  const count = 5 + Math.floor(wave / 2) + (coop ? coop.size - 1 : 0);
+  const kinds = wave >= 12 ? ['zipper', 'brute', 'stinger', 'drone'] : wave >= 6 ? ['zipper', 'drone', 'stinger', 'brute'] : ['zipper', 'drone'];
   const limit = MAP_HALF_SIZE - 30;
   const turn = Math.random() * Math.PI * 2;
   for (let n = 0; n < count; n++) {
     const angle = turn + (n / count) * Math.PI * 2;
-    const spot = new THREE.Vector3(tile.x + Math.cos(angle) * 190, tile.y + Math.sin(angle) * 190, 0);
+    const spot = new THREE.Vector3(tile.x + Math.cos(angle) * 170, tile.y + Math.sin(angle) * 170, 0);
     spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0);
     effects.ring(spot, { radius: 36, color: '#ff2a5a', duration: 0.6 });
-    spawnEnemy(kinds[n % kinds.length], spot);
+    // From wave 6 the curse calls an elite to lead the ambush.
+    const bee = spawnEnemy(kinds[n % kinds.length], spot, n === 0 && wave >= 6 ? { elite: randomEliteMod() } : undefined);
+    if (bee) bee.speed *= 1.2; // they come in angry
   }
 }
 
 function clearCursedTiles() {
   cursedWave = 0;
+  hexLeft = 0;
   for (const tile of cursedTiles) {
     tile.mesh.removeFromParent();
     tile.mesh.geometry.dispose();
@@ -4170,19 +4355,19 @@ const HAZARDS = {
   cosmos: { kind: 'meteor', from: 16, every: 4.5, radius: 62, damage: 18 },
   hell: { kind: 'brimstone', from: 21, every: 3, radius: 66, damage: 22 },
 };
-const hazard = { timer: 0, every: 0, squadTimer: 0, squadsLeft: 0, curtainTimer: 0, curtainEvery: 0 };
-// Bullet curtains: walls of stingers sweeping across the arena with one gap to slip through.
-const CURTAIN = { from: 13, spacing: 24, gap: 3, speed: 135 };
+const hazard = { timer: 0, every: 0, squadTimer: 0, squadsLeft: 0, eventTimer: 0, eventEvery: 0 };
 
 function startHazards(number) {
+  clearArenaEvents();
   const plan = HAZARDS[arena.id] ?? HAZARDS.garden;
   const active = number >= plan.from || waveMods.has('meteors');
   // A meteor shower is much faster than an arena's own hazard.
   hazard.every = waveMods.has('meteors') ? 1.4 : active ? plan.every / (1 + (number - plan.from) * 0.15) : 0;
   hazard.timer = 3 + Math.random() * 2;
-  hazard.squadsLeft = number >= 16 ? 3 + Math.floor((number - 16) / 3) : number >= 11 ? 2 : number >= 6 ? 1 : 0;
-  hazard.curtainEvery = number >= CURTAIN.from ? Math.max(3.5, 13 - (number - CURTAIN.from) * 0.7) : 0;
-  hazard.curtainTimer = hazard.curtainEvery * 0.6;
+  hazard.squadsLeft = number >= 16 ? 4 + Math.floor((number - 16) / 3) : number >= 11 ? 3 : number >= 8 ? 2 : number >= 4 ? 1 : 0;
+  // Arena events: bullet curtains and other patterns sweeping the field, more often deeper in (rarer in boss fights).
+  hazard.eventEvery = number >= ARENA_EVENT_FROM ? Math.max(5, 15 - (number - ARENA_EVENT_FROM) * 0.6) * (waveConfig(number).isBoss ? 1.6 : 1) : 0;
+  hazard.eventTimer = hazard.eventEvery * 0.5;
   hazard.squadTimer = 7 + Math.random() * 5;
 }
 
@@ -4194,9 +4379,9 @@ function updateHazards(delta) {
     const count = Math.min(8, 1 + Math.floor(Math.max(0, wave - 10) / 3));
     for (let i = 0; i < count; i++) dropHazard(i * 0.2);
   }
-  if (hazard.curtainEvery > 0 && (hazard.curtainTimer -= delta) <= 0) {
-    hazard.curtainTimer = hazard.curtainEvery * (0.8 + Math.random() * 0.4);
-    bulletCurtain();
+  if (hazard.eventEvery > 0 && !arenaEvents.length && (hazard.eventTimer -= delta) <= 0) {
+    hazard.eventTimer = hazard.eventEvery * (0.8 + Math.random() * 0.4);
+    startArenaEvent();
   }
   if (hazard.squadsLeft > 0 && (hazard.squadTimer -= delta) <= 0) {
     hazard.squadsLeft--;
@@ -4226,30 +4411,181 @@ function dropHazard(extraDelay) {
   share({ k: 'meteor', p: [spot.x, spot.y], o: options });
 }
 
-/** A wall of stingers sweeps across the arena from one side; find the gap (or hop-dash through). */
-function bulletCurtain() {
-  const side = Math.floor(Math.random() * 4);
-  const edge = MAP_HALF_SIZE + 20;
-  const direction = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0)][side];
+// --- Arena events: patterns of stingers that sweep the whole field, to dodge or hop-dash through ---------------
+// Host only (the bullets are shared). Each event is telegraphed by a callout, and some run for a few seconds.
+const ARENA_EVENT_FROM = 7;
+const CURTAIN = { spacing: 24, gap: 3, speed: 135 };
+const ARENA_EVENTS = [
+  { id: 'curtain', from: 7, weight: 3, title: 'Bullet curtain!' },
+  { id: 'lighthouse', from: 8, weight: 2, title: 'Lighthouse!' },
+  { id: 'noose', from: 9, weight: 2, title: 'The noose!' },
+  { id: 'crossfire', from: 11, weight: 2, title: 'Crossfire!' },
+  { id: 'double', from: 12, weight: 2, title: 'Double curtain!' },
+  { id: 'pincer', from: 14, weight: 2, title: 'Closing walls!' },
+  { id: 'rain', from: 16, weight: 2, title: 'Stinger rain!' },
+  { id: 'starburst', from: 18, weight: 1, title: 'Starburst!' },
+];
+const SIDES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0)];
+let arenaEvents = []; // running events: { time, step(event, delta) → true when done }
+
+const randomTode = () => {
+  const todes = standingTodes();
+  return todes[Math.floor(Math.random() * todes.length)] ?? player;
+};
+const eventSpeed = () => 1 + Math.max(0, wave - ARENA_EVENT_FROM) * 0.02;
+
+function startArenaEvent(id = null) {
+  const tw = vow('hivemind') ? wave + 6 : wave;
+  const pool = ARENA_EVENTS.filter((event) => tw >= event.from || event.id === id);
+  const event = id ? pool.find((e) => e.id === id) : weightedPick(pool);
+  if (!event) return;
+  hud.showCallout(event.title);
+  play('roar');
+  ({
+    curtain: () => curtainLine(SIDES[Math.floor(Math.random() * 4)]),
+    double: () => {
+      const side = SIDES[Math.floor(Math.random() * 4)];
+      curtainLine(side, { gapShift: -5 });
+      later(1.3, () => curtainLine(side, { gapShift: 5 }));
+    },
+    crossfire: () => {
+      const first = Math.floor(Math.random() * 4);
+      curtainLine(SIDES[first]);
+      curtainLine(SIDES[first < 2 ? 2 + Math.floor(Math.random() * 2) : Math.floor(Math.random() * 2)]);
+    },
+    pincer: () => {
+      const axis = Math.random() < 0.5 ? 0 : 2;
+      curtainLine(SIDES[axis], { gapShift: -3, speedScale: 0.85 });
+      curtainLine(SIDES[axis + 1], { gapShift: 3, speedScale: 0.85 });
+    },
+    rain: () => {
+      // Diagonal lines, one after another, each with its gap somewhere else.
+      const angle = Math.PI / 4 + Math.floor(Math.random() * 4) * (Math.PI / 2);
+      const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
+      for (let n = 0; n < 3; n++) later(n * 1.1, () => curtainLine(direction, { gapShift: (n - 1) * 6, speedScale: 1.1 }));
+    },
+    lighthouse: () => lighthouse(),
+    noose: () => {
+      const tode = randomTode();
+      const center = tode.position.clone();
+      noose(center, 0);
+      later(0.7, () => noose(center, 0.5));
+    },
+    starburst: () => {
+      // Three bursts from points around Tode: rings of stingers that cross each other.
+      const tode = randomTode();
+      const turn = Math.random() * Math.PI * 2;
+      for (let n = 0; n < 3; n++) {
+        const angle = turn + (n / 3) * Math.PI * 2;
+        const spot = clampToArena(tode.position.clone().add(new THREE.Vector3(Math.cos(angle) * 280, Math.sin(angle) * 280, 0)));
+        effects.ring(spot, { radius: 60, color: '#ff4a8a', duration: 0.9 });
+        later(0.9 + n * 0.45, () => burstRing(spot, 18, 170 * eventSpeed(), n * 0.17));
+      }
+    },
+  })[event.id]();
+}
+
+function weightedPick(pool) {
+  let roll = Math.random() * pool.reduce((sum, e) => sum + e.weight, 0);
+  return pool.find((e) => (roll -= e.weight) < 0) ?? pool[0];
+}
+
+/** Runs `fn` after `delay` seconds of fighting (dropped when the wave or run ends). */
+function later(delay, fn) {
+  arenaEvents.push({ time: 0, step: (event) => event.time >= delay && (fn(), true) });
+}
+
+function updateArenaEvents(delta) {
+  if (phase !== 'fighting') return;
+  arenaEvents = arenaEvents.filter((event) => {
+    event.time += delta;
+    return !event.step(event, delta);
+  });
+}
+
+function clearArenaEvents() {
+  arenaEvents = [];
+}
+
+function clampToArena(spot, margin = 40) {
+  const limit = MAP_HALF_SIZE - margin;
+  return spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0);
+}
+
+/** A wall of stingers sweeping across the arena along `direction`, with one gap near a Tode. */
+function curtainLine(direction, { gapShift = 0, speedScale = 1, gap = CURTAIN.gap } = {}) {
+  direction = direction.clone().normalize();
+  const diagonal = Math.abs(direction.x) > 0.01 && Math.abs(direction.y) > 0.01;
+  const edge = (MAP_HALF_SIZE + 20) * (diagonal ? Math.SQRT2 : 1);
   const along = new THREE.Vector3(-direction.y, direction.x, 0);
   const count = Math.ceil((edge * 2) / CURTAIN.spacing);
   // The gap lands near a Tode, so there is always a way through.
-  const todes = standingTodes();
-  const tode = todes[Math.floor(Math.random() * todes.length)] ?? player;
-  const gapAt = THREE.MathUtils.clamp(Math.round((tode.position.dot(along) + edge) / CURTAIN.spacing + (Math.random() - 0.5) * 6), 1, count - CURTAIN.gap - 1);
-  const speed = CURTAIN.speed * (1 + Math.max(0, wave - CURTAIN.from) * 0.02);
+  const tode = randomTode();
+  const gapAt = THREE.MathUtils.clamp(Math.round((tode.position.dot(along) + edge) / CURTAIN.spacing + gapShift + (Math.random() - 0.5) * 6), 1, count - gap - 1);
+  const speed = CURTAIN.speed * eventSpeed() * speedScale;
   for (let i = 0; i < count; i++) {
-    if (i >= gapAt && i < gapAt + CURTAIN.gap) continue;
+    if (i >= gapAt && i < gapAt + gap) continue;
     const origin = direction.clone().multiplyScalar(-edge).addScaledVector(along, -edge + i * CURTAIN.spacing);
-    launchStinger(origin, direction, speed, i > 0, edge * 2.2);
-    share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed, q: i > 0, r: edge * 2.2 });
+    // Diagonal lines are longer than the arena is wide: skip the bullets that would never cross it.
+    if (diagonal && Math.abs(origin.dot(along)) > MAP_HALF_SIZE * Math.SQRT2) continue;
+    sharedStinger(origin, direction, speed, i > 0, edge * 2.4);
   }
-  hud.showCallout('Bullet curtain!');
 }
 
-/** Bees working together: an encirclement, a marching phalanx, or a firing squad. */
+/** A lighthouse near Tode: two arms of stingers turning around it for a few seconds. */
+function lighthouse() {
+  const tode = randomTode();
+  const angle = Math.random() * Math.PI * 2;
+  const origin = clampToArena(tode.position.clone().add(new THREE.Vector3(Math.cos(angle) * 240, Math.sin(angle) * 240, 0)), 60);
+  const turn = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 0.3);
+  const arms = wave >= 15 ? 3 : 2;
+  let heading = Math.atan2(tode.position.y - origin.y, tode.position.x - origin.x) + Math.PI / 2;
+  let fireTimer = 0;
+  effects.ring(origin, { radius: 70, color: '#ffd36b', duration: 1 });
+  particles.burst(origin, { count: 24, colors: ['#ffd36b', '#ffffff'], speed: 120, up: 140, size: 2, glow: true });
+  arenaEvents.push({
+    time: 0,
+    step: (event, delta) => {
+      if (event.time < 1) return false; // the warning
+      heading += turn * delta;
+      if ((fireTimer -= delta) <= 0) {
+        fireTimer = 0.085;
+        for (let a = 0; a < arms; a++) {
+          const theta = heading + (a / arms) * Math.PI * 2;
+          const direction = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+          sharedStinger(origin.clone().addScaledVector(direction, 20), direction, 230 * eventSpeed(), true, MAP_HALF_SIZE * 2.4);
+        }
+      }
+      return event.time >= 5.2;
+    },
+  });
+}
+
+/** A ring of stingers around `center`, closing in on it. */
+function noose(center, offset) {
+  const count = Math.min(40, 26 + Math.floor(wave / 2));
+  const radius = 340;
+  for (let n = 0; n < count; n++) {
+    const angle = ((n + offset) / count) * Math.PI * 2;
+    const origin = new THREE.Vector3(center.x + Math.cos(angle) * radius, center.y + Math.sin(angle) * radius, 0);
+    sharedStinger(origin, new THREE.Vector3(-Math.cos(angle), -Math.sin(angle), 0), 125 * eventSpeed(), n > 0, radius * 2.2);
+  }
+}
+
+/** A ring of stingers flying out from `center`. */
+function burstRing(center, count, speed, offset = 0) {
+  for (let n = 0; n < count; n++) {
+    const angle = ((n + offset) / count) * Math.PI * 2;
+    const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
+    sharedStinger(center.clone().addScaledVector(direction, 10), direction, speed, n > 0);
+  }
+  play('boom');
+}
+
+/** Bees working together: an encirclement, a marching phalanx, a firing squad, bombers or a pincer. */
 function spawnSquad() {
-  const type = ['ring', 'phalanx', 'volley'][Math.floor(Math.random() * 3)];
+  const types = ['ring', 'phalanx', 'volley', ...(wave >= 8 ? ['bombers'] : []), ...(wave >= 11 ? ['pincer'] : [])];
+  const type = types[Math.floor(Math.random() * types.length)];
   const tode = player.downed ? standingTodes()[0] ?? player : player;
   const center = tode.position;
   const limit = MAP_HALF_SIZE - 30;
@@ -4279,6 +4615,40 @@ function spawnSquad() {
       if (bee) {
         bee.march = march.clone();
         bee.marchLeft = (limit * 2) / (bee.speed * 1.4);
+      }
+    }
+  } else if (type === 'bombers') {
+    // A line of fast bees flies straight over Tode, dropping stingers to both sides as it passes.
+    const angle = Math.atan2(center.y, center.x) + Math.PI + (Math.random() - 0.5) * 1.2;
+    const march = new THREE.Vector3(-Math.cos(angle), -Math.sin(angle), 0);
+    const side = new THREE.Vector3(-march.y, march.x, 0);
+    const count = 4 + Math.floor(wave / 5);
+    hud.showCallout('Bombing run!');
+    for (let i = 0; i < count; i++) {
+      const spot = clamp(center.clone().addScaledVector(march, -460 - i * 50).addScaledVector(side, (i % 2 ? 1 : -1) * 18));
+      const bee = spawnEnemy('zipper', spot, { elite: null });
+      if (bee) {
+        bee.march = march.clone();
+        bee.marchLeft = 1200 / (bee.speed * 1.4);
+        bee.bomber = { timer: 0.5 + i * 0.12, side: side.clone() };
+        effects.ring(spot, { radius: 30, color: '#ff8a2a', duration: 0.6 });
+      }
+    }
+  } else if (type === 'pincer') {
+    // Two phalanxes from opposite sides at once.
+    const axis = Math.random() < 0.5 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const along = new THREE.Vector3(-axis.y, axis.x, 0);
+    const count = 6 + Math.floor(wave / 5);
+    hud.showCallout('Pincer squad!');
+    for (const sign of [1, -1]) {
+      const march = axis.clone().multiplyScalar(sign);
+      for (let i = 0; i < count; i++) {
+        const spot = clamp(march.clone().multiplyScalar(-limit).addScaledVector(along, ((i + 0.5) / count - 0.5) * limit * 1.8));
+        const bee = spawnEnemy(i % 3 === 0 ? 'brute' : 'drone', spot, { elite: null });
+        if (bee) {
+          bee.march = march.clone();
+          bee.marchLeft = limit / (bee.speed * 1.4);
+        }
       }
     }
   } else {
@@ -4331,8 +4701,12 @@ function waveCleared() {
   leaves.vacuum();
   charmDrops.vacuum();
   clearShrine();
-  if (wave >= 5 && !hitThisWave) achieve('untouchable');
-  if (coop) achieve('coop');
+  feats.cleanWaves = wave >= 5 && !hitThisWave ? feats.cleanWaves + 1 : 0;
+  if (feats.cleanWaves >= 3) achieve('untouchable');
+  if (player.hp === 1 && !player.downed) achieve('whisker');
+  if (feats.bitterWave === wave) achieve('bitter');
+  // A whole arena past the garden (its waves with tiles, then its boss) without setting off a cursed tile.
+  if (wave >= 10 && wave % 5 === 0 && feats.tileWave <= wave - 5) achieve('lightfeet');
   if (coop?.host) share({ k: 'cleared' });
   const bonus = WAVE_CLEAR_BONUS * wave;
   points += bonus;
@@ -4402,6 +4776,7 @@ function chooseBrew(index) {
   brew.apply(player, value);
   play(brew.kind === 'brew' ? 'pick' : 'legendary');
   if (brew.kind === 'duo' || brew.kind === 'legendary') achieve(brew.kind);
+  if (brew.kind === 'legendary' && ++feats.legendaries >= 2) achieve('legendary2');
   meta.blendPicks ??= {};
   for (const blend of brew.blends ?? [brew.blend]) meta.blendPicks[blend] = (meta.blendPicks[blend] ?? 0) + 1;
   tip('brew');
@@ -4438,6 +4813,8 @@ function chooseSkill(index) {
   skills.learn(offer.skill.id);
   pendingLevels = Math.max(0, pendingLevels - 1);
   if (skills.slots.length >= 3) achieve('skills3');
+  if (skills.slots.length >= 6) achieve('skills6');
+  if (skills.slots.some((slot) => slot.level >= 5)) achieve('mastery');
   tip('skill');
   play('legendary');
   effects.ring(player.position, { radius: 90, color: '#3fd0c0', duration: 0.6 });
@@ -5337,6 +5714,7 @@ function clearWorld() {
   charmDrops.clear();
   clearShrine();
   clearCursedTiles();
+  clearArenaEvents();
   clearBossMechanics();
   clearObjective();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
@@ -5393,8 +5771,10 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   const { stats } = player;
   const pantry = (id) => (vow('pantry') ? 0 : pantryLevel(id));
   stats.maxHp += pantry('heart') - vow('shell');
-  stats.damageMultiplier = 1 + 0.1 * pantry('damage');
-  stats.gaugeRate *= 1 + 0.15 * pantry('gauge');
+  stats.damageMultiplier = 1 + 0.08 * pantry('damage');
+  stats.gaugeRate *= 1 + 0.12 * pantry('gauge');
+  stats.magnet *= 1 + 0.25 * pantry('magnet');
+  stats.dashCooldown *= 1 - 0.1 * pantry('spring');
   stats.revives += pantry('revive');
   rerolls = pantry('reroll');
   luck = pantry('luck');
@@ -5431,6 +5811,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   }
 
   endless = false;
+  Object.assign(feats, { cleanWaves: 0, tileWave: 0, legendaries: 0, shrines: 0, bitterWave: 0, bossHurt: false });
   timeAlive = 0;
   beezebubTime = 0;
   kills = 0;
@@ -5703,7 +6084,6 @@ function showPauseMenu() {
     ultimate: player.ultimate,
     form: TIERS[ascension.tier].name,
     sound: soundSettings(),
-    autoCast: settings.autoCast,
     coop: Boolean(coop),
   });
 }
@@ -5840,11 +6220,6 @@ const MENU_ACTIONS = {
   brew: ({ index }) => chooseBrew(Number(index)),
   ultimate: ({ index }) => chooseUltimate(Number(index)),
   skill: ({ index }) => chooseSkill(Number(index)),
-  'toggle-autocast': () => {
-    settings.autoCast = !settings.autoCast;
-    saveSettings();
-    showPauseMenu();
-  },
   reroll,
   pause,
   resume,
@@ -5931,6 +6306,7 @@ function updateGame(delta) {
   procBudget = PROC_BUDGET;
   updateWave(delta);
   updateHazards(delta);
+  updateArenaEvents(delta);
   updateObjective(delta);
   updateShrines(delta);
   updateCursedTiles(delta);
@@ -5949,9 +6325,8 @@ function updateGame(delta) {
   moveDirection.copy(SCREEN_RIGHT).multiplyScalar(moveAxis.x).addScaledVector(SCREEN_UP, moveAxis.y);
   updateAim();
 
-  if (input.wasPressed('ShiftLeft', 'ShiftRight', 'MouseRight')) tryDash(moveDirection);
-  if (input.wasPressed('KeyR', 'MouseMiddle')) tryUltimate();
-  SKILL_KEYS.forEach((key, i) => input.wasPressed(key) && skills.castManual(i, ctx.aimGround));
+  if (input.wasPressed('Space', 'ShiftLeft', 'ShiftRight', 'MouseRight')) tryDash(moveDirection);
+  if (input.wasPressed('KeyE', 'MouseMiddle')) tryUltimate();
 
   spitCooldownLeft = Math.max(0, spitCooldownLeft - delta);
   if ((input.primaryDown || autoFire) && spitCooldownLeft === 0 && !player.rooted) spit();
@@ -5971,9 +6346,9 @@ function updateGame(delta) {
   } else {
     bombCharges = maxBombs;
   }
+  // The tea bomb throws itself at the thickest crowd in range.
   if (bombCharges > 0) {
-    const auto = !input.wasPressed('Space') && autoCasting();
-    const target = input.wasPressed('Space') ? bombTarget(touch.enabled && !input.aiming) ?? bombTarget(false) : auto ? bombTarget(true) : null;
+    const target = bombTarget();
     if (target) throwBomb(target);
   }
 
@@ -5989,7 +6364,7 @@ function updateGame(delta) {
   hud.setCombo(combo);
 
   updatePowers(delta);
-  skills.update(delta, autoCasting());
+  skills.update(delta);
   updateProjectiles(delta);
   updateBombs(delta);
   updateLeaves(delta);
@@ -6005,7 +6380,7 @@ function updateGame(delta) {
   hud.setCooldown('splash', bombCharges > 0 ? 0 : splashCooldownLeft, stats.splashCooldown);
   hud.setCharges('splash', bombCharges, stats.bombCharges);
   hud.setUltimate(player.ultimate, player.gauge);
-  hud.setSkills(skills.slots, settings.autoCast);
+  hud.setSkills(skills.slots);
   updateHealth();
 }
 
@@ -6222,6 +6597,14 @@ if (import.meta.env.DEV) {
       for (let i = 0; i < count; i++) gainCharm(id ? charmById(id) : rollCharm());
     },
     charmCounts,
+    /** Starts an arena event now: 'curtain', 'lighthouse', 'noose', 'crossfire', 'double', 'pincer', 'rain', 'starburst'. */
+    event: (id) => startArenaEvent(id),
+    /** Starts a hive manoeuvre now: 'surround', 'crossfire' or 'rolling'. */
+    tactic: (id) => ({ surround: startSurround, crossfire: startCrossfire, rolling: (tw) => startPounce(tw, true) })[id](Math.max(wave, 12)),
+    squad: () => spawnSquad(),
+    get hex() {
+      return hexLeft;
+    },
     /** Puts a shrine in the arena right away: 'chance', 'bitter' or 'cursed'. */
     shrine: (type = 'chance') => setupShrine(wave, type),
     get shrineState() {

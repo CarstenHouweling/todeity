@@ -124,8 +124,7 @@ export class TouchControls {
     const buttons = document.createElement('div');
     buttons.className = 'touch-buttons';
     buttons.innerHTML = `
-      <button class="touch-button" data-code="KeyR" data-role="ultimate">✨</button>
-      <button class="touch-button" data-code="Space">💥</button>
+      <button class="touch-button" data-code="KeyE" data-role="ultimate">✨</button>
       <button class="touch-button big" data-code="ShiftLeft">💨</button>`;
     this.root.append(buttons);
     this.ultimateButton = buttons.querySelector('[data-role="ultimate"]');
