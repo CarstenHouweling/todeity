@@ -13,7 +13,9 @@ export class Input {
     this.pressed = new Set();
     this.pointer = new THREE.Vector2(); // normalized device coordinates
     this.primaryDown = false;
-    this.touchAxis = new THREE.Vector2(); // set by the touch joystick
+    this.touchAxis = new THREE.Vector2(); // set by the left touch stick
+    this.aimAxis = new THREE.Vector2(); // right touch stick direction (x screen right, y screen up)
+    this.aiming = false; // the right touch stick is pushed
 
     window.addEventListener('keydown', (event) => {
       // Typing in a text field (the leaderboard name) is not playing.

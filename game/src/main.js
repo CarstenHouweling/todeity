@@ -30,6 +30,8 @@ import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
+import { onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
+import { drawShareCard, shareText } from './components/ShareCard.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
@@ -321,11 +323,14 @@ let hitThisWave = false;
 const TIPS = {
   move: () =>
     touch.enabled
-      ? 'Drag on the left side to move. Tode aims and spits by himself!'
+      ? 'Left stick moves, right stick aims. Tode spits all by himself!'
       : 'Move with WASD and hold the left mouse button to spit where you aim.',
   brew: () => 'Brews from two different Blends unlock Duo brews. Two from one Blend unlock a Legendary.',
   ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press R!'),
-  skill: () => 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
+  skill: () =>
+    touch.enabled
+      ? 'Skills cast themselves at the right moment.'
+      : 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
   dash: () =>
     touch.enabled
       ? 'Tap 💨 to hop-dash right through bees: it hurts them, not you.'
@@ -2066,8 +2071,22 @@ scene.add(reticle);
 
 let autoFire = false;
 
-/** Touch mode: aim at the nearest bee in range and keep spitting; otherwise look where Tode walks. */
+const aimDirection = new THREE.Vector3();
+
+/**
+ * Touch mode: Tode spits by himself. With the right stick pushed he aims where it points (spit's aim assist
+ * still nudges shots onto bees); without it he aims at the nearest bee in range, or looks where he walks.
+ */
 function updateTouchAim() {
+  if (input.aiming) {
+    aimDirection.copy(SCREEN_RIGHT).multiplyScalar(input.aimAxis.x).addScaledVector(SCREEN_UP, input.aimAxis.y).normalize();
+    player.aimAt(player.position.clone().addScaledVector(aimDirection, 10));
+    ctx.aimGround.copy(player.position).addScaledVector(aimDirection, 160).setZ(0);
+    reticle.position.set(ctx.aimGround.x, ctx.aimGround.y, 0.4);
+    reticle.visible = true;
+    autoFire = true;
+    return;
+  }
   let target = null;
   let best = player.stats.spitRange * 1.05;
   for (const enemy of aliveEnemies()) {
@@ -3706,7 +3725,8 @@ function endRun({ victory = false } = {}) {
     victory,
     daily: isDaily(),
   };
-  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName() });
+  lastBuild = runBuild();
+  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild });
 }
 
 function gameOver() {
@@ -3717,7 +3737,79 @@ function gameOver() {
 }
 
 let lastRun = null;
+let lastBuild = null;
 let submitted = false;
+
+/** Everything Tode gathered this run, for the game-over screen and the share card. */
+function runBuild() {
+  const ultimate = player.ultimate && ULTIMATES[player.ultimate];
+  return {
+    form: TIERS[ascension.tier].name,
+    ultimate: ultimate ? { icon: ultimate.icon, name: ultimate.name } : null,
+    skills: skills.slots.map(({ id, level }) => ({ icon: SKILLS[id].icon, name: SKILLS[id].name, level, color: '#3fd0c0' })),
+    brews: [...brewLevels].map(([id, level]) => {
+      const brew = brewById(id);
+      return { icon: brew.icon, name: brew.name, level, color: brewColor(brew) };
+    }),
+  };
+}
+
+// --- Sharing a run ---
+let shared = null; // { blob, file, text, image } for the open share popup
+
+async function openShare() {
+  if (!lastRun || !lastBuild) return;
+  play('click');
+  const url = `${location.origin}/`;
+  const card = drawShareCard(lastRun, lastBuild, captureFrame(), url);
+  const blob = await new Promise((resolve) => card.toBlob(resolve, 'image/png'));
+  if (!blob) return;
+  if (shared) URL.revokeObjectURL(shared.image);
+  shared = {
+    blob,
+    file: new File([blob], `todeity-run-${lastRun.score}.png`, { type: 'image/png' }),
+    text: shareText(lastRun, lastBuild, url),
+    image: URL.createObjectURL(blob),
+  };
+  hud.showShare(shared.image, Boolean(navigator.share));
+}
+
+// The share sheet needs the click itself, so the image is made beforehand, when the popup opens.
+function shareNative() {
+  if (!shared) return;
+  const withImage = { files: [shared.file], text: shared.text, title: 'Todeity: Rise of the Tea God' };
+  const data = navigator.canShare?.(withImage) ? withImage : { text: shared.text, title: withImage.title };
+  navigator.share(data).catch((error) => {
+    if (error.name !== 'AbortError') hud.setShareStatus("Couldn't open sharing here: copy the text or save the image instead.");
+  });
+}
+
+function shareCopy() {
+  if (!shared) return;
+  const done = () => hud.setShareStatus('Copied! Paste it in a message to your friends.');
+  const fallback = () => {
+    // Older browsers and plain-http hosts: a hidden text field and the copy command.
+    const field = document.createElement('textarea');
+    field.value = shared.text;
+    document.body.append(field);
+    field.select();
+    const copied = document.execCommand?.('copy');
+    field.remove();
+    if (copied) done();
+    else hud.setShareStatus("Couldn't copy here, sorry: save the image instead.");
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(shared.text).then(done, fallback);
+  else fallback();
+}
+
+function shareSave() {
+  if (!shared) return;
+  const link = document.createElement('a');
+  link.href = shared.image;
+  link.download = shared.file.name;
+  link.click();
+  hud.setShareStatus('Saved!');
+}
 
 async function submitRun(name) {
   if (!lastRun || submitted) return;
@@ -3819,16 +3911,22 @@ function resume() {
   setPhase(pausedFrom, pausedPhaseTimer);
 }
 
-/** Saves a clean screenshot (no HUD) with a small watermark, for sharing the most epic moments. */
-function takePhoto() {
-  achieve('photo');
+/** A copy of the current frame without the HUD (the WebGL canvas is only readable right after rendering). */
+function captureFrame() {
   postfx.render(0);
   const source = renderer.domElement;
   const canvas = document.createElement('canvas');
   canvas.width = source.width;
   canvas.height = source.height;
+  canvas.getContext('2d').drawImage(source, 0, 0);
+  return canvas;
+}
+
+/** Saves a clean screenshot (no HUD) with a small watermark, for sharing the most epic moments. */
+function takePhoto() {
+  achieve('photo');
+  const canvas = captureFrame();
   const context = canvas.getContext('2d');
-  context.drawImage(source, 0, 0);
   const unit = canvas.width / 1280;
   context.textAlign = 'right';
   context.shadowColor = 'rgba(0, 0, 0, 0.6)';
@@ -3910,6 +4008,16 @@ const MENU_ACTIONS = {
     setSound('sfx', !soundSettings().sfx);
     showPauseMenu();
   },
+  'toggle-fullscreen': toggleFullscreen,
+  changelog: () => {
+    play('click');
+    hud.showChangelog();
+  },
+  'close-modal': () => hud.hideModal(),
+  share: openShare,
+  'share-native': shareNative,
+  'share-copy': shareCopy,
+  'share-save': shareSave,
   endless: () => {
     endless = true;
     hud.hideMenu();
@@ -3924,6 +4032,15 @@ hud.onAction = (action, data = {}) => {
   MENU_ACTIONS[action]?.(data);
 };
 hud.setMuted(!soundSettings().sfx && !soundSettings().music);
+
+/** Redraws the open title or pause menu, e.g. when a setting shown on a button changed outside it. */
+function refreshMenu() {
+  if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
+  else if (hud.menuName === 'pause') showPauseMenu();
+}
+onFullscreenChange(refreshMenu);
+// A touchscreen laptop switches to touch controls on its first touch: show the touch controls help.
+touch.onEnable = refreshMenu;
 
 // Browsers only start audio after a user gesture.
 window.addEventListener('pointerdown', unlockAudio);
@@ -3980,7 +4097,7 @@ function updateGame(delta) {
   }
   if (bombCharges > 0) {
     const auto = !input.wasPressed('Space') && autoCasting();
-    const target = input.wasPressed('Space') ? bombTarget(touch.enabled) ?? bombTarget(false) : auto ? bombTarget(true) : null;
+    const target = input.wasPressed('Space') ? bombTarget(touch.enabled && !input.aiming) ?? bombTarget(false) : auto ? bombTarget(true) : null;
     if (target) throwBomb(target);
   }
 
@@ -4019,6 +4136,11 @@ function updateGame(delta) {
 function frame(realDelta, render = true) {
   // Game time can run slower than real time (slow motion, hit-stop); menus and the camera use real time.
   const delta = phase === 'paused' ? realDelta : realDelta * timeScale(realDelta);
+  // A popup (changelog, share card) takes the keyboard: Esc closes it, nothing else reaches the game.
+  if (hud.modalOpen) {
+    if (input.wasPressed('Escape')) hud.hideModal();
+    input.pressed.clear();
+  }
   if (PLAYING.has(phase)) {
     updateGame(delta);
     if (input.wasPressed('Escape', 'KeyP')) (coopMenuOpen ? resume() : pause());

@@ -6,6 +6,8 @@ import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { TIERS } from './Ascension.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
+import { CHANGELOG, VERSION } from './Changelog.js';
+import { canFullscreen, isFullscreen } from './Fullscreen.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
@@ -153,6 +155,15 @@ export class Hud {
       event.preventDefault();
       if (event.target.dataset.form === 'coop') return;
       this.onAction('submit', { name: this.menu.querySelector('#player-name')?.value ?? '' });
+    });
+
+    // Popups over the menus (changelog, share card): the menu underneath stays as it was.
+    this.modal = element('modal', document.body);
+    this.modal.hidden = true;
+    this.modal.addEventListener('click', (event) => {
+      const target = event.target.closest('[data-action]');
+      if (target) this.onAction(target.dataset.action, target.dataset);
+      else if (event.target === this.modal) this.hideModal();
     });
 
     this.damageNumbers = [];
@@ -482,6 +493,7 @@ export class Hud {
 
   /** `clickAction` fires when the player clicks anywhere that isn't a button. */
   showMenu(className, html, clickAction = null) {
+    this.menuName = className.split(' ')[0];
     this.menu.className = `menu ${className}`;
     this.menu.innerHTML = html;
     this.menu.hidden = false;
@@ -489,6 +501,7 @@ export class Hud {
   }
 
   hideMenu() {
+    this.menuName = null;
     this.menu.hidden = true;
     this.menu.innerHTML = '';
     this.menuClickAction = null;
@@ -496,6 +509,64 @@ export class Hud {
 
   get menuOpen() {
     return !this.menu.hidden;
+  }
+
+  showModal(className, html) {
+    this.modal.className = `modal ${className}`;
+    this.modal.innerHTML = `<div class="panel">${html}</div>`;
+    this.modal.hidden = false;
+  }
+
+  hideModal() {
+    this.modal.hidden = true;
+    this.modal.innerHTML = '';
+  }
+
+  get modalOpen() {
+    return !this.modal.hidden;
+  }
+
+  showChangelog() {
+    const entries = CHANGELOG.map(
+      ({ version, date, title, changes }) => `
+        <section class="release">
+          <h3>v${version} · ${title} <small>${date}</small></h3>
+          <ul>${changes.map((change) => `<li>${change}</li>`).join('')}</ul>
+        </section>`
+    ).join('');
+    this.showModal(
+      'changelog',
+      `<h2>📜 What's new</h2>
+      <div class="releases">${entries}</div>
+      <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Close</button></div>`
+    );
+  }
+
+  /** The share card preview; `native`: the device has a share sheet. */
+  showShare(image, native) {
+    this.showModal(
+      'share',
+      `<h2>📤 Share your run</h2>
+      <img class="share-card" src="${image}" alt="Your run: score, time, wave and abilities" />
+      <div class="menu-buttons">
+        ${native ? '<button class="menu-button primary" data-action="share-native">📤 Share</button>' : ''}
+        <button class="menu-button ${native ? '' : 'primary'}" data-action="share-copy">📋 Copy text</button>
+        <button class="menu-button" data-action="share-save">💾 Save image</button>
+        <button class="menu-button" data-action="close-modal">Close</button>
+      </div>
+      <p class="sub share-status"></p>`
+    );
+  }
+
+  setShareStatus(text) {
+    const status = this.modal.querySelector('.share-status');
+    if (status) status.textContent = text;
+  }
+
+  /** A menu button that switches fullscreen; nothing where the browser can't do it. */
+  fullscreenButton() {
+    if (!canFullscreen()) return '';
+    return `<button class="menu-button" data-action="toggle-fullscreen">⛶ Fullscreen: ${isFullscreen() ? 'on' : 'off'}</button>`;
   }
 
   showTitle(best) {
@@ -510,8 +581,9 @@ export class Hud {
 ${
           document.body.classList.contains('touch')
             ? `<div class="controls">
-          <span><b>Drag left side</b> move</span>
-          <span>Tode <b>aims &amp; spits</b> by himself</span>
+          <span><b>Left stick</b> move</span>
+          <span><b>Right stick</b> aim</span>
+          <span>Tode <b>spits</b> by himself</span>
           <span><b>💨</b> hop dash</span>
           <span><b>💥</b> tea bomb</span>
           <span><b>✨</b> ultimate</span>
@@ -534,8 +606,11 @@ ${
           <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
           <button class="menu-button" data-action="pantry">🍃 Tode's Pantry <small>${meta.leaves} leaves</small></button>
+          ${this.fullscreenButton()}
+          <button class="menu-button" data-action="changelog">📜 What's new</button>
         </div>
         <p class="prompt">or press Space</p>
+        <p class="version">v${VERSION}</p>
       </div>`
     );
   }
@@ -693,7 +768,9 @@ ${
           <button class="menu-button primary" data-action="resume">▶ Resume</button>
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
-          <button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>
+          ${document.body.classList.contains('touch') ? '' : `<button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>`}
+          ${this.fullscreenButton()}
+          <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>
           ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}
           <button class="menu-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
         </div>
@@ -745,7 +822,16 @@ ${
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build }) {
+    const items = [build.ultimate, ...build.skills, ...build.brews].filter(Boolean);
+    const gathered = items.length
+      ? `<div class="run-build">${items
+          .map(
+            ({ icon, name, level, color }) =>
+              `<span class="owned-item" title="${escapeHtml(name)}" style="--blend:${color ?? '#ffd76a'}">${icon}${level > 1 ? `<span class="owned-level">${level}</span>` : ''}</span>`
+          )
+          .join('')}</div>`
+      : '';
     this.showMenu(
       `game-over ${victory ? 'victory' : ''}`,
       `
@@ -753,6 +839,7 @@ ${
       <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}</p>
       <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated · ${formatTime(time)}</p>
       ${clear ? `<p class="stats">⏱ Bee-zebub banished in <b>${formatTime(clear)}</b></p>` : ''}
+      ${gathered}
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
       <p class="line">“${line}”</p>
       <form class="submit-score">
@@ -762,6 +849,7 @@ ${
       <div class="board-slot"></div>
       <div class="menu-buttons">
         <button class="menu-button primary" data-action="start">↻ Play again</button>
+        <button class="menu-button" data-action="share">📤 Share run</button>
         <button class="menu-button" data-action="pantry">🍃 Pantry</button>
         <button class="menu-button" data-action="title">⌂ Title</button>
       </div>

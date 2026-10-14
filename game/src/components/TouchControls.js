@@ -1,49 +1,50 @@
-// Touch controls for phones and tablets: a floating joystick on the left half of the screen
-// and action buttons on the right. Tode aims and spits on his own in touch mode (see main.js).
+// Touch controls for phones and tablets: twin sticks (left half moves, right half aims) and action buttons on
+// the right edge. Tode keeps spitting on his own in touch mode: where the right stick points, or at the nearest
+// bee when it's let go (see main.js).
 
-const JOYSTICK_RADIUS = 60; // px the knob can travel
+const STICK_RADIUS = 60; // px the knob can travel
+const DEAD_ZONE = 8; // px before a stick counts as pushed
+const REST_INSET = 130; // px from the bottom corner where an untouched stick waits
 
+/** Phones and tablets: a coarse primary pointer, or touch without a hovering mouse. */
 export const isTouchDevice = () =>
-  window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  window.matchMedia?.('(pointer: coarse)').matches ||
+  (navigator.maxTouchPoints > 0 && !window.matchMedia?.('(hover: hover)').matches);
 
-export class TouchControls {
-  constructor(input) {
-    this.input = input;
-    this.enabled = isTouchDevice();
-    if (!this.enabled) return;
-    document.body.classList.add('touch');
-
-    this.root = document.createElement('div');
-    this.root.className = 'touch-controls';
-    this.root.innerHTML = `
-      <div class="touch-stick-zone"><div class="touch-stick"><div class="touch-knob"></div></div></div>
-      <div class="touch-buttons">
-        <button class="touch-button" data-code="KeyR" data-role="ultimate">✨</button>
-        <button class="touch-button" data-code="Space">💥</button>
-        <button class="touch-button big" data-code="ShiftLeft">💨</button>
-      </div>`;
-    document.body.append(this.root);
-    this.zone = this.root.querySelector('.touch-stick-zone');
-    this.stick = this.root.querySelector('.touch-stick');
-    this.knob = this.root.querySelector('.touch-knob');
-    this.ultimateButton = this.root.querySelector('[data-role="ultimate"]');
+/** A floating thumbstick: it appears under the finger anywhere in its zone and waits in its corner otherwise. */
+class Stick {
+  constructor(parent, side, onChange) {
+    this.side = side;
+    this.onChange = onChange;
+    this.vector = { x: 0, y: 0 }; // x right, y up, length 0–1
     this.pointerId = null;
     this.origin = { x: 0, y: 0 };
+
+    this.zone = document.createElement('div');
+    this.zone.className = `touch-stick-zone ${side}`;
+    this.base = document.createElement('div');
+    this.base.className = `touch-stick ${side}`;
+    this.base.innerHTML = `<div class="touch-knob"></div><span class="touch-stick-label">${side === 'left' ? 'move' : 'aim'}</span>`;
+    this.knob = this.base.querySelector('.touch-knob');
+    parent.append(this.zone, this.base);
 
     this.zone.addEventListener('pointerdown', (event) => this.start(event));
     window.addEventListener('pointermove', (event) => this.move(event));
     window.addEventListener('pointerup', (event) => this.end(event));
     window.addEventListener('pointercancel', (event) => this.end(event));
+    window.addEventListener('resize', () => this.pointerId === null && this.rest());
+    this.rest();
+  }
 
-    for (const button of this.root.querySelectorAll('.touch-button')) {
-      button.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        input.pressed.add(button.dataset.code);
-        button.classList.add('pressed');
-      });
-      button.addEventListener('pointerup', () => button.classList.remove('pressed'));
-      button.addEventListener('pointerleave', () => button.classList.remove('pressed'));
-    }
+  /** Back to its corner, so players can see where their thumbs go. */
+  rest() {
+    const x = this.side === 'left' ? REST_INSET : window.innerWidth - REST_INSET;
+    this.place(x, window.innerHeight - REST_INSET);
+  }
+
+  place(x, y) {
+    this.base.style.left = `${x}px`;
+    this.base.style.top = `${y}px`;
   }
 
   start(event) {
@@ -51,9 +52,8 @@ export class TouchControls {
     event.preventDefault();
     this.pointerId = event.pointerId;
     this.origin = { x: event.clientX, y: event.clientY };
-    this.stick.style.left = `${event.clientX}px`;
-    this.stick.style.top = `${event.clientY}px`;
-    this.stick.classList.add('active');
+    this.place(event.clientX, event.clientY);
+    this.base.classList.add('active');
     this.move(event);
   }
 
@@ -62,29 +62,96 @@ export class TouchControls {
     let dx = event.clientX - this.origin.x;
     let dy = event.clientY - this.origin.y;
     const length = Math.hypot(dx, dy);
-    if (length > JOYSTICK_RADIUS) {
-      dx = (dx / length) * JOYSTICK_RADIUS;
-      dy = (dy / length) * JOYSTICK_RADIUS;
+    if (length > STICK_RADIUS) {
+      dx = (dx / length) * STICK_RADIUS;
+      dy = (dy / length) * STICK_RADIUS;
     }
     this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    // Screen up is negative y; the game wants x right, y up.
-    const strength = Math.min(1, length / JOYSTICK_RADIUS);
-    if (length < 8) this.input.touchAxis.set(0, 0);
-    else this.input.touchAxis.set(dx, -dy).normalize().multiplyScalar(strength > 0.35 ? 1 : strength / 0.35);
+    if (length < DEAD_ZONE) {
+      this.vector = { x: 0, y: 0 };
+    } else {
+      // Full speed from a third of the way out; screen y points down, the game's y up.
+      const strength = Math.min(1, length / STICK_RADIUS / 0.35);
+      this.vector = { x: (dx / length) * strength, y: (-dy / length) * strength };
+    }
+    this.onChange(this.vector);
   }
 
   end(event) {
-    if (event.pointerId !== this.pointerId) return;
+    if (event && event.pointerId !== this.pointerId) return;
     this.pointerId = null;
-    this.input.touchAxis.set(0, 0);
+    this.vector = { x: 0, y: 0 };
     this.knob.style.transform = '';
-    this.stick.classList.remove('active');
+    this.base.classList.remove('active');
+    this.rest();
+    this.onChange(this.vector);
+  }
+}
+
+export class TouchControls {
+  constructor(input) {
+    this.input = input;
+    this.enabled = false;
+    this.onEnable = () => {};
+    if (isTouchDevice()) this.enable();
+    else {
+      // A touchscreen laptop or an iPad with a trackpad: switch over on the first real touch.
+      const listener = (event) => {
+        if (event.pointerType !== 'touch') return;
+        window.removeEventListener('pointerdown', listener, true);
+        this.enable();
+      };
+      window.addEventListener('pointerdown', listener, true);
+    }
+  }
+
+  enable() {
+    if (this.enabled) return;
+    this.enabled = true;
+    document.body.classList.add('touch');
+    const { input } = this;
+
+    this.root = document.createElement('div');
+    this.root.className = 'touch-controls';
+    this.root.hidden = true;
+    document.body.append(this.root);
+    this.moveStick = new Stick(this.root, 'left', (v) => input.touchAxis.set(v.x, v.y));
+    this.aimStick = new Stick(this.root, 'right', (v) => {
+      if (v.x || v.y) input.aimAxis.set(v.x, v.y).normalize();
+      input.aiming = Boolean(v.x || v.y);
+    });
+
+    const buttons = document.createElement('div');
+    buttons.className = 'touch-buttons';
+    buttons.innerHTML = `
+      <button class="touch-button" data-code="KeyR" data-role="ultimate">✨</button>
+      <button class="touch-button" data-code="Space">💥</button>
+      <button class="touch-button big" data-code="ShiftLeft">💨</button>`;
+    this.root.append(buttons);
+    this.ultimateButton = buttons.querySelector('[data-role="ultimate"]');
+    for (const button of buttons.querySelectorAll('.touch-button')) {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        input.pressed.add(button.dataset.code);
+        button.classList.add('pressed');
+      });
+      button.addEventListener('pointerup', () => button.classList.remove('pressed'));
+      button.addEventListener('pointerleave', () => button.classList.remove('pressed'));
+    }
+    this.onEnable();
   }
 
   /** Shows the controls only while playing; glows the ultimate button when it's charged. */
   update(playing, ultimateReady, hasUltimate) {
     if (!this.enabled) return;
-    this.root.hidden = !playing;
+    if (this.root.hidden === playing) {
+      this.root.hidden = !playing;
+      // Let go of both sticks when a menu or cut-scene takes over, so nothing stays pushed.
+      if (!playing) {
+        this.moveStick.end();
+        this.aimStick.end();
+      }
+    }
     this.ultimateButton.hidden = !hasUltimate;
     this.ultimateButton.classList.toggle('ready', ultimateReady);
   }

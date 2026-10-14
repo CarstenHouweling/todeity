@@ -124,8 +124,23 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
 - **Achievements** (`components/Achievements.js`): 16, each worth 15 Golden Leaves, shown in the Pantry.
   First-run **tips** appear once each (`meta.tips`).
-- **Phones:** touch controls (floating joystick, dash/splash/ultimate buttons) with auto-aim and auto-fire; skills
-  always auto-cast. Quality adapts to the frame rate (pixel ratio 0.6–1.5, shadows off as a last resort).
+- **Phones and tablets:** twin-stick touch controls (`TouchControls.js`): the left half of the screen is a floating
+  move stick, the right half a floating aim stick (both wait faintly in their bottom corners), and dash/bomb/ultimate
+  buttons sit in a row above the aim stick. Tode always spits by himself: where the aim stick points (`input.aiming`,
+  `input.aimAxis`; spit's aim assist still applies), or at the nearest bee in range when it's let go. Skills always
+  auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
+  and on the first real touch otherwise (touchscreen laptops). Quality adapts to the frame rate (pixel ratio
+  0.6–1.5, shadows off as a last resort).
+- **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari);
+  hidden where the browser can't do it (iPhone Safari). Menus redraw on `fullscreenchange` (`refreshMenu`).
+- **Sharing a run:** the game-over screen shows everything gathered (ultimate, skills, brews) and a 📤 Share button
+  that opens a popup with a 1200×630 card drawn on a canvas (`ShareCard.js`: score, time, wave, level, bees, form,
+  build, the last frame as a backdrop) plus a text line. Share uses the native share sheet (image + text) where
+  available, else copy text / save image.
+- **Versions:** `components/Changelog.js` lists every release, newest first; its first entry is the version shown
+  on the title screen and in the 📜 What's new popup (title and pause menus). **Add an entry and bump
+  `package.json` for every major change.** Popups use `hud.showModal()` over the current menu; while one is open
+  Esc closes it and no other key reaches the game.
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
   and Tode says a story line after each run. **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
@@ -190,7 +205,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
-| `components/TouchControls.js` | Joystick and buttons for touch devices. |
+| `components/TouchControls.js` | Twin sticks (move / aim) and buttons for touch devices; touch detection. |
+| `components/Fullscreen.js` | Fullscreen toggle with the prefixed Safari API. |
+| `components/ShareCard.js` | The end-of-run share image and text. |
+| `components/Changelog.js` | Version history (`CHANGELOG`, `VERSION`) for the What's new popup. |
 | `components/Achievements.js` | Achievement list and unlocking (rewards Golden Leaves). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |

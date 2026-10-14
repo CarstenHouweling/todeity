@@ -1400,24 +1400,37 @@ body.touch .hint {
 
 .touch-stick-zone {
   position: fixed;
-  left: 0;
   top: 15vh;
   bottom: 0;
   width: 50vw;
   z-index: 3;
 }
 
+.touch-stick-zone.left {
+  left: 0;
+}
+
+.touch-stick-zone.right {
+  right: 0;
+}
+
+/* A stick waits faintly in its corner and jumps under the thumb when touched. */
 .touch-stick {
   position: fixed;
+  z-index: 3;
   width: 120px;
   height: 120px;
   margin: -60px 0 0 -60px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.35);
-  opacity: 0;
+  opacity: 0.45;
   transition: opacity 0.15s;
   pointer-events: none;
+}
+
+.touch-stick.right {
+  border-color: rgba(255, 215, 106, 0.6);
 }
 
 .touch-stick.active {
@@ -1434,13 +1447,38 @@ body.touch .hint {
   background: rgba(255, 255, 255, 0.55);
 }
 
+.touch-stick.right .touch-knob {
+  background: rgba(255, 215, 106, 0.7);
+}
+
+.touch-stick-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+  transition: opacity 0.15s;
+}
+
+.touch-stick.active .touch-stick-label {
+  opacity: 0;
+}
+
+/* Action buttons sit in a row above the aim stick: dash on the outside, the ultimate nearest the middle. */
 .touch-buttons {
   position: fixed;
-  right: 18px;
-  bottom: 120px;
-  z-index: 3;
+  right: 24px;
+  bottom: 215px;
+  z-index: 4;
   display: flex;
-  flex-direction: column;
+  flex-direction: row-reverse;
   align-items: flex-end;
   gap: 14px;
 }
@@ -1478,6 +1516,43 @@ body.touch .hint {
 body.touch .ability-bar {
   transform: translateX(-50%) scale(0.8);
   transform-origin: bottom center;
+}
+
+/* The bottom corners belong to the thumbs: corner buttons and owned brews move up. */
+body.touch .corner-buttons {
+  top: 70px;
+  bottom: auto;
+}
+
+body.touch .owned {
+  top: 96px;
+  bottom: auto;
+  max-width: 30vw;
+}
+
+@media (max-width: 760px) {
+  body.touch .corner-buttons {
+    flex-direction: column;
+  }
+}
+
+@media (max-height: 500px) {
+  .touch-buttons {
+    bottom: 196px;
+    gap: 10px;
+  }
+
+  .touch-button {
+    width: 52px;
+    height: 52px;
+    font-size: 24px;
+  }
+
+  .touch-button.big {
+    width: 62px;
+    height: 62px;
+    font-size: 28px;
+  }
 }
 
 /* Title screen: no HUD, the panel sits at the top so Golden Tode shows below it */
@@ -1671,4 +1746,112 @@ body.touch .ability-bar {
   8% { opacity: 1; transform: translate(-50%, 0); }
   88% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Popups over the menus: changelog, share card */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 18, 8, 0.7);
+  color: #fff;
+  text-align: center;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal .panel {
+  width: min(680px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 22px 24px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 18px;
+  background: rgba(14, 40, 20, 0.95);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal h2 {
+  margin: 0 0 12px;
+  font-size: 32px;
+}
+
+.modal .sub {
+  margin: 10px 0 0;
+  font-size: 16px;
+  opacity: 0.85;
+}
+
+.modal .menu-buttons {
+  margin-top: 16px;
+}
+
+.releases {
+  text-align: left;
+}
+
+.release {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.release + .release {
+  margin-top: 8px;
+}
+
+.release:first-child {
+  border-left: 4px solid #ffd76a;
+  background: rgba(255, 215, 106, 0.12);
+}
+
+.release h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.release h3 small {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.65;
+}
+
+.release ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.share-card {
+  display: block;
+  width: 100%;
+  max-height: 58vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.menu .version {
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+/* Game over: the brews, skills and ultimate of the run */
+.run-build {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: min(640px, 92vw);
+  margin: 12px auto 4px;
 }
