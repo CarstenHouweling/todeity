@@ -12,9 +12,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: game
     permissions:
       contents: read #This is required for actions/checkout
 
@@ -22,21 +19,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Node.js version
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: '24.x'
 
-      - name: npm install and build
+      - name: npm install, build, and test
         run: |
           npm install
-          npm run build
-          npm prune --omit=dev
+          npm run build --if-present
+          npm run test --if-present
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: game
+          path: .
 
   deploy:
     runs-on: ubuntu-latest
@@ -54,9 +51,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_A5D13B19D1324D7B8D428544696D3C34 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_7B2A0377EDEE4E869A00912BE967EEED }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CB4181F588FB45BFA7E79B08061202A2 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_60FE9D95EC0E4A07BCF91979E19A9233 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_299BB4D9A5744B3BBCEF24BF71AD466A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_6B33AA9BD1B64E35925217D598FF4FA2 }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
