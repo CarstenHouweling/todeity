@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.17.3',
+    date: '2026-10-14',
+    title: 'Bees, not bats',
+    changes: [
+      '🐝 The bees of every arena look like bees again: bold stripes and see-through insect wings that buzz. No more bat wings in the Underworld or feathers in the Sky Citadel',
+      '👑 Only the boss queens keep their grand wings',
+    ],
+  },
+  {
     version: '0.17.2',
     date: '2026-10-14',
     title: 'No more bar',

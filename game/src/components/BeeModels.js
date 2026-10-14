@@ -3,7 +3,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { upgradeMaterial } from './Graphics.js';
 
 /**
- * Procedural bees for the arenas after the garden (the garden keeps the original glTF bee).
+ * Procedural bees for the arenas after the garden (the garden keeps the original glTF bee). Whatever the arena, they
+ * must still read as bees from the high gameplay camera (testers called the old Underworld ones bats): every bee has
+ * bold stripes on its abdomen and see-through, veined insect wings. Only the boss queens keep their special wings
+ * (the Seraph's feathers, Bee-zebub's demon wings); `bugWing` is a style's colour for the insect wings.
  * Every arena has its own species, built from smooth primitives with more detail each arena:
  *   1 Sage Mountain   – armoured ronin hornets with kabuto helmets and amber wings
  *   2 Sky Citadel     – golden seraph bees in royal blue, with halos and feathered wings
@@ -21,16 +24,18 @@ export const STYLES = {
     wing: '#ffcf80', wingOpacity: 0.42, wings: 'insect', flap: 26, roughness: 0.35, metalness: 0.3,
   },
   2: {
-    shell: '#d9a23a', shade: '#3a4a8a', armor: '#2f4fb0', trim: '#fff1b8', band: '#f4efe6', eye: '#7fd8ff',
+    shell: '#d9a23a', shade: '#3a4a8a', armor: '#2f4fb0', trim: '#fff1b8', band: '#1e2440', eye: '#7fd8ff',
     wing: '#ffffff', wingOpacity: 0.95, wings: 'feather', flap: 9, roughness: 0.25, metalness: 0.15,
+    bugWing: '#fff6d8', bugWingOpacity: 0.5,
   },
   3: {
-    shell: '#16121f', shade: '#241c34', armor: '#3a2a5a', trim: '#7ff9ff', band: '#7ff9ff', eye: '#d070ff',
+    shell: '#16121f', shade: '#241c34', armor: '#3a2a5a', trim: '#7ff9ff', band: '#ffd23f', eye: '#d070ff',
     wing: '#9ff4ff', wingOpacity: 0.38, wings: 'insect', flap: 30, roughness: 0.15, metalness: 0.6,
   },
   4: {
-    shell: '#160806', shade: '#2a0c08', armor: '#3a0c06', trim: '#ff6a1a', band: '#ff4a10', eye: '#ff2a00',
+    shell: '#160806', shade: '#2a0c08', armor: '#3a0c06', trim: '#ff6a1a', band: '#ffb020', eye: '#ff2a00',
     wing: '#4a0808', wingOpacity: 0.92, wings: 'bat', flap: 11, roughness: 0.4, metalness: 0.35,
+    bugWing: '#ffb070', bugWingOpacity: 0.42,
   },
 };
 
@@ -233,12 +238,19 @@ function buildGeometry(kind, styleId) {
 
   if (build.boss) addRegalia(kind, styleId, style, bulk, seg, body, glow);
 
+  const wings = build.boss ? style.wings : 'insect';
   return {
     body: merge(body),
     glow: merge(glow),
     abdomen: merge(abdomen),
     abdomenGlow: merge(abdomenGlow),
-    wing: style.wings === 'feather' ? featherWing(style, build.wing, seg) : style.wings === 'bat' ? batWing(style, build.wing, Math.max(4, seg >> 1)) : insectWing(style, build.wing),
+    wings,
+    wing:
+      wings === 'feather'
+        ? featherWing(style, build.wing, seg)
+        : wings === 'bat'
+          ? batWing(style, build.wing, Math.max(4, seg >> 1))
+          : insectWing({ ...style, wing: style.bugWing ?? style.wing }, build.wing),
     extraWings: build.boss && (styleId === 2 || styleId === 4),
     cape: build.boss && (styleId === 3 || kind === 'shogun'),
   };
@@ -293,7 +305,21 @@ function shared(styleId) {
       emissiveIntensity: styleId === 3 ? 0.5 : 0.08,
     });
     const cape = new THREE.MeshStandardMaterial({ color: styleId === 3 ? '#3a1a6a' : '#b8322a', side: THREE.DoubleSide, roughness: 0.7, emissive: styleId === 3 ? '#2a0a5a' : '#000000' });
-    sharedMaterials.set(styleId, { glow, wing, cape });
+    const bugOpacity = style.bugWingOpacity ?? style.wingOpacity;
+    const bugWing = style.bugWing
+      ? new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: bugOpacity,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          roughness: 0.25,
+          metalness: 0.1,
+          emissive: style.bugWing,
+          emissiveIntensity: 0.15,
+        })
+      : wing;
+    sharedMaterials.set(styleId, { glow, wing, cape, bugWing });
   }
   return sharedMaterials.get(styleId);
 }
@@ -339,7 +365,7 @@ export function buildBee(kind, styleId) {
   const addWing = (side, y, z, scale, tilt) => {
     const pivot = new THREE.Group();
     pivot.position.set(side * 3.2, y, z);
-    const wing = sharedMesh(parts.wing, materials.wing);
+    const wing = sharedMesh(parts.wing, parts.wings === 'insect' ? materials.bugWing : materials.wing);
     wing.scale.set(side * scale, scale, scale);
     wing.rotation.y = side * tilt;
     pivot.add(wing);
@@ -377,7 +403,7 @@ export function buildBee(kind, styleId) {
     inner.add(orbit);
   }
 
-  const slowFlap = style.wings !== 'insect';
+  const slowFlap = parts.wings !== 'insect';
   return {
     root,
     materials: [surface],
@@ -389,7 +415,7 @@ export function buildBee(kind, styleId) {
       inner.position.y = Math.sin(t * 3) * 1.4;
       tail.rotation.x = Math.sin(t * 4.2) * 0.1 - (enemy.glow > 0.3 ? 0.35 : 0);
       for (const { pivot, side, phase } of wings) {
-        const flap = Math.sin(t * style.flap + phase * 3);
+        const flap = Math.sin(t * (slowFlap ? style.flap : Math.max(style.flap, 26)) + phase * 3); // insect wings buzz
         pivot.rotation.z = side * (slowFlap ? 0.15 + flap * 0.55 : 0.25 + flap * 0.45);
         pivot.rotation.x = slowFlap ? flap * 0.1 : 0;
       }

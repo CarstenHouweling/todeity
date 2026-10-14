@@ -439,7 +439,8 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
   (`mergeBeeParts` in `Enemy.js`); `Enemy.dispose()` frees each bee's skeleton (its bone texture). Every other
   arena has its own procedural species (`components/BeeModels.js`: ronin hornets, seraph bees, void wasps,
   demon hornets, plus regalia for each boss) with flapping wings, a swaying abdomen and a tumbling death,
-  smoother each arena. Geometry is cached per kind and arena and marked `userData.shared`/`keepGeometry` so
+  smoother each arena. Every regular bee must read as a bee: bold dark/gold stripes and see-through, buzzing insect
+  wings (a style's `bugWing` tints them); only the boss queens keep the feather or bat wings of their style. Geometry is cached per kind and arena and marked `userData.shared`/`keepGeometry` so
   dispose leaves it alone. Their hitboxes match the glTF bee (`HITBOX_PER_SCALE`), so balance doesn't change. The HUD runs every frame, so it only writes to the DOM when a value changed
   (`setText`/`setStyle` in `Hud.js`). Adaptive resolution won't climb back to a ratio that proved too slow.
 - Constants for tuning sit at the top of each file (`main.js`, `Player.js` `BASE_STATS`, `Enemy.js`
