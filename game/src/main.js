@@ -311,7 +311,9 @@ let rerolls = 0;
 let luck = 0;
 let endless = false;
 let autoPause = true;
-const settings = { calmFx: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+// autoSpit: on a computer Tode spits by himself whenever a bee is in range (aimed with the mouse), like on touch.
+const settings = { calmFx: false, autoSpit: true, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+hud.autoSpit = settings.autoSpit;
 
 let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
 let steep = 0; // their Steep level: more score and Golden Leaves
@@ -360,7 +362,9 @@ const TIPS = {
   move: () =>
     touch.enabled
       ? 'Left stick moves, right stick aims. Tode spits all by himself!'
-      : 'Move with WASD and hold the left mouse button to spit where you aim.',
+      : settings.autoSpit
+        ? 'Move with WASD and aim with the mouse: Tode spits by himself when bees are in range.'
+        : 'Move with WASD and hold the left mouse button to spit where you aim.',
   brew: () => 'Brews from two different Blends unlock Duo brews. Two from one Blend unlock a Legendary.',
   ultimate: () => (touch.enabled ? 'Your ultimate is charged: tap ✨!' : 'Your ultimate is charged: press E!'),
   skill: () => 'Skills and tea bombs cast themselves at the right moment.',
@@ -3786,11 +3790,19 @@ function updateTouchAim() {
   reticle.visible = false;
 }
 
+/** Is a bee close enough to spit at? Auto-spit only fires then, so Tode stays quiet between fights. */
+function beeInRange() {
+  const range = player.stats.spitRange * 1.05;
+  return targetable().some((enemy) => enemy.position.distanceTo(player.position) < range);
+}
+
 function updateAim() {
   if (touch.enabled) {
     updateTouchAim();
     return;
   }
+  // The mouse aims; Tode spits by himself (unless the player prefers holding the left button).
+  autoFire = settings.autoSpit && beeInRange();
   player.group.updateMatrixWorld(true);
   raycaster.setFromCamera(input.pointer, camera);
   if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) player.aimAt(aimPoint);
@@ -6262,6 +6274,7 @@ function showPauseMenu() {
     keepsake,
     steep,
     calmFx: settings.calmFx,
+    autoSpit: touch.enabled ? null : settings.autoSpit,
     build,
     ultimate: player.ultimate,
     form: TIERS[ascension.tier].name,
@@ -6379,6 +6392,12 @@ const MENU_ACTIONS = {
   },
   'toggle-calm': () => {
     settings.calmFx = !settings.calmFx;
+    saveSettings();
+    showPauseMenu();
+  },
+  'toggle-autospit': () => {
+    settings.autoSpit = !settings.autoSpit;
+    hud.autoSpit = settings.autoSpit;
     saveSettings();
     showPauseMenu();
   },

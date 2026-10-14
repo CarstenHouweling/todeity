@@ -55,8 +55,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 
 ## Gameplay summary
 
-- WASD move (camera-relative), mouse aims, hold LMB to spit, Space/Shift/RMB hop-dash, E/middle mouse fires the
-  ultimate, Esc/P pauses, M mutes. Skills and the tea bomb always cast themselves (there are no manual casts).
+- WASD move (camera-relative), mouse aims, Space/Shift/RMB hop-dash, E/middle mouse fires the ultimate, Esc/P
+  pauses, M mutes. Tode spits by himself whenever a bee is within spit range (`settings.autoSpit`, on by default;
+  the pause menu's "Spit: hold LMB" brings back holding the left button, which always spits too). Skills and the tea bomb always cast themselves (there are no manual casts).
 - Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups), offered by a tea
   spirit with a line of dialogue. After the first boss (wave 5) you pick an **ultimate**. **Skills** come from
   levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen

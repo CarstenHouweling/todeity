@@ -132,11 +132,12 @@ export class Hud {
       slot.title = ability.name;
       const icon = element('ability-icon', slot);
       icon.textContent = ability.icon;
-      element('ability-key', slot).textContent = ability.key;
+      const key = element('ability-key', slot);
+      key.textContent = ability.key;
       const cover = element('ability-cover', slot);
       const timer = element('ability-timer', slot);
       const badge = element('ability-badge', slot);
-      this.slots[ability.id] = { slot, icon, cover, timer, badge };
+      this.slots[ability.id] = { slot, icon, key, cover, timer, badge };
     }
     this.slots.ultimate.slot.hidden = true;
     for (let i = 0; i < MAX_SKILLS; i++) this.slots[`skill${i}`].slot.hidden = true;
@@ -732,6 +733,16 @@ export class Hud {
     return `<button class="menu-button" data-action="toggle-fullscreen">⛶ Fullscreen: ${isFullscreen() ? 'on' : 'off'}</button>`;
   }
 
+  /** Whether Tode spits by himself on a computer (the title's controls and the spit slot's key say so). */
+  get autoSpit() {
+    return this.autoSpitOn;
+  }
+
+  set autoSpit(on) {
+    this.autoSpitOn = on;
+    this.slots.spit.key.textContent = on ? 'auto' : 'LMB';
+  }
+
   showTitle(best) {
     this.showMenu(
       'title-screen',
@@ -754,7 +765,7 @@ ${
             : `<div class="controls">
           <span><b>WASD</b> move</span>
           <span><b>Mouse</b> aim</span>
-          <span><b>Hold LMB</b> spit</span>
+          ${this.autoSpit ? '<span>Tode <b>spits</b> by himself</span>' : '<span><b>Hold LMB</b> spit</span>'}
           <span><b>Space / RMB</b> hop dash</span>
           <span><b>E</b> ultimate</span>
           <span>Skills and bombs cast <b>themselves</b></span>
@@ -1051,7 +1062,7 @@ ${
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, frogClass }) {
+  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, autoSpit, frogClass }) {
     const brews = build.length
       ? build
           .map(
@@ -1073,6 +1084,7 @@ ${
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-calm">✨ Effects: ${calmFx ? 'calm' : 'full'}</button>
+          ${autoSpit == null ? '' : `<button class="menu-button" data-action="toggle-autospit">💧 Spit: ${autoSpit ? 'auto' : 'hold LMB'}</button>`}
           ${this.fullscreenButton()}
           <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>
           ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}

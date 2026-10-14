@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.18.0',
+    date: '2026-10-14',
+    title: 'Hands free',
+    changes: [
+      '💧 On a computer Tode now spits by himself too, just like on phones: aim with the mouse, no need to hold the left button. He spits whenever a bee is in range',
+      'Prefer the old way? Pause → 💧 Spit: hold LMB',
+    ],
+  },
+  {
     version: '0.17.3',
     date: '2026-10-14',
     title: 'Bees, not bats',
