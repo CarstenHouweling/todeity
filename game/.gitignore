@@ -1,0 +1,3 @@
+# Large promo media (trailer, GIF): keep them out of the repo and the deploy package
+promo/*.mp4
+promo/*.gif

@@ -30,8 +30,9 @@ import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
-import { onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
+import { isFullscreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
+import { cloud, initCloud, loadCode, reportBuy, reportRun } from './components/CloudSave.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
@@ -3447,6 +3448,9 @@ const reticle = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false })
 );
 reticle.renderOrder = 1;
+// Hidden until the mouse aims in a fight. Always above the lawn: at z = 0 it z-fought with the ground under Tode.
+reticle.position.z = 0.4;
+reticle.visible = false;
 scene.add(reticle);
 
 let autoFire = false;
@@ -3492,6 +3496,7 @@ function updateAim() {
   raycaster.setFromCamera(input.pointer, camera);
   if (raycaster.ray.intersectPlane(aimPlane, aimPoint)) player.aimAt(aimPoint);
   if (raycaster.ray.intersectPlane(groundPlane, ctx.aimGround)) reticle.position.set(ctx.aimGround.x, ctx.aimGround.y, 0.4);
+  reticle.visible = true;
 }
 
 const BASE_CAMERA_ROTATION = camera.quaternion.clone();
@@ -5138,7 +5143,30 @@ function showLobby() {
 
 function showRoom() {
   const players = net.players.map((p) => ({ ...p, isHost: p.id === net.hostId }));
-  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost });
+  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost, invite: inviteLink() });
+}
+
+/** A link that opens the game with the co-op lobby ready to join this room (`?room=CODE`). */
+function inviteLink() {
+  return `${location.origin}/?room=${net.code}`;
+}
+
+function copyInvite() {
+  const button = hud.menu.querySelector('[data-action="coop-invite"]');
+  copyText(
+    inviteLink(),
+    () => button && (button.textContent = '✅ Link copied!'),
+    () => button && (button.textContent = 'Copy the link above')
+  );
+}
+
+/** Opened from an invite link: show the co-op lobby with the room code filled in. */
+function openInvite() {
+  const params = new URLSearchParams(location.search);
+  const code = (params.get('room') ?? '').trim().toUpperCase();
+  if (!params.has('room')) return;
+  history.replaceState(null, '', location.pathname); // a reload shouldn't join again
+  if (/^[A-Z]{4}$/.test(code)) hud.showLobby({ view: 'start', name: playerName(), code });
 }
 
 async function lobbyConnect(action) {
@@ -5462,6 +5490,11 @@ function endRun({ victory = false } = {}) {
   meta.bossKills += bossKills;
   meta.bestWave = Math.max(meta.bestWave, wave);
   saveMeta();
+  // The server has the final word on the leaves (cloud saves); this screen shows the local count meanwhile.
+  reportRun({
+    wave, bossKills, victory, score: finalScore, kills, time: Math.floor(timeAlive), steep,
+    maxTier: ascension.tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop),
+  });
 
   const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier >= 4, killer });
   lastRun = {
@@ -5524,7 +5557,7 @@ async function openShare() {
     text: shareText(lastRun, lastBuild, url),
     image: URL.createObjectURL(blob),
   };
-  hud.showShare(shared.image, Boolean(navigator.share));
+  hud.showShare(shared.image, Boolean(navigator.share), Boolean(navigator.clipboard?.write && window.ClipboardItem));
 }
 
 // The share sheet needs the click itself, so the image is made beforehand, when the popup opens.
@@ -5537,22 +5570,39 @@ function shareNative() {
   });
 }
 
-function shareCopy() {
-  if (!shared) return;
-  const done = () => hud.setShareStatus('Copied! Paste it in a message to your friends.');
+/** Copies text to the clipboard, then calls `done` or `fail`. */
+function copyText(text, done, fail) {
   const fallback = () => {
     // Older browsers and plain-http hosts: a hidden text field and the copy command.
     const field = document.createElement('textarea');
-    field.value = shared.text;
+    field.value = text;
     document.body.append(field);
     field.select();
     const copied = document.execCommand?.('copy');
     field.remove();
     if (copied) done();
-    else hud.setShareStatus("Couldn't copy here, sorry: save the image instead.");
+    else fail();
   };
-  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(shared.text).then(done, fallback);
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done, fallback);
   else fallback();
+}
+
+function shareCopy() {
+  if (!shared) return;
+  copyText(
+    shared.text,
+    () => hud.setShareStatus('Copied! Paste it in a message to your friends.'),
+    () => hud.setShareStatus("Couldn't copy here, sorry: save the image instead.")
+  );
+}
+
+// Chat apps like Discord take a pasted image, so desktop players can share the card without saving a file.
+function shareCopyImage() {
+  if (!shared) return;
+  navigator.clipboard.write([new ClipboardItem({ 'image/png': shared.blob })]).then(
+    () => hud.setShareStatus('Image copied! Paste it into Discord or any chat.'),
+    () => hud.setShareStatus("Couldn't copy the image here: save it instead.")
+  );
 }
 
 function shareSave() {
@@ -5613,6 +5663,7 @@ function goToTitle() {
   hud.setForm('', 0);
   hud.setOwned([]);
   hud.wave.textContent = '';
+  reticle.visible = false;
   muffleMusic(false);
   setPhase('title');
   ascension.setTier(TITLE_TIER);
@@ -5727,6 +5778,7 @@ const MENU_ACTIONS = {
   'coop-create': () => lobbyConnect('create'),
   'coop-join': () => lobbyConnect('join'),
   'coop-start': () => hostStartCoop(),
+  'coop-invite': copyInvite,
   'coop-leave': () => {
     net.leave();
     showLobby();
@@ -5757,9 +5809,29 @@ const MENU_ACTIONS = {
     showPauseMenu();
   },
   buy: ({ id }) => {
-    if (buy(id)) play('pick');
+    if (buy(id)) {
+      play('pick');
+      reportBuy(id);
+    }
     hud.showPantry();
   },
+  save: () => hud.showSave(),
+  'load-save': async () => {
+    const code = hud.modal.querySelector('#save-code')?.value ?? '';
+    if (!code.trim()) return;
+    const error = await loadCode(code);
+    if (error) hud.showSave({ error });
+    else {
+      play('pick');
+      hud.showSave({ message: 'Welcome back! Your progress is loaded.' });
+    }
+  },
+  'copy-save': () =>
+    copyText(
+      cloud.code,
+      () => hud.setSaveStatus('Copied! Keep it somewhere safe.'),
+      () => hud.setSaveStatus('Write it down: you need it to load your progress elsewhere.')
+    ),
   title: () => {
     if (coop || net.inRoom) leaveCoop();
     if (phase === 'title') hud.showTitle(bestScore);
@@ -5796,6 +5868,7 @@ const MENU_ACTIONS = {
   share: openShare,
   'share-native': shareNative,
   'share-copy': shareCopy,
+  'share-copy-image': shareCopyImage,
   'share-save': shareSave,
   endless: () => {
     endless = true;
@@ -5819,7 +5892,17 @@ function refreshMenu() {
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pause') showPauseMenu();
 }
-onFullscreenChange(refreshMenu);
+// Progress arrived from the server: redraw the menus that show it.
+cloud.onChange = () => {
+  if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
+  else if (hud.menuName === 'pantry') hud.showPantry();
+  if (hud.modal.classList.contains('save') && !hud.modal.hidden && !hud.modal.querySelector('.save-ok, .lobby-error')) hud.showSave();
+};
+onFullscreenChange(() => {
+  // In fullscreen the browser takes Esc to leave fullscreen and the game never sees the key: pause instead.
+  if (!isFullscreen() && PLAYING.has(phase)) pause();
+  refreshMenu();
+});
 // A touchscreen laptop switches to touch controls on its first touch: show the touch controls help.
 touch.onEnable = refreshMenu;
 
@@ -6053,6 +6136,8 @@ Promise.all([player.load(), loadEnemyModel(), loadHouse(HOME)])
     setPhase('title');
     ascension.setTier(TITLE_TIER);
     hud.showTitle(bestScore);
+    openInvite();
+    initCloud();
   })
   .catch((error) => {
     console.error(error);

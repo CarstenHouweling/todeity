@@ -1348,6 +1348,15 @@ canvas.game {
   text-shadow: 0 0 16px rgba(255, 180, 40, 0.7);
 }
 
+.invite-link {
+  margin-top: -6px;
+  overflow-wrap: anywhere;
+}
+
+.invite-link b {
+  user-select: all;
+}
+
 .lobby-players {
   display: flex;
   flex-direction: column;
@@ -2372,4 +2381,113 @@ body.touch .steep-badge {
 .form[data-tier='5'] {
   color: #ffffff;
   text-shadow: 0 0 10px #c8d8ff, 0 0 22px #9ff4ff, 0 0 30px #c8b0ff, 0 1px 2px #000;
+}
+
+/* Title screen: start, ways to play, preparing a run, then small extras */
+.title-screen .menu-buttons {
+  margin-top: 10px;
+}
+
+.title-screen .title-start {
+  margin-top: 20px;
+}
+
+.title-start .menu-button {
+  padding: 14px 48px;
+  font-size: 22px;
+}
+
+.title-prepare .menu-button {
+  padding: 7px 14px;
+  border-width: 1px;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.title-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.title-footer button,
+.save-chip {
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.title-footer button:hover,
+.save-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.save-chip {
+  letter-spacing: 0.5px;
+}
+
+/* Cloud save popup */
+.modal.save .panel {
+  max-width: 460px;
+}
+
+.save-code {
+  margin: 4px 0 2px;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #ffe680;
+  text-shadow: 0 0 12px rgba(255, 180, 40, 0.6);
+  user-select: all;
+}
+
+.modal.save h3 {
+  margin: 18px 0 0;
+}
+
+#save-code {
+  width: 190px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.save-ok {
+  color: #b8f5a0;
+}
+
+.title-screen .prompt {
+  margin-top: 12px;
+  font-size: 15px;
+}
+
+/* Phones: a tighter title screen, so every button fits without scrolling */
+@media (max-width: 600px) {
+  .title-screen .story {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .title-screen .controls {
+    gap: 6px;
+    margin: 12px 0 4px;
+  }
+
+  .title-screen .controls span {
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+
+  .title-start .menu-button {
+    padding: 12px 40px;
+    font-size: 20px;
+  }
 }

@@ -3,12 +3,25 @@
 
 export const CHANGELOG = [
   {
+    version: '0.14.0',
+    date: '2026-10-14',
+    title: 'Cloud saves and sharing',
+    changes: [
+      '☁️ Cloud saves: your progress lives on the server, with an easy save code (like MINT-FROG-42) to continue on any device. Find it in Tode\'s Pantry',
+      '🔗 Co-op invite links: copy a link in the lobby, and friends who open it land in the lobby with the room code filled in',
+      '🖼 Copy your run card as an image and paste it straight into Discord or any chat',
+      '🪧 Links to the game now show a preview card in Discord and on social media',
+      'Fix: no more flickering white circle under Tode on the title screen',
+      'Fix: leaving fullscreen with Esc during a run now pauses the game',
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-10-14',
-    title: 'Infinite Tode and a much harder hive',
+    title: 'Omnitode and a much harder hive',
     changes: [
       '✨ Every ascension is new and unique: white wind spirals, a towering golden flame, golden lightning with stars streaming in, a vortex of divine fire',
-      '🌌 A fifth form, Infinite Tode: a silver-violet flame, a galaxy under his feet and stars pouring into him',
+      '🌌 A fifth form, Omnitode: a silver-violet flame, a galaxy under his feet and stars pouring into him',
       '⛔ Cursed tiles from wave 3: step on one and an ambush of bees appears (hop-dash over them)',
       '☄ Much harder late waves: bigger, stinger-heavy swarms, harder hits from the Tournament on, hazards everywhere and sweeping bullet curtains',
       '∞ Endless mode keeps getting harder, and every boss comes back in turn',

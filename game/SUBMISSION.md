@@ -19,8 +19,8 @@ Brew powers from five tea spirits, combine them into Duo brews, unleash a coloss
 transform: *Awakened → Golden → Radiant → God of Tea*. Every transformation reshapes the garden, until it floats
 above the clouds. Solo, phone-friendly, or **co-op with up to 4 friends**. Leaderboards for score, deepest run, fastest Bee-zebub kill and a Daily Brew.
 
-▶ Play: <your link here>
-🎬 Video: <your link here>
+▶ Play free in your browser: https://todeity.azurewebsites.net
+🎬 Trailer: attached (or <YouTube link>)
 
 Built from the "Build a Game with an AI Coding Agent" course with Claude Code as my AI pair: Three.js, procedural
 world, music and sound all generated in code.
@@ -29,7 +29,7 @@ world, music and sound all generated in code.
 
 - **Roguelite core, Hades-inspired:** 26 brews in 5 Blends (Green Tea, Ember Black, Frost Mint, Chamomile,
   Storm Oolong) with rarities, 8 Duo brews and 5 Legendaries, each offered by a talking tea spirit.
-- **Ascension:** four transformations with cut-scenes: golden flame aura, spiky crest, lightning, a halo and a
+- **Ascension:** five transformations with cut-scenes: golden flame aura, spiky crest, lightning, a halo and a
   reality-warping god form. The spit evolves from green to radiant gold.
 - **The world transforms:** blossoms and lanterns, crystals and floating islands, and finally a marble garden
   floating above a sea of clouds.
@@ -51,6 +51,48 @@ world, music and sound all generated in code.
 - **Co-op for 2–4 players** with room codes; the garden grows with the party.
 - **Meta progression & community:** Tode's Pantry upgrades, global leaderboard and a seeded Daily Brew.
 - **Plays anywhere:** keyboard + mouse, or touch with auto-aim on phones; adapts quality to the device.
+
+## Promo assets (`game/promo/`)
+
+| File | Use |
+| --- | --- |
+| `todeity-trailer-discord.mp4` | 50 s trailer, 960×540, under 10 MB: attach to the Discord post (plays inline, muted) |
+| `todeity-trailer-720p.mp4` | Same trailer in 1280×720 at higher quality: YouTube, X, LinkedIn |
+| `todeity.gif` | 13 s loop, 480 px, ~8 MB: Discord, READMEs, places where video doesn't autoplay |
+| `todeity-banner-1200x630.jpg` | Link preview / social card (also `public/og-image.jpg`) |
+| `todeity-banner-1920x1080.png`, `todeity-banner-2400x1260.png` | Hi-res banner for posts, X header art, slides |
+
+The trailer has no sound (Discord autoplays muted anyway). For a version with the game's music, record the screen
+with OBS while playing and put the trailer's captions over it.
+
+## Discord post (copy and paste)
+
+```
+#JetBrainsGameChallenge 🐸☕ **Todeity: Rise of the Tea God**
+
+A frog. A cup of tea. A thousand bees.
+Tode just wanted his morning tea. Then the bees came. Brew powers from five tea spirits, ascend from garden frog to **God of Tea**, travel through five arenas and face raid bosses all the way down to **Bee-zebub** in the Underworld.
+
+▶ **Play free in your browser:** https://todeity.azurewebsites.net
+👥 Co-op for up to 4: create a room and paste the invite link here
+📅 A new **Daily Brew** every day: same seed for everyone, one leaderboard
+📱 Works on phones and tablets too
+
+Post your run card below (🖼 Copy image on the game-over screen) and tell me how far you got!
+Made from the "Build a Game with an AI Coding Agent" course with Claude Code: Three.js, procedural world, all music and sound generated in code.
+```
+
+Attach `todeity-trailer-discord.mp4` (or the GIF). Discord unfurls the link with the banner by itself.
+
+## Launch-day checklist (Oct 19, 10:00 CEST)
+
+- Deploy the latest build the evening before and open the live site once (cold start), on desktop and on a phone.
+- Paste the link in a private Discord channel to check the preview card (Discord caches previews: if it shows an
+  old one, add `?v=2` to the link in the post).
+- Post early: submissions appear in the order they arrive, and voting starts right away.
+- During the week: answer comments, share a co-op invite in the thread, and mention the Daily Brew leader each
+  day. Every 👍 on the official post counts, so share the post link (not just the game link) with friends.
+- Keep the App Service running until at least Oct 28 (winners announced) so the jury can still play.
 
 ## Gameplay video shot list (60–90 s)
 

@@ -10,7 +10,7 @@ export const TIERS = [
   { name: 'Golden Tode', power: 10, banner: 'GOLDEN TODE', sub: 'His power erupts in golden flame!' },
   { name: 'Radiant Tode', power: 20, banner: 'RADIANT TODE', sub: 'Lightning crackles, the stars answer his call.' },
   { name: 'Tode, God of Tea', power: 36, banner: 'GOD OF TEA', sub: 'A vortex of divine fire. Reality bends.' },
-  { name: 'Infinite Tode', power: 54, banner: 'INFINITE TODE', sub: 'The stars themselves pour into him.' },
+  { name: 'Omnitode', power: 54, banner: 'OMNITODE', sub: 'The stars themselves pour into him.' },
 ];
 
 /**
@@ -19,7 +19,7 @@ export const TIERS = [
  * - Golden: a towering golden flame with spiky tongues, a golden crest and a storm of embers.
  * - Radiant: the golden flame crackling with lightning, golden spirals, sparks streaming into him and rocks rising.
  * - God of Tea: a calm crimson flame inside a swirling vortex of fire, a halo, runes and a sparkle storm.
- * - Infinite: a silver-violet flame, silver spirals, a galaxy under his feet and stars flying into him nonstop.
+ * - Omnitode: a silver-violet flame, silver spirals, a galaxy under his feet and stars flying into him nonstop.
  *
  * `aura`: [outer, inner] flame colours and opacities; `swirls`: spiral ribbons; `inflow`: stars per second flying
  * into him; `arc`: lightning; `orbit`: sparkles circling him; `debris`: rocks rising around him.

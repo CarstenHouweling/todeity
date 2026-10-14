@@ -108,7 +108,7 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   spiral ribbons (`swirlRibbons`, energy or `fire`), stars flying into him (`pullStars`, an instanced stream),
   lightning arcs, orbiting sparkles, rising debris, a crest, halo, runes and a galaxy: Awakened (white wind),
   Golden (towering golden flame), Radiant (gold spirals, lightning, debris, stars), God of Tea (crimson flame in a
-  vortex of fire, halo, runes), Infinite (silver-violet, galaxy underfoot, a constant star stream). Additive layers
+  vortex of fire, halo, runes), Omnitode (silver-violet, galaxy underfoot, a constant star stream). Additive layers
   stack, so colours stay under the bloom threshold (0.93) or the screen washes out white. In the garden **the world
   transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
@@ -208,6 +208,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
+- **Title screen layout:** in order of importance: a big Start run; the ways to play (Daily Brew, Co-op,
+  Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping); then small pills (save code, fullscreen,
+  What's new with the version). Keep new entries in that order rather than adding full-size buttons.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari);
   hidden where the browser can't do it (iPhone Safari). Menus redraw on `fullscreenchange` (`refreshMenu`).
 - **Healing and the ultimate:** Stolen Honey and Herbal Remedy share a 12 s cooldown (`LIFESTEAL_COOLDOWN`);
@@ -217,14 +220,32 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Sharing a run:** the game-over screen shows everything gathered (ultimate, skills, brews) and a 📤 Share button
   that opens a popup with a 1200×630 card drawn on a canvas (`ShareCard.js`: score, time, wave, level, bees, form,
   build, the last frame as a backdrop) plus a text line. Share uses the native share sheet (image + text) where
-  available, else copy text / save image.
+  available, else copy image (`ClipboardItem`, pastes straight into Discord) / copy text / save image.
+- **Invites and link previews:** the co-op room view shows an invite link (`?room=CODE`, `inviteLink()`); opening it
+  shows the lobby with the code filled in (`openInvite()` at boot, which also strips the parameter). `index.html`
+  has Open Graph / Twitter tags pointing at `public/og-image.jpg` (1200×630) with the absolute Azure URL, so a
+  pasted link unfurls in Discord. Change those URLs if the game moves.
+- **Promo material:** `game/promo/` holds the trailer (MP4 for YouTube/X and a <10 MB one for Discord), a GIF and
+  banners. They were made by stepping the dev build frame by frame (`game.step(1/30)`), copying
+  `renderer.domElement` into a 2D canvas (cropped around Tode) and posting each JPEG to a small local receiver,
+  then adding captions and encoding with Pillow + ffmpeg. The DOM HUD isn't in those frames.
 - **Versions:** `components/Changelog.js` lists every release, newest first; its first entry is the version shown
   on the title screen and in the 📜 What's new popup (title and pause menus). **Add an entry and bump
   `package.json` for every major change.** Popups use `hud.showModal()` over the current menu; while one is open
   Esc closes it and no other key reaches the game.
 - **Meta progression:** each run earns Golden Leaves (`leavesForRun`: mostly waves, bosses and victory; a wave-10
   run pays ~90, the whole Pantry costs ~1,300) for permanent upgrades in Tode's Pantry (title screen),
-  and Tode says a story line after each run. **Leaderboards** via `game/server`: score, deepest run (wave, then
+  and Tode says a story line after each run. **Cloud saves** (`components/CloudSave.js`, `server/saves.js`): the
+  server owns leaves, Pantry levels, achievements and run stats. Every browser gets a save code (`MINT-FROG-42`,
+  two words and a number) on its first visit. A ☁️ pill on the title screen and in the Pantry opens the save
+  popup (`hud.showSave`): copy the code or load another one. At start the server's copy replaces the local one (so editing localStorage doesn't stick); a finished
+  run is reported (`reportRun` in `endRun`) and the server computes the leaves itself with the shared rules
+  (`leavesForRun`, `PANTRY`, `ACHIEVEMENTS`, `steepBonus` are imported from `src/`, so the server needs the `src`
+  folder next to it), accepts achievements only when the run fits them (`earned()`), and refuses a run whose
+  playtime exceeds the real time since the previous report. Pantry purchases are checked too (`reportBuy`).
+  Achievements unlocked this session wait in memory (`notePending`) until the next run report. Without a server
+  the game falls back to local progress. Forged requests can still cheat; this only stops storage edits.
+  **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
   fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
 
@@ -292,6 +313,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
+| `components/CloudSave.js` | Cloud save client: save code, sync at start, run and Pantry reports. |
 | `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
 | `components/TouchControls.js` | Twin sticks (move / aim) and buttons for touch devices; touch detection. |
 | `components/Fullscreen.js` | Fullscreen toggle with the prefixed Safari API. |
@@ -318,6 +340,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/House.js`, `Camera.js`, `Renderer.js`, `Input.js`, `Particles.js`, `Projectile.js`, `collision.js` | As named. |
 | `dev/bot.js` | Dev-only autoplayer for balance testing. |
 | `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
+| `../server/saves.js` | `/api/save` cloud saves (`saves.json` in `DATA_DIR`): codes, run rewards, Pantry purchases, rate limits. |
 | `style.css` | All UI styling. |
 
 ## Conventions and gotchas
@@ -394,7 +417,9 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 
 ## Ideas / roadmap
 
-- Deploy to Azure (see above), record a gameplay video for the submission post.
+- Readability seen while making the trailer: the Sky Citadel at golden hour plus a high ascension form washes out
+  to near white, and the Steeping Beam whites out the garden for ~2.5 s. Tode himself is hard to spot inside the
+  God of Tea aura.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant

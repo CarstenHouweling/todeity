@@ -6,6 +6,7 @@ import { brewDialogue, kettleDialogue } from './Spirits.js';
 import { TIERS } from './Ascension.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js';
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
+import { cloud } from './CloudSave.js';
 import { CHANGELOG, VERSION } from './Changelog.js';
 import { canFullscreen, isFullscreen } from './Fullscreen.js';
 import { KEEPSAKES, currentKeepsake, isKeepsakeUnlocked, unlockHint } from './Keepsakes.js';
@@ -185,6 +186,10 @@ export class Hud {
       const target = event.target.closest('[data-action]');
       if (target) this.onAction(target.dataset.action, target.dataset);
       else if (event.target === this.modal) this.hideModal();
+    });
+    this.modal.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (event.target.dataset.form === 'save') this.onAction('load-save');
     });
 
     this.damageNumbers = [];
@@ -442,7 +447,7 @@ export class Hud {
   /**
    * The co-op lobby. `view` is 'start' (create or join), 'room' (in a room) or 'connecting'.
    */
-  showLobby({ view, code, players = [], isHost, error, name }) {
+  showLobby({ view, code, players = [], isHost, error, name, invite }) {
     const errorLine = error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : '';
     let body;
     if (view === 'connecting') {
@@ -457,18 +462,22 @@ export class Hud {
       body = `
         <p class="sub">Share this room code with your friends:</p>
         <div class="room-code">${code}</div>
+        <p class="sub invite-link">or send them the link <b>${escapeHtml(invite ?? '')}</b></p>
         <ul class="lobby-players">${list}</ul>
         <p class="sub">The garden grows and more bees come with every extra frog (up to 4).</p>
-        <div class="menu-buttons">${start}<button class="menu-button" data-action="coop-leave">Leave</button></div>`;
+        <div class="menu-buttons">${start}<button class="menu-button" data-action="coop-invite">🔗 Copy invite link</button><button class="menu-button" data-action="coop-leave">Leave</button></div>`;
     } else {
+      // `code`: a room code from an invite link, ready to join.
+      const invited = code ? `<p class="sub">You're invited to room <b>${escapeHtml(code)}</b>: enter your name and join.</p>` : '';
       body = `
+        ${invited}
         <form class="lobby-form" data-form="coop">
           <input id="coop-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
-          <button class="menu-button primary" type="button" data-action="coop-create">✨ Create room</button>
+          <button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-create">✨ Create room</button>
         </form>
         <form class="lobby-form" data-form="coop">
-          <input id="coop-code" maxlength="4" placeholder="CODE" autocomplete="off" />
-          <button class="menu-button" type="button" data-action="coop-join">🚪 Join room</button>
+          <input id="coop-code" maxlength="4" placeholder="CODE" autocomplete="off" value="${escapeHtml(code ?? '')}" />
+          <button class="menu-button ${code ? 'primary' : ''}" type="button" data-action="coop-join">🚪 Join room</button>
         </form>
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>`;
     }
@@ -677,14 +686,15 @@ export class Hud {
   }
 
   /** The share card preview; `native`: the device has a share sheet. */
-  showShare(image, native) {
+  showShare(image, native, copyImage) {
     this.showModal(
       'share',
       `<h2>📤 Share your run</h2>
       <img class="share-card" src="${image}" alt="Your run: score, time, wave and abilities" />
       <div class="menu-buttons">
         ${native ? '<button class="menu-button primary" data-action="share-native">📤 Share</button>' : ''}
-        <button class="menu-button ${native ? '' : 'primary'}" data-action="share-copy">📋 Copy text</button>
+        ${copyImage ? `<button class="menu-button ${native ? '' : 'primary'}" data-action="share-copy-image">🖼 Copy image</button>` : ''}
+        <button class="menu-button ${native || copyImage ? '' : 'primary'}" data-action="share-copy">📋 Copy text</button>
         <button class="menu-button" data-action="share-save">💾 Save image</button>
         <button class="menu-button" data-action="close-modal">Close</button>
       </div>
@@ -734,19 +744,26 @@ ${
         </div>`
         }
         ${best ? `<p class="best">Best score: ${best}${meta.victories ? ` · 👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : ''}</p>` : ''}
-        <div class="menu-buttons">
+        <!-- Most important first: start, then ways to play, then preparing a run, then small extras. -->
+        <div class="menu-buttons title-start">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
+        </div>
+        <div class="menu-buttons title-play">
           <button class="menu-button" data-action="daily">📅 Daily Brew</button>
           <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
-          <button class="menu-button" data-action="pantry">🍃 Tode's Pantry <small>${meta.leaves} leaves</small></button>
-          <button class="menu-button" data-action="keepsakes">🎒 Keepsake <small>${currentKeepsake().icon} ${currentKeepsake().name}</small></button>
-          ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()} · ×${steepBonus(steepLevel()).toFixed(2)}` : 'off'}</small></button>` : ''}
-          ${this.fullscreenButton()}
-          <button class="menu-button" data-action="changelog">📜 What's new</button>
+        </div>
+        <div class="menu-buttons title-prepare">
+          <button class="menu-button" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small></button>
+          <button class="menu-button" data-action="keepsakes">${currentKeepsake().icon} Keepsake</button>
+          ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small></button>` : ''}
         </div>
         <p class="prompt">or press Space</p>
-        <p class="version">v${VERSION}</p>
+        <div class="title-footer">
+          ${this.saveChip()}
+          ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : ''}
+          <button type="button" data-action="changelog">📜 What's new · v${VERSION}</button>
+        </div>
       </div>`
     );
   }
@@ -779,9 +796,49 @@ ${
         <div class="achievements">${ACHIEVEMENTS.map(
           (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text}">${a.icon}</span>`
         ).join('')}</div>
-        <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
+        <div class="menu-buttons">${this.saveChip()}<button class="menu-button" data-action="title">Back</button></div>
       </div>`
     );
+  }
+
+  /** The small save code button on the title screen and in the Pantry; it opens the save popup. */
+  saveChip() {
+    const label = { online: escapeHtml(cloud.code ?? ''), connecting: 'Connecting…', offline: 'Offline' }[cloud.status];
+    return `<button type="button" class="save-chip" data-action="save" title="Your save code: load your progress on another device">☁️ ${label}</button>`;
+  }
+
+  /** Cloud save popup: this browser's code, and a field to continue another save. `message` / `error`: a result. */
+  showSave({ message, error } = {}) {
+    const note = error
+      ? `<p class="lobby-error">${escapeHtml(error)}</p>`
+      : message
+        ? `<p class="sub save-ok">${escapeHtml(message)}</p>`
+        : '';
+    const current =
+      cloud.status === 'online'
+        ? `<p class="sub">Your progress (Golden Leaves, Pantry, achievements) is saved online under this code:</p>
+          <div class="save-code">${escapeHtml(cloud.code)}</div>
+          <div class="menu-buttons"><button class="menu-button" data-action="copy-save">📋 Copy code</button></div>
+          <p class="sub save-status"></p>`
+        : `<p class="sub">${cloud.status === 'connecting' ? 'Connecting to your cloud save…' : "Can't reach the server: progress is saved in this browser only for now."}</p>`;
+    this.showModal(
+      'save',
+      `<h2>☁️ Your progress</h2>
+      ${current}
+      <h3>Played before?</h3>
+      <p class="sub">Enter your save code to continue where you left off.</p>
+      ${note}
+      <form class="lobby-form" data-form="save">
+        <input id="save-code" maxlength="24" placeholder="MINT-FROG-42" autocomplete="off" />
+        <button class="menu-button primary" type="submit">Load progress</button>
+      </form>
+      <div class="menu-buttons"><button class="menu-button" data-action="close-modal">Close</button></div>`
+    );
+  }
+
+  setSaveStatus(text) {
+    const status = this.modal.querySelector('.save-status');
+    if (status) status.textContent = text;
   }
 
   /** Pick the keepsake Tode carries into his runs; locked ones say how to unlock them. */

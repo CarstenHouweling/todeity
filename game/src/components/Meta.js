@@ -32,6 +32,7 @@ const defaults = () => ({
 });
 
 function load() {
+  if (typeof window === 'undefined') return defaults(); // the server imports the rules from here
   try {
     return { ...defaults(), ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') };
   } catch {
@@ -44,6 +45,7 @@ export const meta = load();
 // Dev: test runs (the bot) can switch saving off so they don't touch the real progress.
 let persist = true;
 export const setPersist = (on) => (persist = on);
+export const isPersisting = () => persist;
 
 export function saveMeta() {
   if (!persist) return;

@@ -3,6 +3,7 @@
 //
 //   GET  /api/scores?board=all|daily|depth|speed&date=YYYY-MM-DD&limit=10
 //   POST /api/scores  { name, score, wave, level, tier, kills, time, clear, victory, daily, steep }
+//   /api/save…        cloud saves with easy save codes (see saves.js)
 //
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
@@ -17,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { handleSave, loadSaves } from './saves.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -33,6 +35,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.glb': 'model/gltf-binary',
   '.json': 'application/json',
   '.ico': 'image/x-icon',
@@ -111,6 +114,8 @@ function parseEntry(body) {
 
 const lastPost = new Map();
 
+const clientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+
 function send(res, status, body, headers = {}) {
   const json = typeof body !== 'string';
   res.writeHead(status, {
@@ -147,7 +152,7 @@ async function handleScores(req, res, url) {
   }
 
   if (req.method === 'POST') {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+    const ip = clientIp(req);
     if (Date.now() - (lastPost.get(ip) ?? 0) < POST_INTERVAL) return send(res, 429, { error: 'Slow down a little.' });
     lastPost.set(ip, Date.now());
 
@@ -300,11 +305,15 @@ setInterval(() => {
 }, 15_000);
 
 await loadScores();
+await loadSaves(DATA_DIR);
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/api/scores') return await handleScores(req, res, url);
+    if (url.pathname === '/api/save' || url.pathname.startsWith('/api/save/')) {
+      return await handleSave(req, res, url, { send, ip: clientIp(req), readJson: async (r) => JSON.parse((await readBody(r)) || '{}') });
+    }
     if (url.pathname === '/api/health') return send(res, 200, { ok: true });
     return await serveStatic(res, url.pathname);
   } catch (error) {

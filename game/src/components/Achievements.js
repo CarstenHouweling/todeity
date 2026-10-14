@@ -1,3 +1,4 @@
+import { notePending } from './CloudSave.js';
 import { meta, saveMeta } from './Meta.js';
 
 /** Achievements: each one pays out Golden Leaves for Tode's Pantry. Stored with the rest of the meta progress. */
@@ -8,7 +9,7 @@ export const ACHIEVEMENTS = [
   { id: 'golden', icon: '🌟', name: 'Golden Frog', text: 'Become Golden Tode.' },
   { id: 'radiant', icon: '⚡', name: 'Radiance', text: 'Become Radiant Tode.' },
   { id: 'god', icon: '👑', name: 'God of Tea', text: 'Ascend to God of Tea.' },
-  { id: 'infinite', icon: '🌌', name: 'Beyond Godhood', text: 'Become Infinite Tode.' },
+  { id: 'infinite', icon: '🌌', name: 'Beyond Godhood', text: 'Become Omnitode.' },
   { id: 'queen', icon: '🐝', name: 'Queen Slayer', text: 'Defeat Queen Buzzbelle.' },
   { id: 'empress', icon: '☕', name: 'Empress Down', text: 'Defeat the Empress of the hive.' },
   { id: 'beezebub', icon: '😈', name: 'Perfectly Steeped', text: 'Banish Bee-zebub from the Underworld and finish your tea.' },
@@ -34,6 +35,7 @@ export function unlock(id) {
   if (!achievement) return null;
   meta.achievements.push(id);
   meta.leaves += ACHIEVEMENT_REWARD;
+  notePending(id); // the server confirms it with the next run report
   saveMeta();
   return achievement;
 }
