@@ -789,22 +789,27 @@ canvas.game {
   overscroll-behavior: contain;
 }
 
-/* A long menu or popup scrolls, but its closing row (Back, Done, Close…) stays pinned at the bottom of the screen,
-   with the list fading out under it: players never have to discover the scroll to leave. */
+/* A long menu or popup scrolls, but its closing row (Back, Done, Close…) stays pinned at the bottom of the screen:
+   players never have to discover the scroll to leave. No bar behind it: the buttons float over the list on their
+   own (solid, with a shadow), and the row lets touches through to the list around them. */
 .menu .panel > .menu-buttons:last-child,
 .modal .panel > .menu-buttons:last-child {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  margin-bottom: 0;
-  padding: 18px 0 8px;
-  background: linear-gradient(rgba(10, 30, 15, 0), rgba(10, 30, 15, 0.9) 45%);
+  padding: 10px 0 6px;
+  pointer-events: none;
 }
 
-.modal .panel > .menu-buttons:last-child {
-  margin-bottom: -22px; /* down to the panel's edge */
-  padding-bottom: 22px;
-  background: linear-gradient(rgba(14, 40, 20, 0), rgba(14, 40, 20, 0.97) 45%);
+.menu .panel > .menu-buttons:last-child .menu-button,
+.modal .panel > .menu-buttons:last-child .menu-button {
+  pointer-events: auto;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.menu .panel > .menu-buttons:last-child .menu-button:not(.primary),
+.modal .panel > .menu-buttons:last-child .menu-button:not(.primary) {
+  background: #2a4a30;
 }
 
 .pause,

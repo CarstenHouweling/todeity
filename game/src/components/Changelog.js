@@ -3,6 +3,12 @@
 
 export const CHANGELOG = [
   {
+    version: '0.17.2',
+    date: '2026-10-14',
+    title: 'No more bar',
+    changes: ['The Done and Back buttons of long menus float on their own, without the dark bar behind them'],
+  },
+  {
     version: '0.17.1',
     date: '2026-10-14',
     title: 'Fullscreen on iPhone',

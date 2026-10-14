@@ -263,7 +263,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   `window.innerWidth`: on phones that grows when the browser zooms out, and a canvas sized from it made the page wider
   than the screen and kept it zoomed out (menus cut off on the right). The canvas is pinned to the screen by CSS
   (`position: fixed`, the renderer only sets its resolution) and the viewport can't be zoomed. Long menus and popups
-  scroll, but their last `.menu-buttons` row (Back, Done, Close) is sticky at the bottom, so it's always on screen.
+  scroll, but their last `.menu-buttons` row (Back, Done, Close) is sticky at the bottom, so it's always on screen:
+  the buttons float on their own (solid, with a shadow), with no bar behind them.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
