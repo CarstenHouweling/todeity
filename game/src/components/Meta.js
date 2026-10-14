@@ -41,7 +41,12 @@ function load() {
 
 export const meta = load();
 
+// Dev: test runs (the bot) can switch saving off so they don't touch the real progress.
+let persist = true;
+export const setPersist = (on) => (persist = on);
+
 export function saveMeta() {
+  if (!persist) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(meta));
   } catch {
@@ -65,8 +70,12 @@ export function buy(id) {
   return true;
 }
 
+/**
+ * Golden Leaves for a run: mostly for progress (waves, bosses, victory), a little for score. The whole Pantry
+ * (about 1,300) takes several good runs: a wave-5 run pays ~40, a wave-20 run ~250.
+ */
 export function leavesForRun({ score, wave, bossKills, victory }) {
-  return Math.floor(score / 40) + wave * 3 + bossKills * 15 + (victory ? 100 : 0);
+  return wave * 4 + bossKills * 15 + (victory ? 80 : 0) + Math.floor(score / 500);
 }
 
 const LINES = [

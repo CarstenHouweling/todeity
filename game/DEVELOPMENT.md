@@ -76,8 +76,10 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   stingers that volley together).
 - **Experience:** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to Tode within his magnet range;
   every level is a pick of 3 **skills**, new ones or upgrades (14 skills, up to 6 slots, level 5 each). Solo, the
-  game pauses for the pick right away (`openLevelUp`, back to the fight afterwards, possibly via a mid-wave
-  transformation); in co-op the picks wait until the wave is cleared (the bar shows `Lv 7 (+2)`). Every player
+  game pauses for the pick (`openLevelUp`, back to the fight afterwards, possibly via a mid-wave transformation);
+  in co-op the picks wait until the wave is cleared (the bar shows `Lv 7 (+2)`). At most one skill pick between
+  waves (`skillPickedThisBreak`); extra levels come up `LEVEL_UP_DELAY` seconds into the next wave, one at a time.
+  The curve (`leavesForLevel`) gives about one level per wave (bot: Lv 20 at wave 20). Every player
   gathers their own leaves. **Critical hits** (5%) deal double damage with gold numbers.
 - **Side objectives** (`OBJECTIVES` in main.js): when Tode reaches an arena it gets one: smash 3 wild hives
   (garden) or golden hives (Sky Citadel), hives being `nest` structure enemies that keep letting out bees; or hold
@@ -115,6 +117,20 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   Brimstone Rings (walls of fire spreading from him: only a hop-dash gets you through), chasing Hellfire Pillars,
   hellfire rain and an Infernal Spiral, with two rage phases where he grows. Beating him plays the ending
   cut-scene back home in the garden, and credits.
+- **Raid bosses** (`BOSS_WARDS`, `WARD`, `startWard`/`updateRaid` in main.js): at set health fractions a boss
+  raises a shield (`Enemy.setShield`, a bubble; `damageEnemy` ignores shielded bees and `targetable()` hides them
+  from aiming, skills and bombs). The task: smash 3–5 **Shield Wards** (`ward` structure bees, `buildWard` in
+  BeeModels.js, tethered to the boss) or hold 3 circles of light. The boss keeps attacking (less often) and guards
+  come; if the timer runs out (30 s wards, 40 s lights) the shield overloads: everyone takes a hit and the boss heals
+  10%. Done: the shield shatters and the boss is **staggered** for 5 s (×1.5 damage). The Seraph (from her first
+  roar), Empress and Bee-zebub also cast a **cataclysm** (`CATACLYSM`): they channel, the arena glows red and only
+  circles of light are safe (2 hearts otherwise, a hop-dash doesn't help). Co-op: the host decides; `ward`,
+  `wardOff`, `overload` and `cata` messages, snapshot flags 64 (shielded) and 128 (staggered).
+- **Hive tactics** (`TACTICS`, `updateTactics`, host only): from wave 4 chasers may be flankers (`assignFlank`:
+  they spiral in from the sides), from wave 7 packs near a Tode lunge together along telegraphed lines
+  (`startPounce`/`updatePounce`), from wave 11 stingers fire synchronized volleys (`tactics.volleyIn`), from wave 15
+  elites and every other stinger lead their shots (`todeMotion` tracks each Tode's velocity). The Hive Mind vow
+  (`tacticsWave()`) brings all of it in from wave 2.
 - **Beam clash** (solo): when the Empress or Bee-zebub hits a rage phase they fire a beam at Tode, he answers, and
   the player mashes Space/click/tap to push the clash point back (`CLASH` in main.js). Winning deals 10% of the
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
@@ -137,8 +153,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   trigger in `charmHit`/`charmKill` from `damageEnemy` (sources in `PROC_SOURCES`). Charm damage passes on half its
   trigger chance (`withProc`, `procScale`) and at most `PROC_BUDGET` triggers fire per frame, so chains die out.
   Loaded Dice add rolls. In co-op every player gathers their own.
-- **Shrines** (`components/Shrines.js`, `setupShrine` in main.js): from wave 2, half the non-boss waves get one;
-  stand on it for 0.9 s. Shrine of Chance: 1 heart for a charm (50%), two (15%) or nothing, 3 tries. Bitter
+- **Shrines** (`components/Shrines.js`, `setupShrine` in main.js): from wave 2, about a third of the non-boss waves get one (each usable once);
+  stand on it for 0.9 s. Shrine of Chance: 1 heart for a charm (50%), two (15%) or nothing. Bitter
   Shrine (solo): the wave gets elites, frenzy, 50% more bees and a squad, then an extra Epic brew pick
   (`bonusPicks`, `offerBrews(true)`). Cursed Leaves: a `CURSES` brew (PowerUps.js, kind `curse`) with a drawback.
 - **Memory** (`meta.lastRun`, `meta.bosses`, `meta.blendPicks`; `rememberRun`/`boss` in Meta.js): at a run's first
@@ -157,6 +173,10 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
   and on the first real touch otherwise (touchscreen laptops). Quality adapts to the frame rate (pixel ratio
   0.6–1.5, shadows off as a last resort).
+- **Touch HUD:** the brew and charm rows (`.inventory`) are replaced by a one-line count under the hearts
+  (`.inventory-summary`); charm pickups float up from Tode instead of toasts; at most 2 toasts, low on the left;
+  weather and modifier lines show only their names; banners and callouts wrap. Narrow screens (`max-width: 600px`)
+  shrink hearts and score and move the wave line below them. The pause menu still lists the whole build.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
@@ -170,7 +190,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   on the title screen and in the 📜 What's new popup (title and pause menus). **Add an entry and bump
   `package.json` for every major change.** Popups use `hud.showModal()` over the current menu; while one is open
   Esc closes it and no other key reaches the game.
-- **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
+- **Meta progression:** each run earns Golden Leaves (`leavesForRun`: mostly waves, bosses and victory; a wave-10
+  run pays ~90, the whole Pantry costs ~1,300) for permanent upgrades in Tode's Pantry (title screen),
   and Tode says a story line after each run. **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
   fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
@@ -206,8 +227,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
   (stingers, storm strikes, boss rain, explosions) are simulated by everyone, each checking hits on their own Tode.
 - **Flow.** After a wave each player picks their own rewards; the host waits until everyone is ready (or 40 s).
   A fallen Tode is *downed*: it spectates a teammate and gets back up at the next wave. The run ends when everyone
-  is down. The garden grows (25 → 31 → 35 → 41 tiles), bees get more numerous and tougher per extra player, and
-  bigger maps get extra spawn points on the edges.
+  is down. The garden grows (25 → 31 → 35 → 41 tiles), and per extra player waves get 60% more bees that are 30%
+  tougher, bosses 80% more health (`COOP_*` in main.js); bigger maps get extra spawn points on the edges.
+- **Experience in co-op:** everyone collects their own copy of every bee's leaves (and charm drops), so leaf values
+  and charm odds are divided by the swarm growth (`coopShare()`): each frog levels at about the solo pace.
 - **Code.** `components/Net.js` (WebSocket client, batched messages), `components/RemoteTode.js` (teammate
   puppets with their own ascension visuals and name tags), the "Co-op" section in `main.js` (snapshots, mirrors,
   message handling, lobby), and the relay in `server/server.js`.
@@ -315,6 +338,7 @@ game.bullets.list         // enemy bullets in flight
 game.level                // Tode's level (tea leaves)
 game.settings.autoCast = false
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
+game.persist = false      // don't save progress or the best score this session (use it before bot runs)
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
 ```
 
@@ -322,9 +346,10 @@ Tip for AI agents with an embedded browser: a hidden browser pane pauses `reques
 with `game.step()` and take a screenshot to see the result. `step()` renders only its last frame; CSS animations
 (banners) run on real time, so a screenshot right after a long step can still show them.
 
-Balance reference (Oct 13, after the chaos update): the bot (perfect aim, random picks, dodges bullets but not
-telegraphed strikes, walks into shrines) died at the wave-10 Hornet Shogun twice and at wave 16 once in three
-runs (levels 12–19). Humans will find the bullet patterns harder than the bot does. See `SUBMISSION.md` for the contest post kit.
+Balance reference (Oct 14, v0.11 with raid bosses and tactics): the bot (perfect aim, random picks, dodges bullets
+but not telegraphed strikes or lunges, walks into shrines and circles of light) died at waves 5, 10 and 15 (the
+Shogun's charges during his shield phase are its usual end). Before v0.11 it died at the wave-10 Shogun twice and
+at wave 16 once. Humans will find the bullet patterns harder than the bot does. See `SUBMISSION.md` for the contest post kit.
 
 ## Ideas / roadmap
 

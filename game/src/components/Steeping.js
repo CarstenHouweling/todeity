@@ -13,6 +13,7 @@ export const VOWS = [
   { id: 'royal', icon: '👑', name: 'Royal Wrath', heat: 1, ranks: 2, text: (r) => `Bosses have ${30 * r}% more health` },
   { id: 'shell', icon: '💔', name: 'Thin Shell', heat: 2, ranks: 2, text: (r) => `Start with ${r} heart${r > 1 ? 's' : ''} fewer` },
   { id: 'elite', icon: '💀', name: 'Elite Guard', heat: 2, ranks: 1, text: () => 'Elite bees from wave 3, twice as often' },
+  { id: 'hivemind', icon: '🧠', name: 'Hive Mind', heat: 2, ranks: 1, text: () => 'Bees use all their tactics from wave 2' },
   { id: 'bitter', icon: '🌀', name: 'Bitter Leaves', heat: 2, ranks: 1, text: () => 'Every wave from wave 2 has a modifier' },
   { id: 'pantry', icon: '🔒', name: 'Locked Pantry', heat: 3, ranks: 1, text: () => 'Your Pantry upgrades do nothing this run' },
 ];

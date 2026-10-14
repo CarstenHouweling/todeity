@@ -69,6 +69,9 @@ export class Hud {
     this.status = element('status', this.root);
     this.hearts = element('hearts', this.status);
     this.form = element('form', this.status);
+    // Touch screens: a one-line count of brews and charms instead of the icon rows (the pause menu lists them).
+    this.summary = element('inventory-summary', this.status);
+    this.counts = { brews: 0, charms: 0 };
 
     this.top = element('top-center', this.root);
     this.wave = element('wave', this.top);
@@ -77,8 +80,11 @@ export class Hud {
     this.modifiers.hidden = true;
     this.objective = element('weather objective', this.top);
     this.objective.hidden = true;
+    // Raid mechanics: "🛡 Break the shield: 1/3 wards · 0:21", or "☀ Get into the light!".
+    this.raid = element('weather objective raid', this.top);
+    this.raid.hidden = true;
     // Arrows at the screen edge pointing at objectives out of view.
-    this.arrows = [0, 1, 2].map(() => {
+    this.arrows = [0, 1, 2, 3, 4].map(() => {
       const arrow = element('objective-arrow', this.root);
       arrow.textContent = '➤';
       arrow.hidden = true;
@@ -217,7 +223,8 @@ export class Hud {
 
   setWeather(info) {
     this.weather.hidden = !info.text;
-    this.weather.textContent = `${info.icon} ${info.name} · ${info.text}`;
+    // Phones: just the name; the explanation would cover the arena.
+    this.weather.textContent = isTouch() ? `${info.icon} ${info.name}` : `${info.icon} ${info.name} · ${info.text}`;
   }
 
   /** The arena's side objective, e.g. "🐝 Smash the wild hives 1/3" (null hides it). */
@@ -250,13 +257,22 @@ export class Hud {
   /** Wave modifiers: [{ icon, name, text }]. */
   setModifiers(list) {
     this.modifiers.hidden = !list.length;
-    setText(this.modifiers, list.map((mod) => `${mod.icon} ${mod.name} · ${mod.text}`).join('   '));
+    setText(this.modifiers, list.map((mod) => (isTouch() ? `${mod.icon} ${mod.name}` : `${mod.icon} ${mod.name} · ${mod.text}`)).join('   '));
+  }
+
+  /** A raid mechanic's status line (null hides it); `urgent` makes it pulse. */
+  setRaid(text, urgent = false) {
+    setProp(this.raid, 'hidden', !text);
+    if (text) setText(this.raid, text);
+    if (this.raid.classList.contains('urgent') !== urgent) this.raid.classList.toggle('urgent', urgent);
   }
 
   setBoss(enemy) {
     setProp(this.boss, 'hidden', !enemy);
     if (!enemy) return;
-    setText(this.bossName, enemy.type.name);
+    const state = enemy.shielded ? 'shielded' : enemy.ai?.staggerLeft > 0 ? 'staggered' : '';
+    if (this.boss.dataset.state !== state) this.boss.dataset.state = state;
+    setText(this.bossName, enemy.shielded ? `🛡 ${enemy.type.name} · SHIELDED` : state ? `💫 ${enemy.type.name} · STAGGERED` : enemy.type.name);
     setStyle(this.bossFill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
   }
 
@@ -311,6 +327,8 @@ export class Hud {
 
   /** The brews picked this run: [{ icon, name, level, blend }]. */
   setOwned(list) {
+    this.counts.brews = list.length;
+    this.updateSummary();
     this.owned.replaceChildren(
       ...list.map(({ icon, name, level, color }) => {
         const item = element('owned-item');
@@ -325,6 +343,8 @@ export class Hud {
 
   /** Charms gathered this run: [{ icon, name, count, rarity, text }]. */
   setCharms(list) {
+    this.counts.charms = list.reduce((sum, charm) => sum + charm.count, 0);
+    this.updateSummary();
     this.charms.replaceChildren(
       ...list.map(({ icon, name, count, rarity, text }) => {
         const item = element('owned-item charm', null);
@@ -335,6 +355,11 @@ export class Hud {
         return item;
       })
     );
+  }
+
+  updateSummary() {
+    const { brews, charms } = this.counts;
+    setText(this.summary, [brews && `🍵 ${brews}`, charms && `💎 ${charms}`].filter(Boolean).join(' · '));
   }
 
   /** The run's Steep level next to the score (hidden at 0). */
@@ -445,18 +470,24 @@ export class Hud {
   }
 
   /** A charm picked up: its icon, name and what the whole stack does now. */
-  showCharm({ icon, name, rarity }, count, text) {
+  showCharm({ icon, name, rarity }, count, text, position) {
     const color = CHARM_RARITIES[rarity].color;
+    // Phones: just the icon floating up from Tode; the counter and the pause menu say the rest.
+    if (isTouch() && position) {
+      this.damageNumber(position, `+${icon}${count > 1 ? `×${count}` : ''}`, 36, 'charm');
+      return;
+    }
     this.toast(
       `<span class="toast-icon">${icon}</span><span><small style="color:${color}">${CHARM_RARITIES[rarity].name} charm${count > 1 ? ` · ×${count}` : ''}</small><b>${name}</b><em>${text}</em></span>`,
       'charm-toast',
-      2.6
+      isTouch() ? 1.8 : 2.6
     );
   }
 
   toast(html, className = '', seconds = 4.2) {
-    // Keep the stack short: a burst of charms shouldn't bury the screen.
-    while (this.toasts.children.length >= 4) this.toasts.firstChild.remove();
+    // Keep the stack short: a burst of charms shouldn't bury the screen (on phones even shorter).
+    while (this.toasts.children.length >= (isTouch() ? 2 : 4)) this.toasts.firstChild.remove();
+    if (isTouch()) seconds = Math.min(seconds, 3);
     const toast = element(`toast ${className}`, this.toasts);
     toast.innerHTML = html;
     setTimeout(() => toast.classList.add('leaving'), seconds * 1000);
@@ -1058,6 +1089,8 @@ ${
     this.damageNumbers = [];
   }
 }
+
+const isTouch = () => document.body.classList.contains('touch');
 
 /** Seconds as m:ss. */
 export function formatTime(seconds) {

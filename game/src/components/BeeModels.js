@@ -466,3 +466,53 @@ export function buildNest(styleId) {
     },
   };
 }
+
+// --- Shield wards: crystals that keep a boss's shield up until they are smashed -------------------
+
+// Per arena (graphics level): garden honey, mountain crimson, sky white-gold, tournament violet, underworld fire.
+const WARD_LOOKS = [
+  { stone: '#6b4423', crystal: '#ffc43d' },
+  { stone: '#4a4a52', crystal: '#ff4a3a' },
+  { stone: '#f2eee6', crystal: '#9fe8ff' },
+  { stone: '#2a2040', crystal: '#c070ff' },
+  { stone: '#2a1010', crystal: '#ff6a10' },
+];
+
+/** A tall glowing crystal on a carved plinth (Y-up like the bees); its colour follows the arena. */
+export function buildWard(styleId) {
+  const look = WARD_LOOKS[Math.min(styleId, WARD_LOOKS.length - 1)];
+  const key = `ward:${styleId}`;
+  if (!geometryCache.has(key)) {
+    const body = [
+      piece(new THREE.CylinderGeometry(13, 16, 6, 8), look.stone, { position: [0, 3, 0] }),
+      piece(new THREE.CylinderGeometry(9, 11, 6, 8), look.stone, { position: [0, 9, 0] }),
+    ];
+    // Three small shards around the big one.
+    const glow = [piece(new THREE.OctahedronGeometry(8, 0), look.crystal, { position: [0, 30, 0], scale: [0.8, 2.4, 0.8] })];
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2;
+      glow.push(piece(new THREE.OctahedronGeometry(3, 0), look.crystal, { position: [Math.cos(angle) * 9, 16, Math.sin(angle) * 9], scale: [0.7, 1.8, 0.7], rotation: [0, 0, 0.3] }));
+    }
+    geometryCache.set(key, { body: merge(body), glow: merge(glow) });
+  }
+  const parts = geometryCache.get(key);
+  const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, flatShading: true });
+  const root = new THREE.Group();
+  const spin = new THREE.Group();
+  root.add(spin);
+  const body = new THREE.Mesh(parts.body, surface);
+  body.userData.keepGeometry = true;
+  body.castShadow = true;
+  const crystal = sharedMesh(parts.glow, shared(Math.max(1, Math.min(styleId, 3))).glow);
+  spin.add(crystal);
+  root.add(body);
+  return {
+    root,
+    materials: [surface],
+    animate(time, delta, enemy) {
+      spin.rotation.y += delta * 1.2;
+      spin.position.y = Math.sin(time * 2) * 1.5;
+      if (enemy.dying) spin.scale.setScalar(Math.max(0.01, spin.scale.x - delta * 2));
+    },
+  };
+}

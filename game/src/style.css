@@ -2128,3 +2128,186 @@ body.touch .menu .prompt {
     zoom: 1;
   }
 }
+
+/* --- Raid bosses (v0.11) ------------------------------------------------- */
+.boss-bar[data-state='shielded'] .boss-fill {
+  background: linear-gradient(90deg, #7fd8ff, #d8f6ff);
+  box-shadow: 0 0 12px #7fd8ff;
+}
+
+.boss-bar[data-state='shielded'] .boss-name {
+  color: #bff0ff;
+}
+
+.boss-bar[data-state='staggered'] .boss-fill {
+  animation: stagger-flash 0.3s infinite alternate;
+}
+
+@keyframes stagger-flash {
+  to { filter: brightness(1.8) saturate(1.5); }
+}
+
+.weather.raid {
+  border: 1px solid #7fd8ff;
+  color: #d8f6ff;
+  font-weight: 800;
+}
+
+/* --- Phones and tablets: keep the arena visible (v0.11) ------------------- */
+.inventory-summary {
+  display: none;
+}
+
+body.touch .inventory {
+  display: none;
+}
+
+body.touch .inventory-summary:not(:empty) {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Achievements (rare on a phone): low on the left, clear of the boss bar and the thumbs. */
+body.touch .toasts {
+  top: auto;
+  bottom: 36%;
+  left: 8px;
+  transform: none;
+  align-items: flex-start;
+  max-width: min(260px, 46vw);
+}
+
+body.touch .toast {
+  min-width: 0;
+  gap: 8px;
+  padding: 5px 10px;
+  border-width: 1px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+body.touch .toast-icon {
+  font-size: 20px;
+}
+
+body.touch .toast small {
+  font-size: 9px;
+}
+
+body.touch .toast b {
+  font-size: 13px;
+}
+
+body.touch .toast em {
+  font-size: 11px;
+}
+
+/* A charm's description waits for the pause menu. */
+body.touch .toast.charm-toast em {
+  display: none;
+}
+
+body.touch .banner {
+  top: 24%;
+  width: 92vw;
+  white-space: normal;
+}
+
+body.touch .banner-title {
+  font-size: clamp(24px, 7vw, 40px);
+}
+
+body.touch .banner-sub {
+  font-size: 14px;
+}
+
+body.touch .callout {
+  max-width: 92vw;
+  font-size: clamp(22px, 6vw, 40px);
+  white-space: normal;
+  text-align: center;
+  -webkit-text-stroke-width: 1px;
+}
+
+body.touch .weather {
+  padding: 2px 10px;
+  font-size: 11px;
+}
+
+body.touch .world-label {
+  max-width: 150px;
+  padding: 2px 8px;
+}
+
+body.touch .world-label b {
+  font-size: 11px;
+}
+
+body.touch .world-label small {
+  font-size: 9px;
+}
+
+body.touch .steep-badge {
+  top: 50px;
+  font-size: 11px;
+}
+
+/* Narrow screens (phones held upright): hearts and score shrink, the wave line drops below them. */
+@media (max-width: 600px) {
+  .score {
+    top: 8px;
+    right: 8px;
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+
+  .status {
+    top: 8px;
+    left: 8px;
+  }
+
+  .hearts {
+    gap: 1px;
+    font-size: 19px;
+  }
+
+  .heart.shield {
+    font-size: 15px;
+  }
+
+  .form {
+    font-size: 12px;
+  }
+
+  .top-center {
+    top: 40px;
+    gap: 4px;
+    max-width: 96vw;
+  }
+
+  .wave {
+    padding: 3px 12px;
+    font-size: 13px;
+  }
+
+  .steep-badge,
+  body.touch .steep-badge {
+    top: 38px;
+    right: 8px;
+  }
+
+
+  .boss-bar {
+    width: 90vw;
+  }
+}
+
+.damage-number.charm {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(160, 230, 255, 0.9));
+}

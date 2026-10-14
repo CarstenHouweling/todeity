@@ -3,6 +3,31 @@
 
 export const CHANGELOG = [
   {
+    version: '0.11.0',
+    date: '2026-10-14',
+    title: 'Raid bosses and a smarter hive',
+    changes: [
+      '🛡 Bosses raise shields: smash the tethered Shield Wards or hold the circles of light before the shield overloads, then strike while the boss is staggered',
+      '☀ Cataclysm: the later bosses blast the whole arena; only the circles of light are safe',
+      '🐝 The hive learns: bees flank you (wave 4), lunge together along marked lines (wave 7), fire synchronized volleys (wave 11) and lead their shots (wave 15)',
+      '🧠 New Steeping vow, Hive Mind: all of that from wave 2',
+      'Shrines appear less often and a Shrine of Chance takes one offering',
+      '📱 Phones: a one-line brew and charm counter instead of the icon rows, charm pickups float up from Tode instead of popups, and a compact top bar',
+    ],
+  },
+  {
+    version: '0.10.1',
+    date: '2026-10-14',
+    title: 'Fairer pacing',
+    changes: [
+      'One skill pick between waves at most: extra levels wait and come up a few seconds into the next wave',
+      'Levels cost more: about one level per wave',
+      'Golden Leaves come mostly from waves, bosses and victories, much less from score: the Pantry takes a dozen runs, not one',
+      'Co-op: each frog levels at about the solo pace (the leaves of the bigger swarm are shared out)',
+      'Co-op: bees are 30% tougher and bosses 80% tougher per extra frog (was 12% and 60%)',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-10-14',
     title: 'Steeping, keepsakes, charms and shrines',

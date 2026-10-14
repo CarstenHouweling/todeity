@@ -7,14 +7,14 @@ import { additive } from './Ultimates.js';
  * moment to use it. Like the shrines and lunar items of other roguelites, none of them is required.
  */
 export const SHRINES = {
-  chance: { icon: '🎲', name: 'Shrine of Chance', color: '#ffd36b', hint: 'Offer 1 ♥ for a charm (or nothing…)' },
+  chance: { icon: '🎲', name: 'Shrine of Chance', color: '#ffd36b', hint: 'Offer 1 ♥ for a charm (or nothing…), once' },
   bitter: { icon: '⛰️', name: 'Bitter Shrine', color: '#ff5a3d', hint: 'Anger the hive for a bonus Epic brew' },
   cursed: { icon: '🌑', name: 'Cursed Leaves', color: '#b07cff', hint: 'Great power, at a price' },
 };
 
 export const SHRINE_RADIUS = 38;
 export const SHRINE_HOLD = 0.9; // seconds to stand on a shrine to use it
-export const CHANCE_TRIES = 3; // a Shrine of Chance crumbles after this many offerings
+export const CHANCE_TRIES = 1; // offerings before a Shrine of Chance crumbles (one: bonuses shouldn't pile up)
 
 /** The shrine's model: a low stone dais Tode stands on, a circle that fills while he does, and its floating icon. */
 export function createShrine(scene, type, position) {

@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
-import { buildBee, buildNest } from './BeeModels.js';
+import { buildBee, buildNest, buildWard } from './BeeModels.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
@@ -53,6 +53,8 @@ export const ENEMY_TYPES = {
   },
   // A hive that keeps letting out bees until it is smashed (a side objective).
   nest: { name: 'Wild Hive', scale: 11, hp: 30, speed: 0, damage: 0, score: 150, knockback: 0, structure: true },
+  // A crystal that keeps a boss's shield up until it is smashed (a raid mechanic, see main.js).
+  ward: { name: 'Shield Ward', scale: 9, hp: 7, speed: 0, damage: 0, score: 100, knockback: 0, structure: true, ward: true },
   // Sage Mountain's boss: armoured, fast, and fond of charging.
   shogun: {
     name: 'Hornet Shogun',
@@ -245,7 +247,12 @@ export class Enemy {
     // Own materials per enemy, so a hit flash only lights up the one that got hit.
     this.materials = [];
     let model;
-    if (type.structure) {
+    if (type.ward) {
+      this.rig = buildWard(graphicsLevel);
+      model = this.rig.root;
+      model.scale.setScalar(type.scale / ENEMY_TYPES.drone.scale);
+      this.materials.push(...this.rig.materials);
+    } else if (type.structure) {
       this.rig = buildNest(graphicsLevel);
       model = this.rig.root;
       model.scale.setScalar(type.scale / ENEMY_TYPES.drone.scale);
@@ -441,6 +448,11 @@ export class Enemy {
       this.eliteRing.material.opacity = 0.45 + 0.3 * Math.sin(this.age * 6);
       this.eliteRing.rotation.z += delta;
     }
+    if (this.shieldBubble) {
+      this.shieldBubble.rotation.z += delta * 0.4;
+      this.shieldBubble.rotation.x = Math.sin(this.age * 0.7) * 0.3;
+      this.shieldBubble.children[0].material.opacity = 0.16 + 0.06 * Math.sin(this.age * 5);
+    }
     this.flashLeft = Math.max(0, this.flashLeft - delta);
     for (const material of this.materials) {
       const emissive = material.emissive.copy(material.userData.baseEmissive);
@@ -458,7 +470,36 @@ export class Enemy {
     }
   }
 
+  /** A boss's shield: a shimmering bubble while `on` (the boss takes no damage, see main.js). */
+  setShield(on) {
+    this.shielded = Boolean(on);
+    if (on && !this.shieldBubble) {
+      const size = Math.max(this.radius * 1.5, this.height * 0.75);
+      const bubble = new THREE.Group();
+      const shell = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 32, 20),
+        new THREE.MeshBasicMaterial({ color: '#7fd8ff', transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      const lattice = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(size * 1.01, 2),
+        new THREE.MeshBasicMaterial({ color: '#bff0ff', wireframe: true, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      bubble.add(shell, lattice);
+      bubble.position.z = this.height * 0.5;
+      this.shieldBubble = bubble;
+      this.group.add(bubble);
+    } else if (!on && this.shieldBubble) {
+      this.shieldBubble.removeFromParent();
+      for (const mesh of this.shieldBubble.children) {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+      }
+      this.shieldBubble = null;
+    }
+  }
+
   dispose() {
+    this.setShield(false);
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.model);
     this.group.removeFromParent();
