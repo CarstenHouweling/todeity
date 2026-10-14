@@ -164,7 +164,7 @@ export function drawShareCard(run, build, backdrop, url) {
   c.textAlign = 'right';
   c.fillStyle = 'rgba(233, 255, 217, 0.85)';
   c.font = `700 20px ${FONT}, ${EMOJI}`;
-  c.fillText(`${run.daily ? '📅 Daily Brew · ' : ''}Can you beat it? 🐸☕ ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`, WIDTH - 40, HEIGHT - 28);
+  c.fillText(`${run.daily ? '📅 Daily Brew · ' : ''}${run.steep ? `🔥 Steep ${run.steep} · ` : ''}Can you beat it? 🐸☕ ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`, WIDTH - 40, HEIGHT - 28);
   return canvas;
 }
 
@@ -172,12 +172,13 @@ export function drawShareCard(run, build, backdrop, url) {
 export function shareText(run, build, url) {
   const result = run.victory ? `banished Bee-zebub and became ${build.form}` : `reached wave ${run.wave} as ${build.form}`;
   const lines = [
-    `🐸☕ I ${result} in Todeity: Rise of the Tea God!${run.daily ? ' (📅 Daily Brew)' : ''}`,
+    `🐸☕ I ${result} in Todeity: Rise of the Tea God!${run.daily ? ' (📅 Daily Brew)' : ''}${run.steep ? ` (🔥 Steep ${run.steep})` : ''}`,
     `🏆 ${run.score.toLocaleString()} points · ⏱ ${formatTime(run.time)} · ⭐ Level ${run.level} · 🐝 ${run.kills} bees`,
   ];
   if (build.ultimate) lines.push(`Ultimate: ${build.ultimate.icon} ${build.ultimate.name}`);
   if (build.skills.length) lines.push(`Skills: ${build.skills.map((s) => s.icon).join('')}`);
   if (build.brews.length) lines.push(`Brews: ${build.brews.map((b) => b.icon).join('')}`);
+  if (build.charms?.length) lines.push(`Charms: ${build.charms.map((c) => `${c.icon}${c.count > 1 ? `×${c.count}` : ''}`).join(' ')}`);
   lines.push(`Can you beat me? ${url}`);
   return lines.join('\n');
 }

@@ -1855,3 +1855,276 @@ body.touch .owned {
   max-width: min(640px, 92vw);
   margin: 12px auto 4px;
 }
+
+/* Short screens (phones in landscape): shrink menus, popups and HUD widgets, and let menus scroll.
+   World-anchored labels and the objective arrows are placed in screen pixels, so they are left unscaled. */
+@media (max-height: 500px) {
+  .menu {
+    overflow-y: auto;
+    justify-content: safe center;
+  }
+
+  .menu.title-screen {
+    padding-top: 8px;
+  }
+
+  .menu > *,
+  .modal > .panel {
+    zoom: 0.68;
+  }
+
+  /* The menu scrolls as a whole; vh lengths inside a zoomed element shrink with it. */
+  .menu .panel {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .modal > .panel {
+    max-height: calc(92vh / 0.68);
+  }
+
+  .share-card {
+    max-height: calc(50vh / 0.68);
+  }
+
+  /* Pause: the buttons first, the build list below them. */
+  .pause .panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pause .build {
+    order: 1;
+  }
+
+  .score,
+  .status,
+  .top-center,
+  .owned,
+  .combo,
+  .callout,
+  .banner,
+  .tip,
+  .toasts,
+  .clash,
+  .corner-buttons,
+  .xp-bar,
+  body.touch .ability-bar {
+    zoom: 0.7;
+  }
+}
+
+/* "Press Space" means nothing on a touch screen. */
+body.touch .menu .prompt {
+  display: none;
+}
+
+/* --- Steeping, keepsakes, charms and shrines (v0.10) -------------------- */
+.inventory {
+  position: absolute;
+  left: 16px;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 30vw;
+}
+
+.inventory .owned {
+  position: static;
+  max-width: none;
+}
+
+.owned.charms:empty {
+  display: none;
+}
+
+/* Charms: a round slot in the rarity colour, the count in the corner. */
+.owned-item.charm {
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  border-width: 2px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--blend) 60%, transparent);
+}
+
+.owned-item.charm .owned-level {
+  background: var(--blend);
+  color: #1a1a1a;
+}
+
+.steep-badge {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(60, 10, 0, 0.6);
+  border: 1px solid #ff7a2f;
+  color: #ffb27a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.toast.charm-toast {
+  border-color: #9fe8ff;
+  box-shadow: 0 0 16px rgba(140, 220, 255, 0.5);
+}
+
+.toast .toast-keepsake {
+  margin-top: 4px;
+  color: #d9b8ff;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.boss-card-taunt {
+  margin-top: 10px;
+  font-size: clamp(15px, 2.2vw, 21px);
+  font-weight: 700;
+  color: #ffe9c4;
+  text-shadow: 0 2px 0 #000, 0 0 10px rgba(255, 60, 0, 0.6);
+  animation: boss-card-in 0.8s 0.9s ease-out backwards;
+}
+
+/* A label over a shrine. */
+.world-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 220px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--label);
+  background: rgba(10, 10, 20, 0.7);
+  text-align: center;
+  white-space: normal;
+}
+
+.world-label b {
+  font-size: 13px;
+  color: var(--label);
+  white-space: nowrap;
+}
+
+.world-label small {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.keepsakes,
+.steeping {
+  cursor: default;
+}
+
+.keepsake-list,
+.vows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.keepsake,
+.vow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.keepsake:hover:not(:disabled),
+.vow:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.keepsake.chosen {
+  border-color: #c9a2ff;
+  background: rgba(160, 110, 255, 0.22);
+}
+
+.keepsake.locked {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.keepsake-icon,
+.vow-icon {
+  font-size: 28px;
+}
+
+.keepsake-text,
+.vow-text {
+  flex: 1;
+}
+
+.keepsake-text b,
+.vow-text b {
+  display: block;
+  font-size: 15px;
+}
+
+.keepsake-text small,
+.vow-text small {
+  display: block;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.keepsake-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #c9a2ff;
+  color: #20103a;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.vow.active {
+  border-color: #ff7a2f;
+  background: rgba(255, 110, 40, 0.18);
+}
+
+.vow .pips i.on {
+  background: #ff7a2f;
+}
+
+.vow-heat {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffb27a;
+}
+
+.steep-total {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffb27a;
+}
+
+.scores .steep {
+  color: #ffb27a;
+  font-weight: 800;
+}
+
+@media (max-height: 500px) {
+  .inventory,
+  .steep-badge {
+    zoom: 0.7;
+  }
+
+  .inventory .owned {
+    zoom: 1;
+  }
+}

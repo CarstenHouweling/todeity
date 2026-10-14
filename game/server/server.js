@@ -2,7 +2,7 @@
 // Runs on any Node 18+ host (Azure App Service, a VM, locally). Its only dependency is `ws`.
 //
 //   GET  /api/scores?board=all|daily|depth|speed&date=YYYY-MM-DD&limit=10
-//   POST /api/scores  { name, score, wave, level, tier, kills, time, clear, victory, daily }
+//   POST /api/scores  { name, score, wave, level, tier, kills, time, clear, victory, daily, steep }
 //
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
@@ -99,10 +99,11 @@ function parseEntry(body) {
     time: clampInt(body.time, 0, 86_400),
     victory: Boolean(body.victory),
     clear: clampInt(body.clear, 0, 86_400), // seconds to beat Bee-zebub (0: not beaten)
+    steep: clampInt(body.steep, 0, 40), // Steeping vows taken (they multiply the score)
     at: Date.now(),
   };
   // A loose sanity check: scores grow with time and kills, not out of nowhere.
-  const plausible = entry.score <= 2_000 + entry.kills * 200 + entry.wave * 2_000;
+  const plausible = entry.score <= (2_000 + entry.kills * 200 + entry.wave * 2_000) * (1 + 0.12 * entry.steep);
   return plausible ? entry : null;
 }
 

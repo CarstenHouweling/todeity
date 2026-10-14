@@ -206,3 +206,62 @@ export function play(name) {
   lastPlayed.set(name, now);
   SOUNDS[name]?.();
 }
+
+// --- Voices ---------------------------------------------------------------------
+// Characters "talk" in a babble of short synthesized syllables while their line is typed out, each pitched to the
+// speaker: no recorded voices needed.
+let voiceNodes = [];
+
+/** Stops every babble that is still scheduled (a menu closed before the line was done). */
+export function hush() {
+  if (!context) return;
+  for (const node of voiceNodes) {
+    try {
+      node.stop();
+    } catch {
+      // Already stopped.
+    }
+  }
+  voiceNodes = [];
+}
+
+/**
+ * Babbles `text` in a `voice` ({ pitch, type, rate: syllables per second, wobble: pitch variation, loud }),
+ * starting after `delay` seconds and lasting as long as typing it out at `charsPerSecond`.
+ */
+export function babble(voice, text, delay = 0, charsPerSecond = 45) {
+  if (!context || !settings.sfx || context.state !== 'running' || !voice || !text) return;
+  const duration = Math.min(4, text.length / charsPerSecond);
+  const count = Math.max(2, Math.round(duration * voice.rate));
+  const step = duration / count;
+  const start = context.currentTime + delay;
+  const shouting = voice.loud && text === text.toUpperCase();
+  const volume = (voice.loud ? 0.09 : 0.08) * (shouting ? 1.3 : 1);
+  voiceNodes = voiceNodes.filter((node) => node.endsAt > context.currentTime);
+  for (let i = 0; i < count; i++) {
+    if (Math.random() < 0.12) continue; // little pauses between "words"
+    const at = start + i * step + Math.random() * step * 0.2;
+    const length = step * (0.55 + Math.random() * 0.3);
+    // Questions go up at the end, everything else drops a little.
+    const ending = i >= count - 2 ? (text.trim().endsWith('?') ? 1.25 : 0.85) : 1;
+    const pitch = voice.pitch * ending * (1 + (Math.random() * 2 - 1) * voice.wobble);
+    const oscillator = context.createOscillator();
+    oscillator.type = voice.type;
+    oscillator.frequency.setValueAtTime(pitch, at);
+    oscillator.frequency.exponentialRampToValueAtTime(pitch * (0.9 + Math.random() * 0.25), at + length);
+    // A band-pass "mouth" that moves between vowel-like formants.
+    const formant = context.createBiquadFilter();
+    formant.type = 'bandpass';
+    formant.Q.value = 1.2;
+    formant.frequency.setValueAtTime(pitch * (1.5 + Math.random() * 3), at);
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(volume, at + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    oscillator.connect(formant).connect(gain).connect(sfxBus);
+    oscillator.start(at);
+    oscillator.stop(at + length + 0.02);
+    oscillator.endsAt = at + length + 0.02;
+    voiceNodes.push(oscillator);
+  }
+}

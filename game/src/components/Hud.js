@@ -8,6 +8,9 @@ import { ACHIEVEMENTS, ACHIEVEMENT_REWARD, isUnlocked } from './Achievements.js'
 import { PANTRY, meta, nextCost, pantryLevel } from './Meta.js';
 import { CHANGELOG, VERSION } from './Changelog.js';
 import { canFullscreen, isFullscreen } from './Fullscreen.js';
+import { KEEPSAKES, currentKeepsake, isKeepsakeUnlocked, unlockHint } from './Keepsakes.js';
+import { STEEP_MAX, VOWS, steepBonus, steepLevel, vowRank } from './Steeping.js';
+import { CHARM_RARITIES } from './Charms.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
@@ -56,6 +59,8 @@ export class Hud {
     this.camera = camera;
     this.projected = new THREE.Vector3();
     this.onAction = () => {};
+    this.onSpeak = () => {}; // (voice, text, delay): a character's line starts being typed out
+    this.onHush = () => {}; // a menu with dialogue closed
 
     this.root = element('hud', document.body);
     this.worldLayer = element('world-layer', this.root);
@@ -120,7 +125,12 @@ export class Hud {
     this.slots.ultimate.slot.hidden = true;
     for (let i = 0; i < MAX_SKILLS; i++) this.slots[`skill${i}`].slot.hidden = true;
 
-    this.owned = element('owned', this.root);
+    // Bottom left: charms (they stack without limit, shown with a count) above the brews.
+    this.inventory = element('inventory', this.root);
+    this.charms = element('owned charms', this.inventory);
+    this.owned = element('owned', this.inventory);
+    this.steep = element('steep-badge', this.root);
+    this.steep.hidden = true;
 
     this.buttons = element('corner-buttons', document.body);
     this.photoButton = element('round-button', this.buttons, 'button');
@@ -313,6 +323,26 @@ export class Hud {
     );
   }
 
+  /** Charms gathered this run: [{ icon, name, count, rarity, text }]. */
+  setCharms(list) {
+    this.charms.replaceChildren(
+      ...list.map(({ icon, name, count, rarity, text }) => {
+        const item = element('owned-item charm', null);
+        item.title = `${name}: ${text}`;
+        item.textContent = icon;
+        item.style.setProperty('--blend', CHARM_RARITIES[rarity].color);
+        if (count > 1) element('owned-level', item, 'span').textContent = count;
+        return item;
+      })
+    );
+  }
+
+  /** The run's Steep level next to the score (hidden at 0). */
+  setSteep(steep) {
+    this.steep.hidden = !steep;
+    this.steep.textContent = `🔥 Steep ${steep}`;
+  }
+
   showBanner(title, subtitle = '', duration = 1.6, className = '') {
     this.banner.className = `banner ${className}`;
     this.banner.innerHTML = `<div class="banner-title">${title}</div><div class="banner-sub">${subtitle}</div>`;
@@ -345,6 +375,23 @@ export class Hud {
 
   removeNameTag({ tag }) {
     tag.remove();
+  }
+
+  /** A label floating over a spot in the world (shrines). */
+  attachWorldLabel(html, color) {
+    const label = element('world-label', this.worldLayer);
+    label.innerHTML = html;
+    label.style.setProperty('--label', color);
+    return label;
+  }
+
+  updateWorldLabel(label, position, height, visible = true) {
+    const shown = visible && this.place(label, position, height);
+    setStyle(label, 'display', shown ? '' : 'none');
+  }
+
+  setWorldLabel(label, html) {
+    if (label.innerHTML !== html) label.innerHTML = html;
   }
 
   /**
@@ -391,11 +438,29 @@ export class Hud {
     this.tip.classList.add('show');
   }
 
-  showAchievement({ icon, name, text }) {
-    const toast = element('toast', this.toasts);
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${ACHIEVEMENT_REWARD} 🍃</small><b>${name}</b><em>${text}</em></span>`;
-    setTimeout(() => toast.classList.add('leaving'), 4200);
-    setTimeout(() => toast.remove(), 4800);
+  /** `keepsake`: the keepsake this achievement unlocks, if any. */
+  showAchievement({ icon, name, text }, keepsake = null) {
+    const unlocked = keepsake ? `<em class="toast-keepsake">🎒 New keepsake: ${keepsake.icon} ${keepsake.name}</em>` : '';
+    this.toast(`<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${ACHIEVEMENT_REWARD} 🍃</small><b>${name}</b><em>${text}</em>${unlocked}</span>`);
+  }
+
+  /** A charm picked up: its icon, name and what the whole stack does now. */
+  showCharm({ icon, name, rarity }, count, text) {
+    const color = CHARM_RARITIES[rarity].color;
+    this.toast(
+      `<span class="toast-icon">${icon}</span><span><small style="color:${color}">${CHARM_RARITIES[rarity].name} charm${count > 1 ? ` · ×${count}` : ''}</small><b>${name}</b><em>${text}</em></span>`,
+      'charm-toast',
+      2.6
+    );
+  }
+
+  toast(html, className = '', seconds = 4.2) {
+    // Keep the stack short: a burst of charms shouldn't bury the screen.
+    while (this.toasts.children.length >= 4) this.toasts.firstChild.remove();
+    const toast = element(`toast ${className}`, this.toasts);
+    toast.innerHTML = html;
+    setTimeout(() => toast.classList.add('leaving'), seconds * 1000);
+    setTimeout(() => toast.remove(), seconds * 1000 + 600);
   }
 
   /** `pending`: levels whose skill pick is still to come (co-op saves them for the end of the wave). */
@@ -431,10 +496,11 @@ export class Hud {
     this.callout.classList.add('show');
   }
 
-  /** Letterboxed name card for a boss entrance. */
-  showBossIntro(name, epithet) {
+  /** Letterboxed name card for a boss entrance; `taunt`: what the boss says to Tode. */
+  showBossIntro(name, epithet, taunt = '') {
+    const line = taunt ? `<div class="boss-card-taunt">“${escapeHtml(taunt)}”</div>` : '';
     this.bossIntro.innerHTML = `<div class="letterbox top"></div><div class="letterbox bottom"></div>
-      <div class="boss-card"><div class="boss-card-name">${name}</div><div class="boss-card-epithet">${epithet}</div></div>`;
+      <div class="boss-card"><div class="boss-card-name">${name}</div><div class="boss-card-epithet">${epithet}</div>${line}</div>`;
     this.bossIntro.hidden = false;
     this.bossIntro.classList.remove('leaving');
   }
@@ -493,6 +559,8 @@ export class Hud {
 
   /** `clickAction` fires when the player clicks anywhere that isn't a button. */
   showMenu(className, html, clickAction = null) {
+    clearInterval(this.typing);
+    this.onHush();
     this.menuName = className.split(' ')[0];
     this.menu.className = `menu ${className}`;
     this.menu.innerHTML = html;
@@ -501,6 +569,8 @@ export class Hud {
   }
 
   hideMenu() {
+    clearInterval(this.typing);
+    this.onHush();
     this.menuName = null;
     this.menu.hidden = true;
     this.menu.innerHTML = '';
@@ -606,6 +676,8 @@ ${
           <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
           <button class="menu-button" data-action="pantry">🍃 Tode's Pantry <small>${meta.leaves} leaves</small></button>
+          <button class="menu-button" data-action="keepsakes">🎒 Keepsake <small>${currentKeepsake().icon} ${currentKeepsake().name}</small></button>
+          ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()} · ×${steepBonus(steepLevel()).toFixed(2)}` : 'off'}</small></button>` : ''}
           ${this.fullscreenButton()}
           <button class="menu-button" data-action="changelog">📜 What's new</button>
         </div>
@@ -648,6 +720,62 @@ ${
     );
   }
 
+  /** Pick the keepsake Tode carries into his runs; locked ones say how to unlock them. */
+  showKeepsakes() {
+    const current = currentKeepsake();
+    const items = KEEPSAKES.map((keepsake) => {
+      const open = isKeepsakeUnlocked(keepsake);
+      const chosen = keepsake === current;
+      return `
+        <button class="keepsake ${open ? '' : 'locked'} ${chosen ? 'chosen' : ''}" ${open ? `data-action="keepsake" data-id="${keepsake.id}"` : 'disabled'}>
+          <span class="keepsake-icon">${open ? keepsake.icon : '🔒'}</span>
+          <span class="keepsake-text"><b>${open ? keepsake.name : '???'}</b><small>${open ? keepsake.text : `Unlock: ${unlockHint(keepsake)}`}</small></span>
+          ${chosen ? '<span class="keepsake-tag">Carried</span>' : ''}
+        </button>`;
+    }).join('');
+    const count = KEEPSAKES.filter(isKeepsakeUnlocked).length;
+    this.showMenu(
+      'keepsakes',
+      `
+      <div class="panel">
+        <h2>🎒 Keepsakes</h2>
+        <p class="sub">Tode carries one keepsake into every run. Achievements unlock new ones (${count}/${KEEPSAKES.length}).</p>
+        <div class="keepsake-list">${items}</div>
+        <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
+      </div>`
+    );
+  }
+
+  /** Steeping: vows that make runs harder for more score and Golden Leaves. */
+  showSteeping() {
+    const steep = steepLevel();
+    const rows = VOWS.map((vow) => {
+      const rank = vowRank(vow.id);
+      const pips = Array.from({ length: vow.ranks }, (_, i) => `<i class="${i < rank ? 'on' : ''}"></i>`).join('');
+      return `
+        <button class="vow ${rank ? 'active' : ''}" data-action="vow" data-id="${vow.id}">
+          <span class="vow-icon">${vow.icon}</span>
+          <span class="vow-text"><b>${vow.name}</b><small>${vow.text(Math.max(1, rank))}</small><span class="pips">${pips}</span></span>
+          <span class="vow-heat">🔥${vow.heat}</span>
+        </button>`;
+    }).join('');
+    this.showMenu(
+      'steeping',
+      `
+      <div class="panel">
+        <h2>🔥 Steeping</h2>
+        <p class="sub">Take vows to steep your runs stronger. Every 🔥 adds 12% to your score and Golden Leaves.
+        Solo runs only: the Daily Brew and co-op are never steeped.</p>
+        <p class="steep-total">Steep <b>${steep}</b> / ${STEEP_MAX} · score and leaves ×${steepBonus(steep).toFixed(2)}</p>
+        <div class="vows">${rows}</div>
+        <div class="menu-buttons">
+          <button class="menu-button" data-action="vows-clear">Clear vows</button>
+          <button class="menu-button primary" data-action="title">Done</button>
+        </div>
+      </div>`
+    );
+  }
+
   card({ action, index, brew, rarity, level, text, kind: kindOverride }) {
     const blends = brew.blends ?? (brew.blend ? [brew.blend] : []);
     const colors = blends.map((id) => BLENDS[id].color);
@@ -679,12 +807,13 @@ ${
 
   /** Spirit portraits with their lines, typed out like a conversation. */
   dialogue(lines) {
+    this.voices = Object.fromEntries(lines.map(({ spirit }) => [spirit.name, spirit.voice]));
     return `<div class="dialogue">${lines
       .map(
         ({ spirit, line }, i) => `
         <div class="speech" style="--spirit:${spirit.color};animation-delay:${i * 0.9}s">
           <span class="portrait">${spirit.portrait}</span>
-          <span class="speech-text"><b>${spirit.name}</b> <small>${spirit.title}</small><span class="line" data-line="${line.replace(/"/g, '&quot;')}" data-delay="${i * 0.9}"></span></span>
+          <span class="speech-text"><b>${spirit.name}</b> <small>${spirit.title}</small><span class="line" data-line="${line.replace(/"/g, '&quot;')}" data-delay="${i * 0.9}" data-voice="${spirit.name}"></span></span>
         </div>`
       )
       .join('')}</div>`;
@@ -693,6 +822,7 @@ ${
   typeDialogue() {
     clearInterval(this.typing);
     const lines = [...this.menu.querySelectorAll('.line')];
+    for (const node of lines) this.onSpeak(this.voices?.[node.dataset.voice], node.dataset.line, Number(node.dataset.delay));
     const started = performance.now();
     this.typing = setInterval(() => {
       let done = true;
@@ -707,14 +837,16 @@ ${
     }, 30);
   }
 
-  showBrews(wave, offers, rerolls) {
+  /** `memory`: what the spirits remember (see Spirits.js); `bonus`: the Bitter Shrine's extra Epic pick. */
+  showBrews(wave, offers, rerolls, memory = {}, bonus = false) {
     const cards = offers
       .map((offer, index) => this.card({ action: 'brew', index, ...offer, text: describe(offer) }))
       .join('');
-    const reroll = rerolls > 0 ? `<button class="menu-button" data-action="reroll">🔄 Reroll (${rerolls})</button>` : '';
+    const reroll = rerolls > 0 && !bonus ? `<button class="menu-button" data-action="reroll">🔄 Reroll (${rerolls})</button>` : '';
+    const title = bonus ? '⛰️ The Bitter Shrine rewards you' : `Wave ${wave} cleared!`;
     this.showMenu(
       'powerups',
-      `<h2>Wave ${wave} cleared!</h2>${this.dialogue(brewDialogue(offers))}<div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
+      `<h2>${title}</h2>${this.dialogue(brewDialogue(offers, memory))}<div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
     );
     this.typeDialogue();
   }
@@ -745,7 +877,7 @@ ${
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, autoCast, coop }) {
+  showPause({ build, ultimate, form, sound, autoCast, coop, keepsake, steep, calmFx }) {
     const brews = build.length
       ? build
           .map(
@@ -761,13 +893,14 @@ ${
       <div class="panel">
         <h2>${coop ? 'Menu' : 'Paused'}</h2>
         ${coop ? '<p class="sub">The run keeps going for your teammates while this menu is open.</p>' : ''}
-        <p class="sub">${form}</p>
+        <p class="sub">${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
         ${ult}
         <div class="build">${brews}</div>
         <div class="menu-buttons">
           <button class="menu-button primary" data-action="resume">▶ Resume</button>
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
+          <button class="menu-button" data-action="toggle-calm">✨ Effects: ${calmFx ? 'calm' : 'full'}</button>
           ${document.body.classList.contains('touch') ? '' : `<button class="menu-button" data-action="toggle-autocast">🤖 Skills: ${autoCast ? 'auto-cast' : 'manual (Q/E/F)'}</button>`}
           ${this.fullscreenButton()}
           <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>
@@ -796,7 +929,7 @@ ${
         (entry, i) => `
         <tr class="${i + 1 === highlight ? 'me' : ''}">
           <td>${i + 1}</td>
-          <td class="name">${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}</td>
+          <td class="name">${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
           ${columns.map(([, value], c) => `<td class="${c === 2 ? 'form-cell' : ''}">${value(entry)}</td>`).join('')}
         </tr>`
       )
@@ -822,8 +955,8 @@ ${
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build }) {
-    const items = [build.ultimate, ...build.skills, ...build.brews].filter(Boolean);
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep }) {
+    const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
           .map(
@@ -836,7 +969,7 @@ ${
       `game-over ${victory ? 'victory' : ''}`,
       `
       <h1>${victory ? 'Victory!' : 'Game Over'}</h1>
-      <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}</p>
+      <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}${steep ? ` <small>🔥 Steep ${steep}</small>` : ''}</p>
       <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated · ${formatTime(time)}</p>
       ${clear ? `<p class="stats">⏱ Bee-zebub banished in <b>${formatTime(clear)}</b></p>` : ''}
       ${gathered}

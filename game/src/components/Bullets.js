@@ -3,8 +3,10 @@ import * as THREE from 'three';
 const HEIGHT = 10;
 
 /**
- * Enemy bullets for the bullet hell: hundreds of glowing orbs drawn with two instanced meshes (a white-hot core
- * and a coloured halo), so a screen full of bullets costs two draw calls.
+ * Enemy bullets for the bullet hell: hundreds of glowing orbs drawn with three instanced meshes (a dark rim, a
+ * coloured halo and a white-hot core), so a screen full of bullets costs three draw calls.
+ * Readability: the dark rim keeps bullets visible on bright floors and in bloom, and bullets draw after every
+ * other transparent effect, so Tode's own sparkles never cover them.
  * A bullet: { x, y, dx, dy, speed, radius, damage, range, traveled, color, dead }.
  */
 export class Bullets {
@@ -18,7 +20,16 @@ export class Bullets {
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
       max
     );
-    for (const mesh of [this.core, this.halo]) {
+    this.rim = new THREE.InstancedMesh(
+      sphere,
+      // Back faces only: the white core (in front of them) stays visible, the rim shows around it.
+      new THREE.MeshBasicMaterial({ color: '#12001c', transparent: true, opacity: 0.5, depthWrite: false, fog: false, side: THREE.BackSide }),
+      max
+    );
+    this.rim.renderOrder = 20;
+    this.halo.renderOrder = 21;
+    this.core.renderOrder = 22;
+    for (const mesh of [this.rim, this.core, this.halo]) {
       mesh.count = 0;
       mesh.frustumCulled = false;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -92,12 +103,17 @@ export class Bullets {
       scale.set(bullet.radius * bullet.stretch * 0.75, bullet.radius * 0.6, bullet.radius * 0.6);
       matrix.compose(position, rotation, scale);
       this.core.setMatrixAt(i, matrix);
+      // The rim sticks out past the halo: a dark outline around the glow.
+      scale.set(bullet.radius * bullet.stretch * 1.7 * pulse, bullet.radius * 1.5 * pulse, bullet.radius * 1.5 * pulse);
+      matrix.compose(position, rotation, scale);
+      this.rim.setMatrixAt(i, matrix);
       scale.set(bullet.radius * bullet.stretch * 1.5 * pulse, bullet.radius * 1.3 * pulse, bullet.radius * 1.3 * pulse);
       matrix.compose(position, rotation, scale);
       this.halo.setMatrixAt(i, matrix);
       this.halo.setColorAt(i, bullet.color);
     });
-    this.core.count = this.halo.count = this.list.length;
+    this.core.count = this.halo.count = this.rim.count = this.list.length;
+    this.rim.instanceMatrix.needsUpdate = true;
     this.core.instanceMatrix.needsUpdate = true;
     this.halo.instanceMatrix.needsUpdate = true;
     if (this.halo.instanceColor) this.halo.instanceColor.needsUpdate = true;

@@ -27,6 +27,7 @@ export class Particles {
     this.position = new THREE.Vector3();
     this.scale = new THREE.Vector3();
     this.color = new THREE.Color();
+    this.density = 1; // fewer particles with calm effects (pause menu)
   }
 
   /**
@@ -38,6 +39,7 @@ export class Particles {
     position,
     { count = 8, colors = ['#ffffff'], speed = 80, up = 60, size = 1.6, life = 0.5, height = 8, ring = 0, gravity = GRAVITY, glow = false }
   ) {
+    count = this.density < 1 ? Math.round(count * this.density + Math.random() * 0.5) : count;
     for (let i = 0; i < count && this.particles.length < this.max; i++) {
       const angle = Math.random() * Math.PI * 2;
       const outward = speed * (0.4 + Math.random() * 0.6);

@@ -148,6 +148,8 @@ export class PostFX {
 
   /** A brief burst of extra bloom / warp / aberration that fades out. */
   pulse({ bloom = 0, warp = 0, aberration = 0 }) {
+    // Calm effects (pause menu): softer spikes, so the screen stays readable.
+    if (this.calm) [bloom, warp, aberration] = [bloom * 0.4, warp * 0.3, aberration * 0.3];
     this.spike.bloom = Math.max(this.spike.bloom, bloom);
     this.spike.warp = Math.max(this.spike.warp, warp);
     this.spike.aberration = Math.max(this.spike.aberration, aberration);
@@ -155,12 +157,14 @@ export class PostFX {
 
   /** Breaks the screen into shards for a moment, with an inverted-colour flash: reality itself cracks. */
   shatter(amount = 1, invert = 0.8) {
+    if (this.calm) [amount, invert] = [amount * 0.5, invert * 0.4];
     this.shatterAmount = Math.max(this.shatterAmount, amount);
     this.invertAmount = Math.max(this.invertAmount, invert);
   }
 
   flash(color = 0xffffff, amount = 0.8) {
     this.reality.uniforms.flashColor.value.set(color);
+    if (this.calm) amount *= 0.5;
     this.flashAmount = Math.max(this.flashAmount, amount);
   }
 

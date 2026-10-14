@@ -10,9 +10,11 @@ export const BASE_STATS = {
   maxHp: 5,
   moveSpeed: 170,
   damageMultiplier: 1,
-  critChance: 0.05, // critical hits deal double damage
+  critChance: 0.05,
+  critMultiplier: 2, // critical hits deal double damage
   magnet: 75, // range at which tea leaves fly to Tode
   leafValue: 1,
+  swarmScale: 1, // bees per wave (the Swarm Horn curse)
 
   // Spit (left mouse)
   spitDamage: 1,

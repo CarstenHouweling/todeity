@@ -25,6 +25,10 @@ const defaults = () => ({
   eliteKills: 0,
   achievements: [],
   seenStory: false,
+  // What the spirits and bosses remember (see Spirits.js).
+  lastRun: null, // { wave, killer, tier, victory, steep }
+  bosses: {}, // boss kind → { met, beaten, won } (won: times it ended a run)
+  blendPicks: {}, // blend → brews picked from it, ever
 });
 
 function load() {
@@ -80,11 +84,34 @@ const LINES = [
   'The lily pads whisper of a frog who once became a god. Tode likes the sound of that.',
 ];
 
+// What Tode mutters about the boss that ended his run, the first and the later times.
+const BOSS_DEFEATS = {
+  queen: ['So there IS a Queen. And she has a crown. Tode wants that crown.', 'Queen Buzzbelle again. Tode is starting to recognise her laugh.'],
+  shogun: ["The Hornet Shogun's blade was faster than Tode's tongue. For now.", 'Tode practises his dodge in the mirror. The Shogun will not cut him again.'],
+  seraph: ['The Seraph Queen shone so bright that Tode forgot to dodge.', 'Next time, Tode decides, he will bring sunglasses. Frog-sized ones.'],
+  empress: ['The Empress looked down at Tode like he was a stain on her throne.', "The Empress's spiral haunts Tode's dreams. Left, then right, then left…"],
+  beezebub: ['Bee-zebub laughed as Tode fell. Tode does not like that laugh.', 'The Underworld is hot, Bee-zebub is cruel, and Tode is coming back.'],
+};
+
+/** Records what the spirits and bosses will remember about this run. */
+export function rememberRun({ wave, killer, tier, victory, steep }) {
+  meta.lastRun = { wave, killer, tier, victory, steep };
+  if (killer && killer !== 'swarm') boss(killer).won++;
+}
+
+/** Per-boss memory: { met, beaten, won }. */
+export function boss(kind) {
+  meta.bosses ??= {};
+  meta.bosses[kind] ??= { met: 0, beaten: 0, won: 0 };
+  return meta.bosses[kind];
+}
+
 /** Tode's reflection after a run: milestones first, then the next line of the story. */
-export function runLine({ wave, victory, firstBossKill, reachedGod }) {
+export function runLine({ wave, victory, firstBossKill, reachedGod, killer }) {
   if (victory) return 'Bee-zebub is banished and the hive is silent. Tode finally finishes his tea. It is, at last, perfectly steeped. ☕';
   if (reachedGod) return 'For a moment Tode was a god, and the garden bent around him. He wants that feeling back.';
   if (firstBossKill) return 'The Queen fell, but the hive did not. There is an Empress beyond the hedge…';
-  if (wave === 5) return 'So there IS a Queen. And she has a crown. Tode wants that crown.';
+  const lines = BOSS_DEFEATS[killer];
+  if (lines) return lines[(meta.bosses?.[killer]?.won ?? 1) > 1 ? 1 : 0];
   return LINES[(meta.runs - 1) % LINES.length];
 }

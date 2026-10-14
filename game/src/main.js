@@ -11,17 +11,17 @@ import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TIL
 import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
-import { BLENDS, brewById, describe, rollBrews } from './components/PowerUps.js';
+import { BLENDS, CURSES, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
-import { muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
+import { babble, hush, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
 import { PostFX } from './components/PostFX.js';
 import { Effects } from './components/Effects.js';
 import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ultimates.js';
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
-import { buy, leavesForRun, meta, pantryLevel, runLine, saveMeta } from './components/Meta.js';
+import { boss as bossMemory, buy, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta } from './components/Meta.js';
 import { SKILL_KEYS, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { unlock } from './components/Achievements.js';
@@ -36,6 +36,11 @@ import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
 import { applyRenderer } from './components/Graphics.js';
+import { cycleVow, clearVows, runVows, steepBonus, steepLevel } from './components/Steeping.js';
+import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
+import { chance, charmById, CharmDrops, CHARM_RARITIES, rollCharm } from './components/Charms.js';
+import { CHANCE_TRIES, createShrine, disposeShrine, SHRINE_HOLD, SHRINE_RADIUS, SHRINES, updateShrine } from './components/Shrines.js';
+import { BOSS_VOICE, bossTaunt } from './components/Spirits.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
 THREE.Cache.enabled = true;
@@ -289,7 +294,16 @@ let rerolls = 0;
 let luck = 0;
 let endless = false;
 let autoPause = true;
-const settings = { autoCast: true, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+const settings = { autoCast: true, calmFx: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+
+let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
+let steep = 0; // their Steep level: more score and Golden Leaves
+const vow = (id) => vows[id] ?? 0;
+let keepsake = null; // what Tode carries this run (see Keepsakes.js)
+let leafBonus = 1; // Golden Leaves multiplier (the Golden Leaf keepsake)
+let fullGaugeStart = false; // the Tiny Crown: the ultimate starts charged
+let bonusPicks = 0; // extra Epic brew picks promised by a Bitter Shrine
+let firstOffer = true; // at the run's first offer the spirits talk about earlier runs
 
 let timeAlive = 0;
 let kills = 0;
@@ -349,7 +363,7 @@ function tip(id) {
 function achieve(id) {
   const achievement = unlock(id);
   if (!achievement) return;
-  hud.showAchievement(achievement);
+  hud.showAchievement(achievement, keepsakeFor(id));
   play('legendary');
 }
 
@@ -374,7 +388,7 @@ function safeStorage(op, key, value) {
 
 function updateScore() {
   // In co-op the host keeps the team's score.
-  score = isGuest() ? coopScore : timeAlive * SCORE_PER_SECOND + points;
+  score = isGuest() ? coopScore : (timeAlive * SCORE_PER_SECOND + points) * steepBonus(steep);
   hud.setScore(Math.floor(score), Math.max(bestScore, Math.floor(score)), timeAlive);
 }
 
@@ -662,8 +676,8 @@ function farthestCorner() {
 }
 
 function rollElite(kind) {
-  if (ENEMY_TYPES_BOSS.has(kind) || kind === 'nest' || wave < ELITE_FROM_WAVE) return null;
-  if (Math.random() > (0.04 + wave * 0.009) * (waveMods.has('elites') ? 3 : 1)) return null;
+  if (ENEMY_TYPES_BOSS.has(kind) || kind === 'nest' || wave < (vow('elite') ? 3 : ELITE_FROM_WAVE)) return null;
+  if (Math.random() > (0.04 + wave * 0.009) * (waveMods.has('elites') ? 3 : 1) * (vow('elite') ? 2 : 1)) return null;
   const mods = Object.keys(ELITE_MODS);
   return mods[Math.floor(Math.random() * mods.length)];
 }
@@ -674,6 +688,7 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   enemy.netId = nextNetId++;
   // More frogs, mightier bosses.
   if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.6 * (coop.size - 1)));
+  if (enemy.type.boss && vow('royal')) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.3 * vow('royal')));
   let spot = at ?? freeCorner(enemy.radius);
   // A requested spot can be blocked (a huge boss at a corner, a summon inside a tree): step toward the middle.
   if (at) {
@@ -710,8 +725,9 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
   if (!fromTeammate && player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
   const crit = !fromTeammate && source !== 'burn' && source !== 'ultimate' && Math.random() < player.stats.critChance;
-  if (crit) damage *= 2;
+  if (crit) damage *= player.stats.critMultiplier;
   damage = Math.max(1, Math.round(damage));
+  const procs = !fromTeammate && charmCounts.size > 0 && PROC_SOURCES.has(source) && procScale > 0.15;
 
   if (isGuest()) {
     net.queue('host', { k: 'hit', id: enemy.netId, dm: damage, kx: direction ? direction.x * force : 0, ky: direction ? direction.y * force : 0 });
@@ -721,11 +737,16 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate) hitStop(0.045);
   hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
   if (source !== 'ultimate' && !fromTeammate) addGauge(damage * GAUGE_PER_DAMAGE);
-  if (killed) onEnemyKilled(enemy);
+  if (procs) charmHit(enemy, amount, crit);
+  if (killed) {
+    onEnemyKilled(enemy);
+    if (procs) charmKill(enemy);
+  }
 }
 
 function onEnemyKilled(enemy) {
   dropLeaves(enemy);
+  dropCharms(enemy);
   if (enemy.type.structure) objectiveDone();
   // Vengeful Swarm: dying bees burst into stingers (the host fires them for everyone).
   if (waveMods.has('vengeful') && !enemy.type.boss && !enemy.type.structure && !isGuest()) fireRing(enemy, 6, 150, Math.random() * Math.PI);
@@ -767,15 +788,16 @@ function onEnemyKilled(enemy) {
     share({ k: 'fin', big: enemy.type.boss });
   }
   if (enemy.type.boss) {
-    bossDefeated(enemy.type.name, enemy.type.score);
-    share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score });
+    bossDefeated(enemy.type.name, enemy.type.score, enemy.kind);
+    share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score, kd: enemy.kind });
   }
 }
 
 let beezebubTime = 0; // play time when Bee-zebub fell (the speed leaderboard)
 
-function bossDefeated(name, score) {
+function bossDefeated(name, score, kind) {
   if (name.includes('zebub') && !beezebubTime) beezebubTime = Math.max(1, Math.floor(timeAlive));
+  if (kind) bossMemory(kind).beaten++;
   const achievement = name.includes('Empress') ? 'empress' : name.includes('zebub') ? 'beezebub' : name.includes('Buzzbelle') ? 'queen' : null;
   if (achievement) achieve(achievement);
   bossKills++;
@@ -1026,6 +1048,7 @@ function fireStinger(enemy, direction, speed, quiet = false) {
 
 /** Every player simulates the bullets themselves and only checks hits on their own Tode. */
 function launchStinger(origin, direction, speed, quiet = false) {
+  speed *= 1 + 0.15 * vow('stingers');
   bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range: STINGER.range * 1.6, color: arena.bullet ?? '#c070ff' });
   if (!quiet) play('sting');
 }
@@ -1657,6 +1680,15 @@ function spit() {
     effects.chain(player.position, 4, Math.max(3, stats.spitDamage * 2), { range: 280 });
   }
 
+  spitVolley(center);
+  // Echo Bell: sometimes a second volley right behind the first.
+  if (charms('bell') && Math.random() < Math.min(1, 0.2 * charms('bell'))) echoDelay = 0.08;
+}
+
+let echoDelay = 0; // seconds until an Echo Bell volley (0: none)
+
+function spitVolley(center) {
+  const { stats } = player;
   for (let i = 0; i < stats.spitCount; i++) {
     const angle = (i - (stats.spitCount - 1) / 2) * stats.spitSpread;
     const direction = center.clone().applyAxisAngle(Z_AXIS, angle);
@@ -1677,7 +1709,7 @@ function fireSpit(origin, direction, damage, { child = false, hits } = {}) {
     color,
     emissive,
   });
-  projectile.trail = SPIT_TRAILS[ascension.tier];
+  projectile.trail = settings.calmFx ? null : SPIT_TRAILS[ascension.tier];
   projectile.child = child;
   if (hits) hits.forEach((enemy) => projectile.hits.add(enemy));
   projectiles.push(projectile);
@@ -2055,6 +2087,274 @@ function updatePowers(delta) {
   }
 }
 
+// --- Charms: stacking trinkets that trigger on hits, crits and kills (see Charms.js) -------------------
+const charmCounts = new Map(); // charm id → copies
+const charmDrops = new CharmDrops(scene);
+const charms = (id) => charmCounts.get(id) ?? 0;
+let charmLuck = 1; // drop chance multiplier (the Four-Leaf Clover keepsake)
+// Hits that can trigger charms. A charm's own hits pass on a weaker chance (`procScale`), so chains die out.
+const PROC_SOURCES = new Set(['spit', 'splash', 'dash', 'skill', 'lightning', 'burst', 'frost', 'blast', 'charm']);
+const PROC_BUDGET = 14; // charm triggers per frame at most, so huge stacks can't stall the game
+let procScale = 1;
+let procBudget = PROC_BUDGET;
+
+/** Runs `fn` with a weaker proc chance for everything it hits. */
+function withProc(scale, fn) {
+  const previous = procScale;
+  procScale = previous * scale;
+  try {
+    fn();
+  } finally {
+    procScale = previous;
+  }
+}
+
+/** A chance roll for a charm; Loaded Dice give extra rolls. */
+function procs(probability) {
+  if (procBudget <= 0) return false;
+  for (let i = 0; i <= charms('dice'); i++) {
+    if (Math.random() < probability * procScale) {
+      procBudget--;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** On hit: `amount` is the hit's damage before Tode's multipliers (charm damage scales from it). */
+function charmHit(enemy, amount, crit) {
+  const at = enemy.position.clone().setZ(0);
+  if (charms('chili') && procs(chance(0.1, charms('chili')))) {
+    enemy.applyBurn(2, 3);
+    particles.burst(at, { count: 6, colors: FIRE, speed: 40, up: 70, gravity: -30, size: 1.4, height: enemy.height * 0.5, glow: true });
+  }
+  if (charms('cube') && !enemy.dying && procs(chance(0.07, charms('cube')))) {
+    enemy.applySlow(1, 1.1);
+    particles.burst(at, { count: 6, colors: ICE, speed: 50, up: 40, size: 1.4, glow: true });
+  }
+  if (charms('spoon') && procs(chance(0.09, charms('spoon')))) {
+    withProc(0.5, () => effects.chain(at, 3, Math.max(1, Math.round(amount * 0.8)), { hit: new Set([enemy]) }));
+  }
+  if (charms('biscuit') && procs(chance(0.08, charms('biscuit')))) {
+    effects.addEffect(new Biscuit(player.position, enemy, Math.max(2, Math.round(amount * 2.5)), procScale * 0.5));
+  }
+  if (crit && charms('cup') && procs(1)) {
+    withProc(0.5, () =>
+      effects.blast(at, { radius: 55, damage: 3 + 2 * charms('cup'), knockback: 90, color: '#ffd36b', particleColors: TEA_DROPS, source: 'charm' })
+    );
+  }
+}
+
+function charmKill(enemy) {
+  if (charms('battery')) addGauge(charms('battery'));
+  if (charms('firecracker') && procs(0.25)) {
+    const at = enemy.position.clone().setZ(0);
+    const n = charms('firecracker');
+    play('boom');
+    withProc(0.5, () =>
+      effects.blast(at, { radius: 60 + 6 * n, damage: 3 + 3 * n, knockback: 160, color: '#ff6a3d', particleColors: FIRE, source: 'charm' })
+    );
+  }
+}
+
+/** Elites, hives and bosses drop charms (bosses three, at least Uncommon); plain bees very rarely. */
+function dropCharms(enemy) {
+  const odds = enemy.type.boss || enemy.type.structure ? 1 : enemy.elite ? 0.35 : 0.004;
+  const count = enemy.type.boss ? 3 : 1;
+  for (let i = 0; i < count; i++) {
+    if (Math.random() < odds * charmLuck) charmDrops.drop(enemy.position, rollCharm(enemy.type.boss ? 'uncommon' : 'common'));
+  }
+}
+
+function gainCharm(charm) {
+  const count = charms(charm.id) + 1;
+  charmCounts.set(charm.id, count);
+  charm.apply?.(player.stats);
+  if (charm.heal) player.heal(charm.heal);
+  updateHealth();
+  play(charm.rarity === 'common' ? 'pick' : 'legendary');
+  effects.ring(player.position, { radius: 50, color: CHARM_RARITIES[charm.rarity].color, duration: 0.4 });
+  hud.showCharm(charm, count, charm.text(count));
+  refreshCharms();
+}
+
+function charmList() {
+  return [...charmCounts].map(([id, count]) => {
+    const charm = charmById(id);
+    return { icon: charm.icon, name: charm.name, count, level: count, rarity: charm.rarity, text: charm.text(count), color: CHARM_RARITIES[charm.rarity].color };
+  });
+}
+
+function refreshCharms() {
+  hud.setCharms(charmList());
+}
+
+const biscuitGeometry = new THREE.SphereGeometry(4, 10, 8);
+const biscuitMaterial = new THREE.MeshStandardMaterial({ color: '#c88a4a', emissive: '#6a3a10', emissiveIntensity: 0.6, roughness: 0.8 });
+
+/** The Homing Biscuit: flies after its bee (or the next one) and hits hard. */
+class Biscuit {
+  constructor(from, target, damage, scale) {
+    this.mesh = new THREE.Mesh(biscuitGeometry, biscuitMaterial);
+    this.mesh.position.copy(from).setZ(24);
+    scene.add(this.mesh);
+    this.target = target;
+    this.damage = damage;
+    this.scale = scale;
+    this.velocity = new THREE.Vector3((Math.random() - 0.5) * 300, (Math.random() - 0.5) * 300, 160);
+    this.age = 0;
+  }
+
+  update(delta) {
+    this.age += delta;
+    if (this.target.dying) {
+      const position = this.mesh.position;
+      this.target = aliveEnemies().sort((a, b) => distanceSqXY(a.position, position) - distanceSqXY(b.position, position))[0];
+      if (!this.target) return false;
+    }
+    const goal = this.target.position.clone().setZ(this.target.height * 0.5);
+    const toGoal = goal.sub(this.mesh.position);
+    const distance = toGoal.length();
+    if (distance < this.target.radius + 6) {
+      const direction = toGoal.setZ(0).normalize();
+      withProc(this.scale, () => damageEnemy(this.target, this.damage, direction, 80, 'charm'));
+      particles.burst(this.mesh.position, { count: 8, colors: ['#c88a4a', '#f3d29a', '#8a5a2a'], speed: 70, up: 50, size: 1.5, height: 0 });
+      return false;
+    }
+    // Steer harder the longer it flies, so it never orbits forever.
+    this.velocity.lerp(toGoal.normalize().multiplyScalar(460), 1 - Math.exp(-(4 + this.age * 8) * delta));
+    this.mesh.position.addScaledVector(this.velocity, delta);
+    this.mesh.rotation.x += delta * 14;
+    if (Math.random() < 0.5) particles.burst(this.mesh.position.clone().setZ(0), { count: 1, colors: ['#f3d29a'], speed: 5, up: 0, gravity: 0, height: this.mesh.position.z, size: 1, life: 0.25 });
+    return this.age < 3;
+  }
+
+  dispose() {
+    this.mesh.removeFromParent();
+  }
+}
+
+// --- Shrines: optional risks during a wave (see Shrines.js) -----------------------------------
+let shrine = null; // { type, position, group, progress, …, label, curse }
+
+function shrineLabel(current) {
+  const def = SHRINES[current.type];
+  const hint = current.type === 'cursed' ? `${current.curse.icon} ${current.curse.name}: ${current.curse.text}` : def.hint;
+  const tries = current.type === 'chance' && current.tries ? ` (${CHANCE_TRIES - current.tries} left)` : '';
+  return `<b>${def.icon} ${def.name}</b><small>${hint}${tries}</small>`;
+}
+
+/** From wave 2, half the waves that aren't boss waves get one shrine somewhere in the arena. `forced`: a type. */
+function setupShrine(number, forced = null) {
+  clearShrine();
+  if (!forced && (number < 2 || config.isBoss)) return;
+  const plan = seeded(() => {
+    if (!forced && Math.random() > 0.5) return null;
+    const types = coop ? ['chance', 'cursed'] : ['chance', 'chance', 'cursed', 'bitter'];
+    const curses = CURSES.filter((curse) => !brewLevels.has(curse.id));
+    let type = forced ?? types[Math.floor(Math.random() * types.length)];
+    if (type === 'cursed' && !curses.length) type = 'chance';
+    const angle = Math.random() * Math.PI * 2;
+    const distance = MAP_HALF_SIZE * (0.25 + Math.random() * 0.3);
+    return { type, curse: curses[Math.floor(Math.random() * curses.length)], at: new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0) };
+  });
+  if (!plan) return;
+  shrine = createShrine(scene, plan.type, plan.at);
+  shrine.curse = plan.type === 'cursed' ? plan.curse : null;
+  shrine.label = hud.attachWorldLabel(shrineLabel(shrine), SHRINES[plan.type].color);
+  if (number <= 6) hud.showCallout(`${SHRINES[plan.type].icon} A ${SHRINES[plan.type].name} appeared!`);
+}
+
+function clearShrine() {
+  if (!shrine) return;
+  shrine.label.remove();
+  disposeShrine(shrine);
+  shrine = null;
+}
+
+function updateShrines(delta) {
+  if (!shrine) return;
+  updateShrine(shrine, delta, clock.elapsedTime);
+  hud.updateWorldLabel(shrine.label, shrine.position, 82, PLAYING.has(phase) && !shrine.used);
+  if (shrine.used || player.downed) return;
+  shrine.cooldown = Math.max(0, shrine.cooldown - delta);
+  const inside = distanceSqXY(player.position, shrine.position) < SHRINE_RADIUS ** 2;
+  const tooWeak = shrine.type === 'chance' && player.hp <= 1;
+  if (inside && tooWeak && !shrine.warned) {
+    shrine.warned = true;
+    hud.showCallout('Too weak to make an offering!');
+  }
+  if (!inside) shrine.warned = false;
+  const holding = inside && !tooWeak && shrine.cooldown === 0 && phase === 'fighting';
+  shrine.progress = holding ? Math.min(1, shrine.progress + delta / SHRINE_HOLD) : Math.max(0, shrine.progress - delta * 2);
+  if (shrine.progress >= 1) {
+    shrine.progress = 0;
+    useShrine();
+  }
+}
+
+function useShrine() {
+  const { position, type } = shrine;
+  const color = SHRINES[type].color;
+  effects.ring(position, { radius: 120, color, duration: 0.6, thickness: 0.2 });
+  particles.burst(position, { count: 30, colors: ['#ffffff', color], speed: 160, up: 160, size: 2, glow: true });
+  if (type === 'chance') {
+    // An offering of one heart: a charm, two charms, or nothing at all.
+    player.hp -= 1;
+    play('hurt');
+    hud.flashHurt();
+    updateHealth();
+    shrine.tries++;
+    shrine.cooldown = 1;
+    const roll = Math.random();
+    if (roll < 0.15) {
+      charmDrops.drop(position, rollCharm('uncommon'));
+      charmDrops.drop(position, rollCharm('uncommon'));
+      hud.showCallout('🎲 Jackpot!');
+      play('legendary');
+    } else if (roll < 0.65) {
+      charmDrops.drop(position, rollCharm());
+      hud.showCallout('🎲 The leaves smile on you');
+      play('pick');
+    } else {
+      hud.showCallout('🎲 The leaves say no…');
+    }
+    if (shrine.tries >= CHANCE_TRIES) {
+      shrine.used = true;
+      hud.showCallout('The shrine crumbles.');
+    } else {
+      hud.setWorldLabel(shrine.label, shrineLabel(shrine));
+    }
+  } else if (type === 'bitter') {
+    // The hive answers: elites, frenzy, half again as many bees and a squad right away. An Epic brew afterwards.
+    shrine.used = true;
+    for (const id of ['elites', 'frenzy']) waveMods.add(id);
+    config.speedScale *= 1.25;
+    spawnQueue.push(...buildSpawnQueue({ ...config, count: Math.round(config.count * 0.5) }));
+    spawnSquad();
+    bonusPicks++;
+    hud.setModifiers([...waveMods].map((id) => MODIFIERS[id]));
+    hud.showBanner('The hive is enraged!', 'Survive the wave for an Epic brew', 2.4);
+    postfx.flash('#ff3b1f', 0.4);
+    shake = Math.max(shake, 12);
+    play('roar');
+  } else {
+    // Cursed Leaves: a powerful brew with a drawback.
+    shrine.used = true;
+    const { curse } = shrine;
+    brewLevels.set(curse.id, 1);
+    brewTexts.set(curse.id, curse.text);
+    curse.apply(player);
+    updateHealth();
+    refreshOwned();
+    hud.showBanner(`${curse.icon} ${curse.name}`, curse.text, 2.8);
+    postfx.flash(color, 0.45);
+    postfx.pulse({ warp: 0.6, aberration: 0.6 });
+    play('legendary');
+  }
+  if (shrine.used) clearShrine();
+}
+
 // --- Aiming ---
 const raycaster = new THREE.Raycaster();
 // Aim at bee height rather than the ground, so pointing at a bee aims at the bee.
@@ -2140,10 +2440,11 @@ function updateCamera(delta) {
   // Tall, narrow screens (phones) see more of the garden.
   const portrait = camera.aspect < 1 ? 1.45 : 1;
   const zoom = cameraZoom * (1 - zoomPunch) * portrait;
+  const jolt = shake * (postfx.calm ? 0.35 : 1);
   camera.position.set(
-    CAMERA_OFFSET.x * zoom + cameraPan.x + (Math.random() - 0.5) * shake,
-    CAMERA_OFFSET.y * zoom + cameraPan.y + (Math.random() - 0.5) * shake,
-    CAMERA_OFFSET.z * zoom + (Math.random() - 0.5) * shake
+    CAMERA_OFFSET.x * zoom + cameraPan.x + (Math.random() - 0.5) * jolt,
+    CAMERA_OFFSET.y * zoom + cameraPan.y + (Math.random() - 0.5) * jolt,
+    CAMERA_OFFSET.z * zoom + (Math.random() - 0.5) * jolt
   );
 }
 
@@ -2408,6 +2709,11 @@ function startWave(number, weatherKind, mods) {
   const destination = arenaForWave(number);
   weatherKind ??= seeded(() => rollWeather(number, waveConfig(number).isBoss));
   mods ??= seeded(() => rollModifiers(number, waveConfig(number).isBoss));
+  // Bitter Leaves (a Steeping vow): every wave from wave 2 gets a modifier.
+  if (vow('bitter') && number >= 2 && !mods.length && !waveConfig(number).isBoss) {
+    const pool = Object.keys(MODIFIERS);
+    mods = [seeded(() => pool[Math.floor(Math.random() * pool.length)])];
+  }
   if (destination.weathers && !destination.weathers.includes(weatherKind)) weatherKind = 'clear';
   if (coop?.host) share({ k: 'wave', n: number, wx: weatherKind, m: mods });
   if (destination !== arena) startTravel(destination, number, weatherKind, mods);
@@ -2423,9 +2729,14 @@ function beginWave(number, weatherKind, mods = []) {
   if (waveMods.has('horde')) config.count = Math.round(config.count * 1.5);
   if (waveMods.has('frenzy')) config.speedScale *= 1.25;
   if (waveMods.has('armored')) config.hpScale *= 1.5;
+  // Steeping vows and the Swarm Horn curse.
+  config.count = Math.round(config.count * (1 + 0.2 * vow('swarm')) * (config.isBoss ? 1 : player.stats.swarmScale));
+  config.hpScale *= 1 + 0.15 * vow('hardy');
+  config.speedScale *= 1 + 0.1 * vow('wings');
   hud.setModifiers(mods.map((id) => MODIFIERS[id]));
   startHazards(number);
   if (number === 1 || arenaForWave(number - 1) !== arena) setupObjective();
+  setupShrine(number);
   if (coop) {
     // More frogs, more bees: bigger swarms, tougher bees, faster spawning.
     const extra = coop.size - 1;
@@ -2538,6 +2849,7 @@ function updateObjective(delta) {
       zone.edge.material.color.set('#ffffff');
       effects.ring(zone.position, { radius: 220, color: zone.color, duration: 0.8, thickness: 0.2 });
       particles.burst(zone.position, { count: 50, colors: ['#ffffff', zone.color], speed: 240, up: 220, size: 2.4, glow: true });
+      charmDrops.drop(zone.position, rollCharm());
       objectiveDone();
     }
   }
@@ -2721,6 +3033,8 @@ function updateWave(delta) {
 
 function waveCleared() {
   leaves.vacuum();
+  charmDrops.vacuum();
+  clearShrine();
   if (wave >= 5 && !hitThisWave) achieve('untouchable');
   if (coop) achieve('coop');
   if (coop?.host) share({ k: 'cleared' });
@@ -2765,13 +3079,22 @@ function offerRewards() {
 /** Between waves: skill picks for the levels gained (co-op saves them up), then a brew. */
 function offerNextReward() {
   if (pendingLevels > 0 && openLevelUp()) return;
-  offers = seeded(() => rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate }));
+  offerBrews();
+}
+
+let offeringBonus = false; // the offer on screen is a Bitter Shrine's Epic pick (no rerolls)
+
+/** `bonus`: the Bitter Shrine's extra pick, always Epic. */
+function offerBrews(bonus = false) {
+  offers = seeded(() => rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate, minRarity: bonus ? 2 : 0 }));
   if (!offers.length) {
     afterReward();
     return;
   }
   setPhase('choosing');
-  hud.showBrews(wave, offers, rerolls);
+  offeringBonus = bonus;
+  hud.showBrews(wave, offers, rerolls, { first: firstOffer, steep }, bonus);
+  firstOffer = false;
 }
 
 function chooseBrew(index) {
@@ -2783,6 +3106,8 @@ function chooseBrew(index) {
   brew.apply(player, value);
   play(brew.kind === 'brew' ? 'pick' : 'legendary');
   if (brew.kind === 'duo' || brew.kind === 'legendary') achieve(brew.kind);
+  meta.blendPicks ??= {};
+  for (const blend of brew.blends ?? [brew.blend]) meta.blendPicks[blend] = (meta.blendPicks[blend] ?? 0) + 1;
   tip('brew');
   if (brew.kind !== 'brew') {
     postfx.flash(brew.kind === 'legendary' ? '#ffd36b' : '#ffffff', 0.35);
@@ -2791,6 +3116,11 @@ function chooseBrew(index) {
   updateHealth();
   refreshOwned();
   hud.hideMenu();
+  if (bonusPicks > 0) {
+    bonusPicks--;
+    offerBrews(true);
+    return;
+  }
   afterReward();
 }
 
@@ -2799,7 +3129,7 @@ function chooseUltimate(index) {
   const ultimate = Object.values(ULTIMATES)[index];
   if (!ultimate) return;
   player.ultimate = ultimate.id;
-  player.gauge = 30; // a taste of power right away
+  player.gauge = fullGaugeStart ? 100 : 30; // a taste of power right away (the Tiny Crown: all of it)
   play('legendary');
   postfx.flash('#fff2c0', 0.5);
   hud.hideMenu();
@@ -2835,14 +3165,14 @@ function saveSettings() {
 }
 
 function reroll() {
-  if (phase !== 'choosing' || rerolls <= 0) return;
+  if (phase !== 'choosing' || rerolls <= 0 || offeringBonus) return;
   rerolls--;
   play('click');
   offers = seeded(() => rollBrews(brewLevels, { wave, luck, hasUltimate: !!player.ultimate }));
-  hud.showBrews(wave, offers, rerolls);
+  hud.showBrews(wave, offers, rerolls, { steep });
 }
 
-const brewColor = (brew) => BLENDS[brew.blend ?? brew.blends[0]].color;
+const brewColor = (brew) => brew.color ?? BLENDS[brew.blend ?? brew.blends[0]].color;
 
 function refreshOwned() {
   hud.setOwned(
@@ -2857,7 +3187,7 @@ function refreshOwned() {
 function power() {
   let total = player.ultimate ? 2 : 0;
   for (const slot of skills.slots) total += 1 + slot.level;
-  for (const [id, level] of brewLevels) total += brewById(id).kind === 'brew' ? level : 2;
+  for (const [id, level] of brewLevels) total += { brew: level, curse: 1 }[brewById(id).kind] ?? 2;
   return total;
 }
 
@@ -3028,7 +3358,13 @@ function startBossIntro(boss) {
   introBoss = boss;
   setPhase('bossIntro', BOSS_INTRO_TIME);
   music.play('boss', 4);
-  hud.showBossIntro(boss.type.name, BOSS_EPITHETS[boss.kind] ?? '');
+  // Bosses remember Tode: who won last time, and how often.
+  const memory = bossMemory(boss.kind);
+  const taunt = bossTaunt(boss.kind, memory);
+  memory.met++;
+  saveMeta();
+  hud.showBossIntro(boss.type.name, BOSS_EPITHETS[boss.kind] ?? '', taunt);
+  babble(BOSS_VOICE, taunt, 0.6, 28);
   hud.setBoss(boss);
 }
 
@@ -3277,6 +3613,7 @@ function applySnapshot(snap) {
     if (flags & 1) {
       enemy.die();
       dropLeaves(enemy);
+      dropCharms(enemy);
       if (enemy.type.structure) objectiveDone();
       hud.removeHealthBar(enemy);
     }
@@ -3398,7 +3735,7 @@ function handleNet(from, message) {
       finisher(message.big);
       break;
     case 'bossDown':
-      bossDefeated(message.n, message.s);
+      bossDefeated(message.n, message.s, message.kd);
       break;
     case 'over':
       if (phase !== 'gameover') endRun({ victory: message.v });
@@ -3603,6 +3940,8 @@ function clearWorld() {
   for (const projectile of [...projectiles]) removeFrom(projectiles, projectile);
   bullets.clear();
   leaves.clear();
+  charmDrops.clear();
+  clearShrine();
   clearObjective();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
@@ -3649,15 +3988,51 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   hud.hideMenu();
   muffleMusic(false);
 
-  // Tode's Pantry: permanent upgrades.
+  // Steeping: the vows taken for this run (never in the Daily Brew or co-op).
+  vows = runVows({ daily, coop: coopRun });
+  steep = steepLevel(vows);
+  hud.setSteep(steep);
+
+  // Tode's Pantry: permanent upgrades (unless a vow locked it).
   const { stats } = player;
-  stats.maxHp += pantryLevel('heart');
+  const pantry = (id) => (vow('pantry') ? 0 : pantryLevel(id));
+  stats.maxHp += pantry('heart') - vow('shell');
+  stats.damageMultiplier = 1 + 0.1 * pantry('damage');
+  stats.gaugeRate *= 1 + 0.15 * pantry('gauge');
+  stats.revives += pantry('revive');
+  rerolls = pantry('reroll');
+  luck = pantry('luck');
+
+  // Charms and the keepsake.
+  charmCounts.clear();
+  charmLuck = 1;
+  refreshCharms();
+  bonusPicks = 0;
+  firstOffer = true;
+  leafBonus = 1;
+  fullGaugeStart = false;
+  let awaken = false;
+  keepsake = currentKeepsake();
+  keepsake.apply({
+    stats,
+    player,
+    grant: {
+      level: () => pendingLevels++,
+      charm: () => gainCharm(rollCharm()),
+      charmLuck: (factor) => (charmLuck = factor),
+      leaves: (factor) => (leafBonus = factor),
+      fullGauge: () => (fullGaugeStart = true),
+      awaken: () => (awaken = true),
+    },
+  });
+  stats.maxHp = Math.max(1, stats.maxHp);
   player.hp = stats.maxHp;
-  stats.damageMultiplier = 1 + 0.1 * pantryLevel('damage');
-  stats.gaugeRate *= 1 + 0.15 * pantryLevel('gauge');
-  stats.revives += pantryLevel('revive');
-  rerolls = pantryLevel('reroll');
-  luck = pantryLevel('luck');
+  hud.setXp(0, 0, pendingLevels);
+  if (awaken) {
+    ascension.setTier(1);
+    divinity.setTier(1);
+    hud.setForm(TIERS[1].name, 1);
+  }
 
   endless = false;
   timeAlive = 0;
@@ -3706,14 +4081,20 @@ function endRun({ victory = false } = {}) {
   }
 
   const firstBossKill = meta.bossKills === 0 && bossKills > 0;
-  const leaves = leavesForRun({ score: finalScore, wave, bossKills, victory });
+  // The score already carries the Steep bonus; the leaves get it once, on everything.
+  const bonus = steepBonus(steep);
+  const leaves = Math.round(leavesForRun({ score: finalScore / bonus, wave, bossKills, victory }) * bonus * leafBonus);
+  // What ended the run: the boss of a boss wave if it still stands, otherwise the swarm.
+  const bossAlive = config?.isBoss && enemies.some((enemy) => enemy.type.boss && !enemy.dying);
+  const killer = victory ? null : bossAlive ? config.boss : 'swarm';
+  rememberRun({ wave, killer, tier: ascension.tier, victory, steep });
   meta.leaves += leaves;
   meta.runs++;
   meta.bossKills += bossKills;
   meta.bestWave = Math.max(meta.bestWave, wave);
   saveMeta();
 
-  const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier === 4 });
+  const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier === 4, killer });
   lastRun = {
     score: finalScore,
     wave,
@@ -3724,6 +4105,7 @@ function endRun({ victory = false } = {}) {
     clear: beezebubTime,
     victory,
     daily: isDaily(),
+    steep,
   };
   lastBuild = runBuild();
   hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild });
@@ -3745,6 +4127,8 @@ function runBuild() {
   const ultimate = player.ultimate && ULTIMATES[player.ultimate];
   return {
     form: TIERS[ascension.tier].name,
+    keepsake: keepsake ? { icon: keepsake.icon, name: keepsake.name, color: '#c9a2ff' } : null,
+    charms: charmList(),
     ultimate: ultimate ? { icon: ultimate.icon, name: ultimate.name } : null,
     skills: skills.slots.map(({ id, level }) => ({ icon: SKILLS[id].icon, name: SKILLS[id].name, level, color: '#3fd0c0' })),
     brews: [...brewLevels].map(([id, level]) => {
@@ -3889,7 +4273,12 @@ function showPauseMenu() {
     const skill = SKILLS[slot.id];
     build.push({ icon: skill.icon, name: skill.name, level: slot.level, color: '#3fd0c0', text: skill.text(slot.level) });
   }
+  for (const charm of charmList()) build.push(charm);
+  if (keepsake) build.unshift({ icon: keepsake.icon, name: keepsake.name, level: 1, color: '#c9a2ff', text: keepsake.text });
   hud.showPause({
+    keepsake,
+    steep,
+    calmFx: settings.calmFx,
     build,
     ultimate: player.ultimate,
     form: TIERS[ascension.tier].name,
@@ -3977,6 +4366,27 @@ const MENU_ACTIONS = {
   leaderboard: ({ board }) => showLeaderboard(board ?? 'all'),
   submit: ({ name }) => submitRun(name ?? ''),
   pantry: () => hud.showPantry(),
+  keepsakes: () => hud.showKeepsakes(),
+  keepsake: ({ id }) => {
+    if (chooseKeepsake(id)) play('pick');
+    hud.showKeepsakes();
+  },
+  steeping: () => hud.showSteeping(),
+  vow: ({ id }) => {
+    cycleVow(id);
+    play(steepLevel() ? 'charge' : 'click');
+    hud.showSteeping();
+  },
+  'vows-clear': () => {
+    clearVows();
+    play('click');
+    hud.showSteeping();
+  },
+  'toggle-calm': () => {
+    settings.calmFx = !settings.calmFx;
+    saveSettings();
+    showPauseMenu();
+  },
   buy: ({ id }) => {
     if (buy(id)) play('pick');
     hud.showPantry();
@@ -4027,6 +4437,8 @@ const MENU_ACTIONS = {
   retire: () => endRun({ victory: true }),
 };
 
+hud.onSpeak = (voice, text, delay) => babble(voice, text, delay);
+hud.onHush = hush;
 hud.onAction = (action, data = {}) => {
   unlockAudio();
   MENU_ACTIONS[action]?.(data);
@@ -4063,9 +4475,12 @@ const moveDirection = new THREE.Vector3();
 
 function updateGame(delta) {
   timeAlive += delta;
+  procBudget = PROC_BUDGET;
   updateWave(delta);
   updateHazards(delta);
   updateObjective(delta);
+  updateShrines(delta);
+  for (const charm of charmDrops.update(delta, player.position, !player.downed)) gainCharm(charm);
   if (player.downed) {
     updateEnemies(delta);
     updateEnemyProjectiles(delta);
@@ -4083,6 +4498,10 @@ function updateGame(delta) {
 
   spitCooldownLeft = Math.max(0, spitCooldownLeft - delta);
   if ((input.primaryDown || autoFire) && spitCooldownLeft === 0 && !player.rooted) spit();
+  if (echoDelay > 0 && (echoDelay -= delta) <= 0) {
+    echoDelay = 0;
+    spitVolley(player.facing.clone());
+  }
 
   // Tea bombs recharge one at a time.
   const { bombCharges: maxBombs } = player.stats;
@@ -4201,6 +4620,9 @@ function frame(realDelta, render = true) {
     warp: look.warp + (boost.warp ?? 0),
     aberration: look.aberration + (boost.aberration ?? 0),
   });
+  // Calm effects soften flashes, shakes and particles during play (cut-scenes keep the full show).
+  postfx.calm = settings.calmFx && PLAYING.has(phase);
+  particles.density = postfx.calm ? 0.5 : 1;
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
   if (render) postfx.render(realDelta);
@@ -4319,6 +4741,16 @@ if (import.meta.env.DEV) {
     killAll: () => aliveEnemies().forEach((enemy) => damageEnemy(enemy, 9999)),
     skipSpawns: () => spawnQueue.splice(0),
     spawn: (kind, x, y) => spawnEnemy(kind, new THREE.Vector3(x, y, 0)),
+    /** Grants charms: game.charm('spoon', 5), or a random one with game.charm(). */
+    charm: (id, count = 1) => {
+      for (let i = 0; i < count; i++) gainCharm(id ? charmById(id) : rollCharm());
+    },
+    charmCounts,
+    /** Puts a shrine in the arena right away: 'chance', 'bitter' or 'cursed'. */
+    shrine: (type = 'chance') => setupShrine(wave, type),
+    get shrineState() {
+      return shrine;
+    },
     /** Grants a brew by id (Duo and Legendary too), e.g. game.give('eye'). */
     give: (id, rarity = 2) => {
       const brew = brewById(id);

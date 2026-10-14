@@ -285,11 +285,61 @@ const LEGENDARIES = [
   },
 ];
 
+// Cursed brews: taken from a Cursed Leaves shrine, never offered. Strong, with a drawback.
+export const CURSE_COLOR = '#b07cff';
+export const CURSES = [
+  {
+    id: 'glasskettle', name: 'Glass Kettle', icon: '🫙',
+    text: '+40% damage, but 2 fewer max hearts.',
+    apply: (player) => {
+      player.stats.damageMultiplier *= 1.4;
+      player.stats.maxHp = Math.max(1, player.stats.maxHp - 2);
+      player.hp = Math.min(player.hp, player.stats.maxHp);
+    },
+  },
+  {
+    id: 'overbrew', name: 'Overbrewed Bombs', icon: '💣',
+    text: '+2 tea bomb charges and +50% bomb damage, but your dash recharges 60% slower.',
+    apply: ({ stats }) => {
+      stats.bombCharges += 2;
+      stats.splashDamage = Math.round(stats.splashDamage * 1.5);
+      stats.dashCooldown *= 1.6;
+    },
+  },
+  {
+    id: 'fever', name: 'Fever Leaf', icon: '🥵',
+    text: 'Spit 35% faster, but clearing a wave no longer heals you.',
+    apply: ({ stats }) => {
+      stats.spitCooldown /= 1.35;
+      stats.waveHeal = 0;
+    },
+  },
+  {
+    id: 'horn', name: 'Swarm Horn', icon: '📯',
+    text: 'Tea leaves are worth double, but every wave has 30% more bees.',
+    apply: ({ stats }) => {
+      stats.leafValue *= 2;
+      stats.swarmScale *= 1.3;
+    },
+  },
+  {
+    id: 'thorncup', name: 'Thorned Cup', icon: '🌵',
+    text: '+20% critical chance and critical hits deal triple damage, but 1 fewer max heart.',
+    apply: (player) => {
+      player.stats.critChance += 0.2;
+      player.stats.critMultiplier = 3;
+      player.stats.maxHp = Math.max(1, player.stats.maxHp - 1);
+      player.hp = Math.min(player.hp, player.stats.maxHp);
+    },
+  },
+];
+
 for (const brew of BREWS) brew.kind = 'brew';
 for (const duo of DUOS) Object.assign(duo, { kind: 'duo', maxLevel: 1 });
 for (const legendary of LEGENDARIES) Object.assign(legendary, { kind: 'legendary', maxLevel: 1 });
+for (const curse of CURSES) Object.assign(curse, { kind: 'curse', maxLevel: 1, color: CURSE_COLOR });
 
-export const ALL_BREWS = [...BREWS, ...DUOS, ...LEGENDARIES];
+export const ALL_BREWS = [...BREWS, ...DUOS, ...LEGENDARIES, ...CURSES];
 export const brewById = (id) => ALL_BREWS.find((brew) => brew.id === id);
 
 /** How many different brews of each blend the player owns. */
@@ -322,7 +372,7 @@ function rollRarity(wave, luck) {
  * Three offers: { brew, rarity, value, level }. Duo and Legendary brews show up once
  * their requirements are met; regular brews come from different blends where possible.
  */
-export function rollBrews(levels, { wave, luck = 0, hasUltimate = false, count = 3 }) {
+export function rollBrews(levels, { wave, luck = 0, hasUltimate = false, count = 3, minRarity = 0 }) {
   const owned = (brew) => levels.get(brew.id) ?? 0;
   const counts = blendCounts(levels);
   const offers = [];
@@ -341,7 +391,7 @@ export function rollBrews(levels, { wave, luck = 0, hasUltimate = false, count =
   }
 
   return offers.slice(0, count).map(({ brew }) => {
-    const rarity = brew.kind === 'brew' ? rollRarity(wave, luck) : null;
+    const rarity = brew.kind === 'brew' ? Math.max(minRarity, rollRarity(wave, luck)) : null;
     return { brew, rarity, value: brew.values?.[rarity], level: owned(brew) + 1 };
   });
 }

@@ -124,6 +124,32 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
 - **Achievements** (`components/Achievements.js`): 16, each worth 15 Golden Leaves, shown in the Pantry.
   First-run **tips** appear once each (`meta.tips`).
+- **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
+  bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its
+  heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
+  the Daily Brew and co-op. The level is sent to the leaderboard (`steep`) and shown there, in the HUD and on shares.
+- **Keepsakes** (`components/Keepsakes.js`, title screen): one trinket per run (`meta.keepsake`). The teacup is free,
+  the other 10 unlock with achievements (`unlock`), and the achievement toast says so. `apply({ stats, player,
+  grant })`: `grant` holds the hooks for effects that aren't stats (a skill pick, a charm, starting Awakened…).
+- **Charms** (`components/Charms.js`): stacking trinkets without a cap, dropped by elites (35%), hives and held
+  shrines (always), bosses (3, at least Uncommon) and plain bees (0.4%). They lie on the ground (`CharmDrops`, emoji
+  sprites) until picked up and fly to Tode when a wave is cleared. Stat charms `apply` once per copy; the others
+  trigger in `charmHit`/`charmKill` from `damageEnemy` (sources in `PROC_SOURCES`). Charm damage passes on half its
+  trigger chance (`withProc`, `procScale`) and at most `PROC_BUDGET` triggers fire per frame, so chains die out.
+  Loaded Dice add rolls. In co-op every player gathers their own.
+- **Shrines** (`components/Shrines.js`, `setupShrine` in main.js): from wave 2, half the non-boss waves get one;
+  stand on it for 0.9 s. Shrine of Chance: 1 heart for a charm (50%), two (15%) or nothing, 3 tries. Bitter
+  Shrine (solo): the wave gets elites, frenzy, 50% more bees and a squad, then an extra Epic brew pick
+  (`bonusPicks`, `offerBrews(true)`). Cursed Leaves: a `CURSES` brew (PowerUps.js, kind `curse`) with a drawback.
+- **Memory** (`meta.lastRun`, `meta.bosses`, `meta.blendPicks`; `rememberRun`/`boss` in Meta.js): at a run's first
+  brew offer the speaking spirit talks about the last run (its killer, depth, a god form, a victory, the Steep, a
+  favourite Blend); later offers sometimes mention the favourite. Bosses taunt at their entrance from `bossTaunt`
+  (first meeting, beat Tode before, lost before). Tode's line after a boss defeat names that boss.
+- **Voices:** spirits and bosses babble synthesized syllables while their line types out (`babble`/`hush` in
+  Sound.js, a `voice` per spirit in Spirits.js, `hud.onSpeak`/`onHush`).
+- **Readability:** enemy bullets have a dark outline (back-face rim mesh) and draw after all other transparent
+  effects. The pause menu's **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
+  during play (cut-scenes keep the full show) and drop the spit trails.
 - **Phones and tablets:** twin-stick touch controls (`TouchControls.js`): the left half of the screen is a floating
   move stick, the right half a floating aim stick (both wait faintly in their bottom corners), and dash/bomb/ultimate
   buttons sit in a row above the aim stick. Tode always spits by himself: where the aim stick points (`input.aiming`,
@@ -131,6 +157,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
   and on the first real touch otherwise (touchscreen laptops). Quality adapts to the frame rate (pixel ratio
   0.6–1.5, shadows off as a last resort).
+- **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
+  widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
+  screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari);
   hidden where the browser can't do it (iPhone Safari). Menus redraw on `fullscreenchange` (`refreshMenu`).
 - **Sharing a run:** the game-over screen shows everything gathered (ultimate, skills, brews) and a 📤 Share button
@@ -144,7 +173,7 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Meta progression:** each run earns Golden Leaves for permanent upgrades in Tode's Pantry (title screen),
   and Tode says a story line after each run. **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
-  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta`, `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
+  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
 
 ## Graphics levels
 
@@ -200,7 +229,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
 | `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Summoning: Great Tode (and the teapot model). |
 | `components/Skills.js` | 14 skills (`SKILLS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting, manual Q/E/F for the first three). |
-| `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges). |
+| `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges, memories of past runs, voices) and the bosses' taunts. |
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
@@ -210,6 +239,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/ShareCard.js` | The end-of-run share image and text. |
 | `components/Changelog.js` | Version history (`CHANGELOG`, `VERSION`) for the What's new popup. |
 | `components/Achievements.js` | Achievement list and unlocking (rewards Golden Leaves). |
+| `components/Steeping.js` | Steeping vows, the Steep level and its bonus. |
+| `components/Keepsakes.js` | Keepsakes, their unlocks and the chosen one. |
+| `components/Charms.js` | Charm definitions, rarity rolls and the charms lying on the ground (`CharmDrops`). |
+| `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
@@ -276,6 +309,8 @@ game.renderer.info        // draw calls, triangles, GPU textures/geometries (wat
 game.setArena('hell')     // show an arena right away; game.startWave(21) travels there instead
 game.arena                // the current arena id
 game.ultimate('summon')   // then press R for the Great Tode
+game.charm('spoon', 5)    // gain charms (no id: a random one); game.charmCounts
+game.shrine('bitter')     // put a shrine in the arena now: 'chance', 'bitter' or 'cursed'
 game.bullets.list         // enemy bullets in flight
 game.level                // Tode's level (tea leaves)
 game.settings.autoCast = false
@@ -294,8 +329,8 @@ runs (levels 12–19). Humans will find the bullet patterns harder than the bot 
 ## Ideas / roadmap
 
 - Deploy to Azure (see above), record a gameplay video for the submission post.
-- More variety: new bee behaviours per arena (not only looks), more brews, keepsakes, room/door choices like Hades,
-  chests or shrines during waves (Risk of Rain).
+- More variety: new bee behaviours per arena (not only looks), more brews and charms.
+- Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant
   landmark per arena placed toward the camera's view (-x, +y) is what reads best in play.
 - The Divinity world transformations (blossoms, lanterns, heaven) only apply in the garden.

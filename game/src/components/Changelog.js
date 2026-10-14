@@ -3,6 +3,28 @@
 
 export const CHANGELOG = [
   {
+    version: '0.10.0',
+    date: '2026-10-14',
+    title: 'Steeping, keepsakes, charms and shrines',
+    changes: [
+      '🔥 Steeping: take vows (more bees, tougher bosses, fewer hearts…) for up to ×3.76 score and Golden Leaves',
+      '🎒 Keepsakes: carry one trinket into every run; achievements unlock 10 more',
+      '💎 Charms: stacking trinkets from elites, hives and bosses that trigger on hits, crits and kills, and chain into each other',
+      '🎲 Shrines during waves: gamble a heart at a Shrine of Chance, anger the hive at a Bitter Shrine for an Epic brew, or take Cursed Leaves',
+      '💬 The tea spirits and bosses remember your earlier runs, and everyone babbles in their own voice',
+      '👁️ Enemy bullets get a dark outline and draw above your own effects; a calm effects option in the pause menu',
+    ],
+  },
+  {
+    version: '0.9.1',
+    date: '2026-10-14',
+    title: 'Phones in landscape',
+    changes: [
+      'Menus, cards and the HUD shrink to fit phones held sideways, and long menus scroll',
+      'The pause menu shows its buttons before your build list on small screens',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-10-14',
     title: 'Tablet update',
