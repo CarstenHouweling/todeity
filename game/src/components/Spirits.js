@@ -38,7 +38,7 @@ export const SPIRITS = {
     legendary: "THE VOLCANO POT! I'VE WAITED CENTURIES TO SAY THAT!",
   },
   mint: {
-    voice: { pitch: 440, type: 'triangle', rate: 16, wobble: 0.15 },
+    voice: { pitch: 440, type: 'triangle', rate: 16, wobble: 0.15, volume: 0.07 }, // high and bright: carries without much push
     name: 'Mintaka',
     title: 'Fox of the North Wind',
     portrait: '🦊',
@@ -263,7 +263,15 @@ const BOSS_TAUNTS = {
   },
 };
 
-export const BOSS_VOICE = { pitch: 80, type: 'sawtooth', rate: 10, wobble: 0.35, loud: true };
+// Every boss has its own voice, louder than the spirits' (they speak over a boss theme). `layer` adds a second voice
+// at pitch × layer: an octave below for a growl, a fifth above for a choir.
+export const BOSS_VOICES = {
+  queen: { pitch: 230, type: 'sawtooth', rate: 13, wobble: 0.3, loud: true, volume: 0.14 }, // shrill and haughty
+  shogun: { pitch: 130, type: 'square', rate: 9, wobble: 0.1, loud: true, volume: 0.15 }, // clipped and gruff
+  seraph: { pitch: 520, type: 'triangle', rate: 10, wobble: 0.05, volume: 0.16, layer: 1.5 }, // a calm choir
+  empress: { pitch: 280, type: 'sawtooth', rate: 12, wobble: 0.2, loud: true, volume: 0.14, layer: 2 }, // regal, ringing
+  beezebub: { pitch: 110, type: 'sawtooth', rate: 8, wobble: 0.4, loud: true, volume: 0.2, layer: 0.5 }, // a demonic growl
+};
 
 /** The boss's line at its entrance, from what it remembers: { met, beaten, won } (see Meta.js `boss`). */
 export function bossTaunt(kind, { met = 0, beaten = 0, won = 0 } = {}) {

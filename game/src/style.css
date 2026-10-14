@@ -2043,6 +2043,120 @@ body.touch .menu .prompt {
   cursor: default;
 }
 
+/* --- Frog classes (v0.17) ------------------------------------------------- */
+.classes {
+  cursor: default;
+}
+
+.class-chip {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin: 12px auto 0;
+  padding: 4px 14px 4px 4px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  background: rgba(10, 30, 15, 0.45);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.class-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.class-chip span small {
+  display: block;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.class-chip span b {
+  display: block;
+  font-size: 17px;
+}
+
+.class-chip em {
+  margin-left: 8px;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+  color: #ffd76a;
+}
+
+.class-face {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  object-fit: contain;
+}
+
+.class-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.class-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px 8px 6px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.class-card:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.class-card.chosen {
+  border-color: #ffd76a;
+  background: rgba(255, 215, 106, 0.16);
+}
+
+.class-card .class-face {
+  width: 76px;
+  height: 76px;
+}
+
+.class-text {
+  flex: 1;
+}
+
+.class-text b {
+  display: block;
+  font-size: 15px;
+}
+
+.class-text small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  opacity: 0.85;
+}
+
+.class-text .class-title {
+  color: #ff9ec7;
+  opacity: 1;
+  font-weight: 700;
+}
+
 .keepsake-list,
 .vows {
   display: grid;

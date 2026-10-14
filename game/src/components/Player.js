@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { computeFootprintRadius } from './collision.js';
-import { smoothGeometry, upgradeMaterial } from './Graphics.js';
+import { upgradeMaterial } from './Graphics.js';
+import { buildFrog } from './FrogModels.js';
 
-export const PLAYER_SCALE = 20;
+// The frogs of FrogModels.js are built about 25 units tall; at this size they match the original glTF Tode.
+export const FROG_SCALE = 0.65;
+// Tode's footprint (measured on the original model), the same for every class so balance doesn't change.
+const PLAYER_RADIUS = 17;
+const FROG_GROUND = 0.8; // the toes reach a little below the frog's origin
 
 // Base stats for a fresh run. Brews modify the player's copy of these.
 export const BASE_STATS = {
@@ -71,6 +74,15 @@ export const BASE_STATS = {
   lightningFreeze: false,
   gaugeRate: 1,
   ultimatePower: 1,
+
+  // Class mechanics (see Classes.js)
+  dashKnockback: 1, // how hard the hop-dash shoves bees
+  skillCooldown: 1, // multiplies skill cooldowns
+  spitHoming: 0, // spit steers toward bees (the Mage's bolts)
+  spitStyle: null, // how the spit looks: null (Tode's), 'pellet', 'dart', 'bolt' or 'star'
+  bombElements: false, // every tea bomb gets a random element (the Alchemist)
+  companions: 0, // little pond toads at Tode's side (the Summoner)
+  dashDecoy: false, // the hop-dash vanishes in smoke and leaves a decoy (the Ninja)
 };
 
 const ACCELERATION = 18; // how fast velocity reaches the target speed; higher = snappier
@@ -82,7 +94,6 @@ const HIT_INVULNERABILITY = 0.9; // seconds
 const SHIELD_INVULNERABILITY = 0.6;
 const DASH_GRACE = 0.25; // seconds Tode stays safe after landing, so hopping into a swarm doesn't backfire
 
-const loader = new GLTFLoader();
 const targetVelocity = new THREE.Vector3();
 const lastPosition = new THREE.Vector3();
 const STILL = new THREE.Vector3();
@@ -94,12 +105,15 @@ export class Player {
     this.adornments = new THREE.Group();
     this.group.add(this.adornments);
     this.model = null;
-    this.frogMaterials = [];
-    this.frogMeshes = []; // { mesh, geometry, material, entry }: the classic look, to switch graphics levels
+    this.rig = null; // the animated frog (FrogModels.js)
+    this.frogClass = null;
+    this.frogMaterials = []; // { material (current), original, base }: what ascension tints
+    this.frogMeshes = []; // { mesh, entry }: to swap materials between graphics levels
     this.graphicsLevel = 0;
+    this.visualScale = 1;
     this.baseGroundOffset = 0;
     this.groundOffset = 0;
-    this.radius = 10;
+    this.radius = PLAYER_RADIUS;
 
     this.shieldBubble = new THREE.Mesh(
       new THREE.SphereGeometry(17, 20, 14),
@@ -114,48 +128,68 @@ export class Player {
     this.reset();
   }
 
-  async load() {
-    const gltf = await loader.loadAsync('/models/tode.glb');
-    const model = gltf.scene;
-    model.scale.setScalar(PLAYER_SCALE);
-    model.rotation.x = Math.PI / 2;
+  async load(frogClass = 'tode') {
+    this.setClass(frogClass);
+  }
+
+  /** Builds (or rebuilds) the frog of a class (see Classes.js): its model, materials and animations. */
+  setClass(id) {
+    if (this.rig && this.frogClass === id) return;
+    if (this.model) {
+      this.model.removeFromParent();
+      this.model.traverse((child) => child.isMesh && !child.userData.shared && child.geometry?.dispose());
+      for (const { material, original } of this.frogMaterials) {
+        material.dispose();
+        if (original !== material) original.dispose();
+      }
+    }
+    this.frogClass = id;
+    const rig = buildFrog(id, { ownMaterials: true });
+    this.rig = rig;
+    const model = rig.root;
+    model.rotation.x = Math.PI / 2; // built Y-up, the world is Z-up
     model.traverse((child) => {
-      if (!child.isMesh) return;
-      child.castShadow = true;
-      // Own copies, so Tode can turn golden without touching the shared model.
-      child.material = child.material.clone();
-      const { color, emissive, metalness = 0, roughness = 1 } = child.material;
-      const entry = {
-        material: child.material,
-        base: { color: color.clone(), emissive: emissive?.clone(), metalness, roughness },
-      };
-      this.frogMaterials.push(entry);
-      this.frogMeshes.push({ mesh: child, geometry: child.geometry, material: child.material, entry });
+      if (child.isMesh) child.castShadow = true;
     });
-
-    model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(model, true);
-    this.baseGroundOffset = this.groundOffset = -box.min.z;
-    model.position.z = this.groundOffset;
-
+    this.frogMaterials = rig.materials.map((material) => ({
+      material,
+      original: material,
+      base: { color: material.color.clone(), emissive: material.emissive?.clone(), metalness: material.metalness ?? 0, roughness: material.roughness ?? 1 },
+    }));
+    this.frogMeshes = [];
+    model.traverse((child) => {
+      const entry = child.isMesh && this.frogMaterials.find((e) => e.original === child.material);
+      if (entry) this.frogMeshes.push({ mesh: child, entry });
+    });
     this.model = model;
     this.group.add(model);
-    this.radius = computeFootprintRadius(this.group);
+    this.radius = PLAYER_RADIUS;
+    this.setVisualScale(this.visualScale);
+    // Back to the graphics level we were at.
+    const level = this.graphicsLevel;
+    this.graphicsLevel = 0;
+    this.setGraphics(level);
     this.applyFacing();
+  }
+
+  /** Runs the frog's animations (every frame, menus and cut-scenes too). */
+  animate(delta) {
+    this.rig?.update(delta);
   }
 
   get position() {
     return this.group.position;
   }
 
-  /** Classic faceted Tode at level 0; smooth, glossy skin from level 1 on (see Graphics.js). */
+  /** The voxel look at level 0; glossier blocks from level 1 on (see Graphics.js). They stay blocky. */
   setGraphics(level) {
     if (level === this.graphicsLevel) return;
     this.graphicsLevel = level;
-    for (const look of this.frogMeshes) {
-      const current = look.mesh.material;
-      const next = level === 0 ? look.material : upgradeMaterial(look.material, level);
-      next.flatShading = level === 0 && look.material.flatShading;
+    for (const entry of this.frogMaterials) {
+      const current = entry.material;
+      const next = level === 0 ? entry.original : upgradeMaterial(entry.original, level);
+      next.flatShading = true;
+      next.side = entry.original.side;
       // Keep the ascension colours it has right now.
       next.color.copy(current.color);
       next.emissive?.copy(current.emissive);
@@ -164,11 +198,10 @@ export class Player {
         next.roughness = current.roughness;
       }
       next.needsUpdate = true;
-      if (current !== look.material) current.dispose();
-      look.mesh.material = next;
-      look.mesh.geometry = level === 0 ? look.geometry : smoothGeometry(look.geometry);
-      look.entry.material = next;
+      if (current !== entry.original) current.dispose();
+      entry.material = next;
     }
+    for (const { mesh, entry } of this.frogMeshes) mesh.material = entry.material;
   }
 
   get isDashing() {
@@ -185,9 +218,10 @@ export class Player {
 
   /** Grows Tode as he ascends; his aura and crest grow with him. */
   setVisualScale(scale) {
+    this.visualScale = scale;
     if (!this.model) return;
-    this.model.scale.setScalar(PLAYER_SCALE * scale);
-    this.groundOffset = this.baseGroundOffset * scale;
+    this.model.scale.setScalar(FROG_SCALE * scale);
+    this.groundOffset = FROG_GROUND * scale;
     this.adornments.scale.setScalar(scale);
   }
 
@@ -211,6 +245,7 @@ export class Player {
     if (this.dash || this.dashCharges < 1 || this.rooted) return false;
     const dashDirection = direction.lengthSq() > 0 ? direction.clone() : this.facing.clone();
     this.dash = { direction: dashDirection.normalize(), elapsed: 0, hits: new Set() };
+    this.rig?.play('dash', { once: true, length: this.stats.dashDuration + 0.25 });
     this.dashCharges--;
     this.dashes++;
     if (this.dashCooldownLeft === 0) this.dashCooldownLeft = this.stats.dashCooldown;
@@ -303,9 +338,11 @@ export class Player {
     }
     this.model.position.z = this.groundOffset + height;
     this.adornments.position.z = height;
+    // The legs push out behind in every running hop.
+    this.rig?.setLocomotion(this.dash || !moved ? 0 : height / HOP_HEIGHT);
 
-    // Blink while recovering from a hit.
-    const visible = this.invulnerableLeft === 0 || Math.floor(this.invulnerableLeft * 14) % 2 === 0;
+    // Blink while recovering from a hit; the Ninja vanishes into smoke while he hops.
+    const visible = (this.invulnerableLeft === 0 || Math.floor(this.invulnerableLeft * 14) % 2 === 0) && !(this.dash && this.stats.dashDecoy);
     this.model.visible = visible;
     this.adornments.visible = visible;
   }

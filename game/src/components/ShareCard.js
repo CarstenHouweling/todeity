@@ -54,7 +54,7 @@ export function drawShareCard(run, build, backdrop, url) {
   c.fillText(run.victory ? '👑 Victory!' : `Reached wave ${run.wave}`, left, 215);
   c.fillStyle = 'rgba(255, 255, 255, 0.85)';
   c.font = `700 24px ${FONT}`;
-  c.fillText(build.form, left, 252);
+  c.fillText(build.frogClass && build.frogClass !== build.form ? `${build.frogClass} · ${build.form}` : build.form, left, 252);
 
   c.fillStyle = 'rgba(255, 255, 255, 0.7)';
   c.font = `800 20px ${FONT}`;
@@ -170,7 +170,8 @@ export function drawShareCard(run, build, backdrop, url) {
 
 /** A short message to go with the card (or alone where images can't be shared). */
 export function shareText(run, build, url) {
-  const result = run.victory ? `banished Bee-zebub and became ${build.form}` : `reached wave ${run.wave} as ${build.form}`;
+  const who = build.frogClass && build.frogClass !== 'Tode' ? `${build.frogClass} (${build.form})` : build.form;
+  const result = run.victory ? `banished Bee-zebub as ${who}` : `reached wave ${run.wave} as ${who}`;
   const lines = [
     `🐸☕ I ${result} in Todeity: Rise of the Tea God!${run.daily ? ' (📅 Daily Brew)' : ''}${run.steep ? ` (🔥 Steep ${run.steep})` : ''}`,
     `🏆 ${run.score.toLocaleString()} points · ⏱ ${formatTime(run.time)} · ⭐ Level ${run.level} · 🐝 ${run.kills} bees`,

@@ -3,11 +3,14 @@
 
 const SFX_VOLUME = 0.5;
 const MUSIC_VOLUME = 0.32;
+const VOICE_VOLUME = 1; // voices are tuned to come through clearly over the loudest song (see babble)
 
 let context = null;
 let sfxBus = null;
 let musicBus = null;
 let musicFilter = null;
+let musicDuck = null; // dips the music while someone talks
+let voiceBus = null; // voices have their own level and a limiter, so they can be loud without distorting
 const settings = { sfx: true, music: true };
 const lastPlayed = new Map();
 const unlockListeners = [];
@@ -45,7 +48,14 @@ export function unlockAudio() {
     musicFilter.frequency.value = 20000;
     musicBus = context.createGain();
     musicBus.gain.value = settings.music ? MUSIC_VOLUME : 0;
-    musicBus.connect(musicFilter).connect(master);
+    musicDuck = context.createGain();
+    musicBus.connect(musicFilter).connect(musicDuck).connect(master);
+
+    voiceBus = context.createGain();
+    voiceBus.gain.value = settings.sfx ? VOICE_VOLUME : 0;
+    const limiter = context.createDynamicsCompressor();
+    Object.entries({ threshold: -12, knee: 6, ratio: 8, attack: 0.003, release: 0.15 }).forEach(([key, value]) => (limiter[key].value = value));
+    voiceBus.connect(limiter).connect(master);
 
     unlockListeners.forEach((listener) => listener());
   }
@@ -70,7 +80,10 @@ export function setSound(channel, on) {
   settings[channel] = on;
   saveSettings();
   if (!context) return;
-  if (channel === 'sfx') sfxBus.gain.value = on ? SFX_VOLUME : 0;
+  if (channel === 'sfx') {
+    sfxBus.gain.value = on ? SFX_VOLUME : 0;
+    voiceBus.gain.value = on ? VOICE_VOLUME : 0;
+  }
   if (channel === 'music') musicBus.gain.setTargetAtTime(on ? MUSIC_VOLUME : 0, context.currentTime, 0.1);
 }
 
@@ -209,8 +222,34 @@ export function play(name) {
 
 // --- Voices ---------------------------------------------------------------------
 // Characters "talk" in a babble of short synthesized syllables while their line is typed out, each pitched to the
-// speaker: no recorded voices needed.
+// speaker: no recorded voices needed. Every syllable is a vowel: the voice's buzz shaped by the two resonances of
+// a mouth (F1, F2). Those sit at 300–2,300 Hz whatever the pitch, so even deep voices come through phone and tablet
+// speakers, which barely play anything under 200 Hz. They go to their own bus (`voiceBus`), loud enough to be
+// heard over a boss theme, and the music dips while anyone talks.
 let voiceNodes = [];
+// [F1, F2] in Hz for "ah", "eh", "ee", "aw", "oo", "ae".
+const VOWELS = [[750, 1200], [500, 1850], [330, 2250], [520, 950], [380, 1050], [620, 1650]];
+const VOICE_GAIN = 6; // make-up gain: the narrow vowel filters only let a few harmonics through
+const WAVE_GAIN = { triangle: 2 }; // a triangle's overtones are faint, so less of it gets through the vowels
+const MUSIC_DUCK = 0.3; // the music's level while someone talks
+
+let duckFrom = 0;
+let duckTo = 0;
+
+/**
+ * Dips the music for `seconds` from `start` (context time), so a line can be heard over a boss theme. Lines that
+ * are scheduled together (a Duo exchange) share one dip from the first to the last.
+ */
+function duckMusic(start, seconds) {
+  const now = context.currentTime;
+  const pending = duckTo > now;
+  duckFrom = pending ? Math.max(now, Math.min(duckFrom, start)) : start;
+  duckTo = pending ? Math.max(duckTo, start + seconds) : start + seconds;
+  const { gain } = musicDuck;
+  gain.cancelScheduledValues(now);
+  gain.setTargetAtTime(MUSIC_DUCK, duckFrom, 0.08);
+  gain.setTargetAtTime(1, duckTo, 0.4);
+}
 
 /** Stops every babble that is still scheduled (a menu closed before the line was done). */
 export function hush() {
@@ -223,11 +262,15 @@ export function hush() {
     }
   }
   voiceNodes = [];
+  duckTo = 0;
+  musicDuck.gain.cancelScheduledValues(context.currentTime);
+  musicDuck.gain.setTargetAtTime(1, context.currentTime, 0.2);
 }
 
 /**
- * Babbles `text` in a `voice` ({ pitch, type, rate: syllables per second, wobble: pitch variation, loud }),
- * starting after `delay` seconds and lasting as long as typing it out at `charsPerSecond`.
+ * Babbles `text` in a `voice` ({ pitch, type, rate: syllables per second, wobble: pitch variation, loud, volume,
+ * layer: a second voice at `pitch × layer` for a growl or a choir }), starting after `delay` seconds and lasting as
+ * long as typing it out at `charsPerSecond`.
  */
 export function babble(voice, text, delay = 0, charsPerSecond = 45) {
   if (!context || !settings.sfx || context.state !== 'running' || !voice || !text) return;
@@ -236,32 +279,46 @@ export function babble(voice, text, delay = 0, charsPerSecond = 45) {
   const step = duration / count;
   const start = context.currentTime + delay;
   const shouting = voice.loud && text === text.toUpperCase();
-  const volume = (voice.loud ? 0.09 : 0.08) * (shouting ? 1.3 : 1);
+  const volume = (voice.volume ?? (voice.loud ? 0.14 : 0.11)) * (shouting ? 1.3 : 1) * VOICE_GAIN * (WAVE_GAIN[voice.type] ?? 1);
   voiceNodes = voiceNodes.filter((node) => node.endsAt > context.currentTime);
+  duckMusic(start, duration);
   for (let i = 0; i < count; i++) {
-    if (Math.random() < 0.12) continue; // little pauses between "words"
-    const at = start + i * step + Math.random() * step * 0.2;
-    const length = step * (0.55 + Math.random() * 0.3);
+    if (Math.random() < 0.08) continue; // little pauses between "words"
+    const at = start + i * step + Math.random() * step * 0.1;
+    const length = step * (0.75 + Math.random() * 0.2);
     // Questions go up at the end, everything else drops a little.
     const ending = i >= count - 2 ? (text.trim().endsWith('?') ? 1.25 : 0.85) : 1;
     const pitch = voice.pitch * ending * (1 + (Math.random() * 2 - 1) * voice.wobble);
-    const oscillator = context.createOscillator();
-    oscillator.type = voice.type;
-    oscillator.frequency.setValueAtTime(pitch, at);
-    oscillator.frequency.exponentialRampToValueAtTime(pitch * (0.9 + Math.random() * 0.25), at + length);
-    // A band-pass "mouth" that moves between vowel-like formants.
-    const formant = context.createBiquadFilter();
-    formant.type = 'bandpass';
-    formant.Q.value = 1.2;
-    formant.frequency.setValueAtTime(pitch * (1.5 + Math.random() * 3), at);
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, at);
-    gain.gain.exponentialRampToValueAtTime(volume, at + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
-    oscillator.connect(formant).connect(gain).connect(sfxBus);
-    oscillator.start(at);
-    oscillator.stop(at + length + 0.02);
-    oscillator.endsAt = at + length + 0.02;
-    voiceNodes.push(oscillator);
+    const glide = 0.9 + Math.random() * 0.25;
+    // The mouth: two vowel resonances (a little higher for small, high voices).
+    const [f1, f2] = VOWELS[Math.floor(Math.random() * VOWELS.length)];
+    const lift = Math.max(1, pitch / 280);
+    const mouth = context.createGain();
+    const envelope = context.createGain();
+    for (const [frequency, q, level] of [[f1 * lift, 5, 1], [f2 * lift, 7, 0.7]]) {
+      const resonance = context.createBiquadFilter();
+      resonance.type = 'bandpass';
+      resonance.frequency.value = frequency;
+      resonance.Q.value = q;
+      const amount = context.createGain();
+      amount.gain.value = level;
+      mouth.connect(resonance).connect(amount).connect(envelope);
+    }
+    envelope.gain.setValueAtTime(0.0001, at);
+    envelope.gain.exponentialRampToValueAtTime(volume, at + 0.02);
+    envelope.gain.setValueAtTime(volume, at + length * 0.6);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    envelope.connect(voiceBus);
+    for (const factor of voice.layer ? [1, voice.layer] : [1]) {
+      const oscillator = context.createOscillator();
+      oscillator.type = voice.type;
+      oscillator.frequency.setValueAtTime(pitch * factor, at);
+      oscillator.frequency.exponentialRampToValueAtTime(pitch * factor * glide, at + length);
+      oscillator.connect(mouth);
+      oscillator.start(at);
+      oscillator.stop(at + length + 0.02);
+      oscillator.endsAt = at + length + 0.02;
+      voiceNodes.push(oscillator);
+    }
   }
 }

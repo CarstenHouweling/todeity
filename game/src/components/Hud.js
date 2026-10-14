@@ -12,6 +12,9 @@ import { canFullscreen, isFullscreen } from './Fullscreen.js';
 import { KEEPSAKES, currentKeepsake, isKeepsakeUnlocked, unlockHint } from './Keepsakes.js';
 import { STEEP_MAX, VOWS, steepBonus, steepLevel, vowRank } from './Steeping.js';
 import { CHARM_RARITIES } from './Charms.js';
+import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
+import { classPortrait } from './ClassPortraits.js';
+import { todayKey } from './Random.js';
 
 const ABILITIES = [
   { id: 'spit', key: 'LMB', name: 'Spit', icon: '💧' },
@@ -744,8 +747,9 @@ ${
         <div class="menu-buttons title-start">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
         </div>
+        <button class="class-chip" data-action="classes">${this.classFace(chosenClass())}<span><small>Playing as</small><b>${chosenClass().name}</b></span><em>Change ▸</em></button>
         <div class="menu-buttons title-play">
-          <button class="menu-button" data-action="daily">📅 Daily Brew</button>
+          <button class="menu-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${classOfTheDay(todayKey()).name}</small></button>
           <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
         </div>
@@ -835,6 +839,40 @@ ${
   setSaveStatus(text) {
     const status = this.modal.querySelector('.save-status');
     if (status) status.textContent = text;
+  }
+
+  /** A class's portrait (its frog, rendered once), or its icon where no portrait could be made. */
+  classFace(frogClass) {
+    const portrait = classPortrait(frogClass.id);
+    return portrait ? `<img class="class-face" src="${portrait}" alt="">` : `<span class="class-face">${frogClass.icon}</span>`;
+  }
+
+  /** Pick the frog that plays: every class is open. */
+  showClasses() {
+    const current = chosenClass();
+    const daily = classOfTheDay(todayKey());
+    const cards = CLASSES.map(
+      (frogClass) => `
+        <button class="class-card ${frogClass === current ? 'chosen' : ''}" data-action="class" data-id="${frogClass.id}">
+          ${this.classFace(frogClass)}
+          <span class="class-text">
+            <b>${frogClass.icon} ${frogClass.name}</b>
+            <small class="class-title">${frogClass.title} · ${'♥'.repeat(frogClass.hearts)}</small>
+            <small>${frogClass.text}</small>
+          </span>
+          ${frogClass === current ? '<span class="keepsake-tag">Playing</span>' : ''}
+        </button>`
+    ).join('');
+    this.showMenu(
+      'classes',
+      `
+      <div class="panel">
+        <h2>🐸 Choose your frog</h2>
+        <p class="sub">Every frog plays differently; brews, skills, charms and keepsakes work for all of them. Today's Daily Brew is played by ${daily.icon} <b>${daily.name}</b>.</p>
+        <div class="class-list">${cards}</div>
+        <div class="menu-buttons"><button class="menu-button primary" data-action="title">Done</button></div>
+      </div>`
+    );
   }
 
   /** Pick the keepsake Tode carries into his runs; locked ones say how to unlock them. */
@@ -994,7 +1032,7 @@ ${
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx }) {
+  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, frogClass }) {
     const brews = build.length
       ? build
           .map(
@@ -1021,7 +1059,7 @@ ${
           ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}
           <button class="menu-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
         </div>
-        <p class="sub">${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
+        <p class="sub">${frogClass ? `${frogClass.icon} ${frogClass.name} · ` : ''}${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
         ${ult}
         <div class="build">${brews}</div>
       </div>`
@@ -1046,7 +1084,7 @@ ${
         (entry, i) => `
         <tr class="${i + 1 === highlight ? 'me' : ''}">
           <td>${i + 1}</td>
-          <td class="name">${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
+          <td class="name">${entry.cls ? `<span title="${classById(entry.cls).name}">${classById(entry.cls).icon}</span> ` : ''}${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
           ${columns.map(([, value], c) => `<td class="${c === 2 ? 'form-cell' : ''}">${value(entry)}</td>`).join('')}
         </tr>`
       )

@@ -120,6 +120,26 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
+- **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked under Start run (`hud.showClasses`,
+  `meta.frogClass`): Tode, Bullfrog Brawler (8 hearts, 5-pellet shotgun spit, hard dash shove, Tongue Lash), Tree Frog
+  Sharpshooter (4 hearts, long piercing double-damage darts, crits), Toad Alchemist (3 elemental tea bombs, Sugar
+  Mines), Starleaf Mage (4 hearts, homing bolts, faster skills, Ball Lightning), Toad Summoner (pond toads at his side,
+  `companions`; the Great Tode ultimate from the start, as his own Ancient Pond Toad) and Ninja Toad (throwing stars,
+  2 dashes, `dashDecoy`: a log the bees chase; bosses ignore it). A class is `apply({ stats, player, grant })` on top
+  of `BASE_STATS`, before the Pantry and the keepsake; its mechanics are stats in `BASE_STATS` ("Class mechanics")
+  read by main.js ("Class mechanics" section: `placeDecoy`, `updateCompanions`; `steer` for homing; `teaBlast` for
+  elements) and `Projectile` (`shape`). The Daily Brew plays the class of the day (`classOfTheDay`). Hits round to
+  whole damage, so give low-damage classes whole-number boosts (a +20% on a 1-damage spit does nothing). Balance (bot,
+  300 hearts, waves 1–10, one run each so noisy): Queen 22–49 s, Shogun 18–62 s, 4.6–8.7 hits a minute for every class.
+  The Dart Frog was dropped (it overlapped the Ninja). Inspired by ninja-anime toads but deliberately original: no
+  leaf headband, no copied characters or names.
+- **The frogs** (`components/FrogModels.js`): every player is a procedural voxel frog with real joints (head, jaw,
+  tongue, throat, blinking eyes, arms, folding legs); `Player.setClass` builds it (`FROG_SCALE`, with Tode's original
+  hitbox for every class) and `player.animate` runs it every frame. The game drives it: running legs follow the hop
+  (`setLocomotion`), `flick()` per spit, a one-shot `dash`, `victory` in the ascension and story cut-scenes, a sip in
+  the ending, and the signature move now and then on the title screen. `rig.inPlace` keeps moves from walking the frog
+  off its hitbox in play. Ascension tints the frog's own materials (`ownMaterials`); later arenas make them glossier but
+  keep them blocky. `/classes.html` (dev only) previews them all.
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
   again too); the first run starts with a skippable story
   cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
@@ -128,12 +148,16 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   hellfire rain and an Infernal Spiral, with two rage phases where he grows. Beating him plays the ending
   cut-scene back home in the garden, and credits.
 - **Raid bosses** (`BOSS_SCRIPTS`, `MECHANICS` and the "Raid bosses" / "Boss stages" sections in main.js): every
-  boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic; a **phase lock**
-  (`stageFloor`, in `damageEnemy`) keeps its health at the threshold until that stage has begun, so damage can't
-  skip stages (except during a ritual, which must be breakable). Every stage also lasts at least `stageTime`
-  (13–15 s): the boss holds at the next threshold until then, and can't die before its last stage has run that long
-  (a ⏳ shows on blocked hits; `stageDone`). An **enrage timer** per boss (3:00 to 5:00 of
-  fighting, shown under the boss bar) makes it much faster and harder hitting with stinger rain (`ENRAGE`).
+  boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic. **Apart from its
+  shield, a boss always takes damage**: the fight lasts through its health (`hp` in `BOSS_SCRIPTS` multiplies
+  ENEMY_TYPES: ×1.5 Queen, ×2 Shogun, ×4 Seraph, ×9 Empress, ×12 Bee-zebub), never through a lock that swallows
+  hits. (Until v0.15 a phase lock held the boss at each threshold and every stage lasted at least 13–15 s, with ⏳ on
+  blocked hits; players hated not being able to do anything.) A stage starts the frame its threshold is crossed: a
+  shield goes up even mid-attack or mid-stagger, and a mechanic that takes over the boss (a ritual, a blade storm)
+  cuts its attack or stagger short, but waits for a running ritual or blade storm; during a cataclysm the stages
+  with their own circles wait. A big burst can cross several thresholds; their stages then follow one after another.
+  The ritual's damage target is a share of the health before the `hp` boost. An **enrage timer** per boss (3:20 to
+  5:00 of fighting, shown under the boss bar) makes it much faster and harder hitting with stinger rain (`ENRAGE`).
   Mechanics:
   - Shields (`startWard`, `startGuardians`, `updateRaid`): the boss is immune (`Enemy.setShield`; `damageEnemy`
     ignores it, `targetable()` hides it from aiming, skills and bombs) until its **Shield Wards** (`ward` bees,
@@ -181,6 +205,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   and more often.
   **Endless** (waves past 21): bees +10% health per wave, always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`),
   +1 contact damage every 10 waves.
+- **Co-op classes:** every player plays their own class; the state message carries it (`c`) and `RemoteTode`
+  rebuilds the puppet; spits carry their style (`st`), a Ninja's decoy is a `decoy` message (the host's bees chase it).
+  The Summoner's pond toads are local only (their spits show as his).
 - **Co-op objectives:** a circle (arena objective or a boss's circles of light) only fills while every standing
   frog is in it (`circleHolders`). Shield wards and guardians are attuned to one player each (`attune`, labelled;
   `owner`; the host ignores other players' hits, and an owner who is down or gone frees it).
@@ -207,7 +234,14 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   favourite Blend); later offers sometimes mention the favourite. Bosses taunt at their entrance from `bossTaunt`
   (first meeting, beat Tode before, lost before). Tode's line after a boss defeat names that boss.
 - **Voices:** spirits and bosses babble synthesized syllables while their line types out (`babble`/`hush` in
-  Sound.js, a `voice` per spirit in Spirits.js, `hud.onSpeak`/`onHush`).
+  Sound.js, a `voice` per spirit and `BOSS_VOICES` per boss in Spirits.js, `hud.onSpeak`/`onHush`). Every syllable
+  is a vowel: the voice's oscillator through two resonances (`VOWELS`, F1/F2 at 300–2,300 Hz whatever the pitch,
+  so deep voices still come through phone, tablet and laptop speakers); a voice's `layer` adds a growl or a choir.
+  Voices have their own bus with a limiter (`voiceBus`), and the music dips to 30% while anyone talks
+  (`duckMusic`). Measured at the speakers (RMS): the boss theme ~0.13 (0.04 dipped), boss voices 0.09–0.13,
+  spirits 0.05–0.10, the garden theme ~0.04; keep new voices in that range (`volume`, `VOICE_GAIN`). A boss roars at
+  `BOSS_ROARS_AT` and speaks at `BOSS_SPEAKS_AT` (main.js): its taunt used to start under the roar and was drowned
+  out.
 - **Readability:** enemy bullets have a dark outline (back-face rim mesh) and draw after all other transparent
   effects. The pause menu's **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
   during play (cut-scenes keep the full show) and drop the spit trails.
@@ -363,6 +397,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Map.js` | Lawn (canvas texture with mowing pattern and path) + meadow; `MAP_HALF_SIZE`, `isInsideMap`. |
 | `components/House.js`, `Camera.js`, `Renderer.js`, `Input.js`, `Particles.js`, `Projectile.js`, `collision.js` | As named. |
 | `dev/bot.js` | Dev-only autoplayer for balance testing. |
+| `components/Classes.js` | The frog classes: stats, starting kits, the chosen class and the class of the day. |
+| `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
+| `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
+| `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the five frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |
 | `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
 | `../server/saves.js` | `/api/save` cloud saves (`saves.json` in `DATA_DIR`): codes, run rewards, Pantry purchases, rate limits. |
 | `style.css` | All UI styling. |
@@ -434,6 +472,14 @@ shots copy `game.renderer.domElement.toDataURL()` into a full-screen `<img>` rig
 two tabs against `npm run server` (stepping each tab in turn, with short awaits for the messages). `step()` renders only its last frame; CSS animations
 (banners) run on real time, so a screenshot right after a long step can still show them.
 
+Boss balance (Oct 14, v0.16, the bot with 300 hearts, measured with a harness around `bot.run`): player damage spreads
+very widely late in a run, about 300–600 per second for a weak random build at waves 20–21 and 1,100–2,500+ for a
+strong one, so boss health is set for a weak build to win in ~3 minutes, inside the enrage timer, and a strong one
+in about a minute. Fights measured (shielded time in brackets): Queen 64–85 s (32–44), Shogun 41–68 s (17–28),
+Seraph 51–93 s (40–47), Empress 70 s (41) with a strong build, Bee-zebub 35–71 s (5–26) with a strong build that
+kept growing. Before v0.16 the phase lock made 30–60 s of most fights "no progress": Shogun 78 s with 30 s locked,
+Seraph 121 s with 52 s, Empress 118 s with 48 s, Bee-zebub 147 s with 59 s.
+
 Balance reference (Oct 14, v0.12): the bot can't do raid mechanics well (it flees the boss instead of walking to
 circles), so it dies at the first or second boss; with 80 hearts a Queen fight took ~50 s and a Shogun fight ~45–70 s
 through all stages. Earlier (v0.11 with raid bosses and tactics): the bot (perfect aim, random picks, dodges bullets
@@ -455,7 +501,7 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 
 ## Credits
 
-- `tode.glb`: from the JetBrains Academy course.
+- `tode.glb`: from the JetBrains Academy course (the original Tode; since v0.17 the frogs are built in code, in his style).
 - `enemy.glb`: "Armabee Evolved" by Quaternius, [CC0](https://creativecommons.org/publicdomain/zero/1.0/), via [Poly Pizza](https://poly.pizza/m/GcttdvsqsQ).
 - `small_house.glb`: "Small House" by Jarlan Perez, [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/), via [Poly Pizza](https://poly.pizza/m/053kskrV4U_).
 - Everything else (scenery, effects, music, sound) is generated in code.

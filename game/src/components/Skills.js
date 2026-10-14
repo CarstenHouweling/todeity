@@ -782,7 +782,7 @@ export class SkillBook {
   fire(slot, target) {
     if (this.ctx.player.rooted) return;
     const skill = SKILLS[slot.id];
-    slot.cooldownLeft = skill.cooldown(slot.level);
+    slot.cooldownLeft = skill.cooldown(slot.level) * (this.ctx.player.stats.skillCooldown ?? 1); // the Mage's are shorter
     skill.cast(this.ctx, target, slot.level);
     this.ctx.onSkillCast?.(slot.id, slot.level, target); // co-op: show it to teammates
   }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildFrog } from './FrogModels.js';
 import { MAP_HALF_SIZE } from './Map.js';
 
 /**
@@ -274,16 +275,30 @@ class GreatTodeSummon {
     ctx.shake(6);
   }
 
-  /** A copy of Tode many times his size, with battle-worn reddish skin. */
+  /**
+   * A copy of the player's frog many times its size, with battle-worn reddish skin. The Summoner calls up his own
+   * Ancient Pond Toad instead (see FrogModels.js).
+   */
   createToad() {
     const { ctx } = this;
     const toad = new THREE.Group();
-    const model = ctx.player.model.clone();
+    const ancient = ctx.player.frogClass === 'summoner';
+    let model;
+    if (ancient) {
+      model = buildFrog('giant').root;
+      model.rotation.x = Math.PI / 2;
+      model.scale.setScalar(ctx.player.model.scale.x * 0.85);
+      model.position.z = ctx.player.model.position.z;
+    } else {
+      model = ctx.player.model.clone();
+    }
     model.traverse((child) => {
       if (!child.isMesh) return;
       child.material = child.material.clone();
-      child.material.color.lerp(new THREE.Color('#d0704a'), 0.45);
-      child.material.emissive?.set('#2a0a00');
+      if (!ancient) {
+        child.material.color.lerp(new THREE.Color('#d0704a'), 0.45);
+        child.material.emissive?.set('#2a0a00');
+      }
       child.castShadow = true;
     });
     model.scale.multiplyScalar(SUMMON_SCALE);

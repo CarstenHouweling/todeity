@@ -27,6 +27,9 @@ world, music and sound all generated in code.
 
 ## Feature highlights (for the longer post or the video captions)
 
+- **Seven frogs to play:** Tode, the Bullfrog Brawler, the Tree Frog Sharpshooter, the Toad Alchemist, the Starleaf
+  Mage, the Toad Summoner (who calls up a giant Ancient Pond Toad) and the Ninja Toad, each fully animated with a
+  signature move.
 - **Roguelite core, Hades-inspired:** 27 brews in 5 Blends (Green Tea, Ember Black, Frost Mint, Chamomile,
   Storm Oolong) with rarities, 8 Duo brews and 5 Legendaries, each offered by a talking tea spirit.
 - **Ascension:** five transformations with cut-scenes: golden flame aura, spiky crest, lightning, a halo and a

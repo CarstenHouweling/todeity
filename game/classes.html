@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/tode.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Todeity: class look test</title>
+    <style>
+      body { margin: 0; overflow: hidden; background: #a8dcf5; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #fff; user-select: none; }
+      canvas { display: block; }
+      .bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: calc(100vw - 24px); }
+      .bar button { padding: 8px 14px; border: 2px solid rgba(255, 255, 255, 0.55); border-radius: 10px; background: rgba(10, 30, 15, 0.55); color: #fff; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
+      .bar button.on { border-color: #ffd76a; background: linear-gradient(#ffcf5a, #f0a72a); color: #3b2a14; }
+      .bar .gap { width: 12px; }
+      .label { position: fixed; transform: translate(-50%, 0); text-align: center; pointer-events: none; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); white-space: nowrap; }
+      .label b { display: block; font-size: 16px; }
+      .label small { display: block; font-size: 12px; opacity: 0.9; }
+      .label em { display: block; max-width: 190px; white-space: normal; margin-top: 4px; font-size: 11px; font-style: normal; opacity: 0.85; }
+      .label .short { display: none; }
+      .compact .label .full, .compact .label em { display: none; }
+      .compact .label .short { display: inline; }
+      .compact .label b { font-size: 13px; }
+      .compact .label small { font-size: 10px; }
+      h1 { position: fixed; top: 12px; left: 16px; margin: 0; font-size: 20px; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
+      h1 small { display: block; font-size: 13px; font-weight: 600; opacity: 0.85; }
+    </style>
+  </head>
+  <body>
+    <h1>Todeity: class look test <small>Procedural voxel frogs with real joints. The game itself is unchanged.</small></h1>
+    <div class="bar"></div>
+    <script type="module" src="/src/dev/classes.js"></script>
+  </body>
+</html>

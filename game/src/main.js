@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
-import { Player } from './components/Player.js';
+import { FROG_SCALE, Player } from './components/Player.js';
 import { ELITE_MODS, Enemy, loadEnemyModel, setEnemyGraphics } from './components/Enemy.js';
 import { Projectile, PROJECTILE_HEIGHT } from './components/Projectile.js';
 import { Input } from './components/Input.js';
@@ -26,7 +26,7 @@ import { SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
-import { isDaily, seeded, startDaily, stopDaily } from './components/Random.js';
+import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
 import { Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
@@ -39,9 +39,11 @@ import { ARENAS, arenaForWave } from './components/Arenas.js';
 import { applyRenderer } from './components/Graphics.js';
 import { cycleVow, clearVows, runVows, steepBonus, steepLevel } from './components/Steeping.js';
 import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
+import { chooseClass, chosenClass, classById, classOfTheDay } from './components/Classes.js';
+import { buildFrog } from './components/FrogModels.js';
 import { chance, charmById, CharmDrops, CHARM_RARITIES, rollCharm } from './components/Charms.js';
 import { CHANCE_TRIES, createShrine, disposeShrine, SHRINE_HOLD, SHRINE_RADIUS, SHRINES, updateShrine } from './components/Shrines.js';
-import { BOSS_VOICE, bossTaunt } from './components/Spirits.js';
+import { BOSS_VOICES, bossTaunt } from './components/Spirits.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
 THREE.Cache.enabled = true;
@@ -105,6 +107,8 @@ const HIT_STOP_DAMAGE = 12; // hits this strong freeze the action for a moment
 
 // Bosses
 const BOSS_INTRO_TIME = 2.6;
+const BOSS_ROARS_AT = 0.3; // seconds into its entrance
+const BOSS_SPEAKS_AT = 0.9; // after the roar, so the roar doesn't drown its taunt
 const BOSS_EPITHETS = {
   queen: 'Matriarch of the Hive',
   shogun: 'Blade of the Mountain Hive',
@@ -312,6 +316,7 @@ let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
 let steep = 0; // their Steep level: more score and Golden Leaves
 const vow = (id) => vows[id] ?? 0;
 let keepsake = null; // what Tode carries this run (see Keepsakes.js)
+let runClass = chosenClass(); // the frog playing this run (see Classes.js)
 let leafBonus = 1; // Golden Leaves multiplier (the Golden Leaf keepsake)
 let fullGaugeStart = false; // the Tiny Crown: the ultimate starts charged
 let bonusPicks = 0; // extra Epic brew picks promised by a Bitter Shrine
@@ -612,12 +617,13 @@ function standingTodes() {
 }
 
 /** Bees chase the nearest Tode. */
-function targetFor(position) {
-  return targetTodeFor(position).position;
+function targetFor(position, lured = true) {
+  return targetTodeFor(position, lured).position;
 }
 
-/** The Tode nearest to `position` (the local one if nobody is standing). */
-function targetTodeFor(position) {
+/** The Tode nearest to `position` (the local one if nobody is standing), or a Ninja's decoy close by. */
+function targetTodeFor(position, lured = true) {
+  if (lured) for (const decoy of decoys) if (distanceSqXY(decoy.position, position) < DECOY.lure ** 2) return decoy;
   let best = player;
   let bestDistance = Infinity;
   for (const tode of standingTodes()) {
@@ -715,6 +721,8 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   // More frogs, mightier bosses.
   if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + COOP_BOSS_HP * (coop.size - 1)));
   if (enemy.type.boss && vow('royal')) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.3 * vow('royal')));
+  // Bosses are fought through their health, not a lock on it (see BOSS_SCRIPTS).
+  if (enemy.type.boss) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (BOSS_SCRIPTS[kind]?.hp ?? 1));
   if (enemy.damage > 0) enemy.damage += config.contactBonus ?? 0;
   let spot = at ?? freeCorner(enemy.radius);
   // A requested spot can be blocked (a huge boss at a corner, a summon inside a tree): step toward the middle.
@@ -777,20 +785,6 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
 
   if (isGuest()) {
     net.queue('host', { k: 'hit', id: enemy.netId, dm: damage, kx: direction ? direction.x * force : 0, ky: direction ? direction.y * force : 0 });
-  } else {
-    // Phase lock: a boss can't be pushed past its next stage before that stage has begun.
-    const floor = stageFloor(enemy);
-    if (floor && enemy.hp - damage < floor) {
-      damage = Math.max(0, Math.ceil(enemy.hp - floor));
-      if (!damage) {
-        // Holding at the threshold until the stage is over: show that the hits don't get through.
-        if (clock.elapsedTime - (enemy.lastShieldPing ?? 0) > 0.5) {
-          enemy.lastShieldPing = clock.elapsedTime;
-          hud.damageNumber(enemy.position, '⏳', enemy.height + 4, 'frost');
-        }
-        return;
-      }
-    }
   }
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
@@ -1048,7 +1042,7 @@ function checkContact(enemy) {
       enemy.shatterLeft = FREEZE_SHATTER_DELAY;
       particles.burst(enemy.position, { count: 8, colors: ICE, speed: 60, up: 50, size: 1.4, glow: true });
     }
-    if (dashDamage > 0) damageEnemy(enemy, dashDamage, player.dash.direction, DASH_KNOCKBACK, 'dash');
+    if (dashDamage > 0) damageEnemy(enemy, dashDamage, player.dash.direction, DASH_KNOCKBACK * player.stats.dashKnockback, 'dash');
     return;
   }
   if (!enemy.damage) return; // nurses
@@ -1377,7 +1371,7 @@ function stingerRain(boss) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const distance = i === 0 ? 0 : 40 + Math.random() * 200;
-    const spot = targetFor(boss.position).clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
+    const spot = targetFor(boss.position, false).clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
     sharedStrike(spot, { damage: 0, radius: 38, delay: 1.1 + i * 0.05, hurtsPlayer: true, hitsBees: false, color: hellish ? '#ff4a10' : '#c070ff' });
   }
 }
@@ -1386,15 +1380,16 @@ function stingerRain(boss) {
 // At each health fraction a boss enters its next stage: it roars, attacks a little faster and starts a mechanic.
 // Shield tasks ('wards', 'lights', 'guardians') make it immune until they are done; 'interrupt' is a damage race
 // against its channel; 'nurses', 'soak', 'mark' and 'blades' become attacks it keeps repeating; 'firering' closes
-// the arena for the rest of the fight. `enrage`: seconds of fighting before it enrages. `stageTime`: every stage
-// lasts at least this long (the boss holds at the next threshold until then, and can't fall before its last stage
-// has run that long), so a strong build can't burst through a fight. [fraction, mechanic, count]
+// the arena for the rest of the fight. `enrage`: seconds of fighting before it enrages. Apart from its shield, a
+// boss always takes damage: the fight lasts through its health (`hp` multiplies ENEMY_TYPES), never through a lock
+// that swallows hits. A big burst can cross several thresholds; their stages then follow one after another.
+// [fraction, mechanic, count]
 const BOSS_SCRIPTS = {
-  queen: { enrage: 180, stageTime: 15, stages: [[0.75, 'wards', 3], [0.5, 'nurses'], [0.25, 'interrupt']] },
-  shogun: { enrage: 220, stageTime: 15, stages: [[0.85, 'interrupt'], [0.62, 'wards', 4], [0.4, 'blades'], [0.18, 'guardians', 2]] },
-  seraph: { enrage: 250, stageTime: 15, stages: [[0.82, 'lights', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
-  empress: { enrage: 270, stageTime: 14, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
-  beezebub: { enrage: 300, stageTime: 13, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
+  queen: { enrage: 200, hp: 1.5, stages: [[0.75, 'wards', 3], [0.5, 'nurses'], [0.25, 'interrupt']] },
+  shogun: { enrage: 220, hp: 2, stages: [[0.85, 'interrupt'], [0.62, 'wards', 4], [0.4, 'blades'], [0.18, 'guardians', 2]] },
+  seraph: { enrage: 250, hp: 4, stages: [[0.82, 'lights', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
+  empress: { enrage: 270, hp: 9, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
+  beezebub: { enrage: 300, hp: 12, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
 };
 // Titles for the stage banners; `every`: seconds between casts of a repeating mechanic.
 const MECHANICS = {
@@ -1711,28 +1706,10 @@ const MARK = { time: 6.5, damage: 2 };
 const BLADES = { windup: 1, spin: 3.4, length: 900, width: 16, speed: 0.55 };
 const CLOSING = { time: 22, to: 0.42 };
 
-/** The health a boss can't drop below until its next stage starts (0: none left). */
-function stageFloor(enemy) {
-  if (!enemy.type.boss || ritual?.boss === enemy) return 0; // a ritual must be breakable
-
-  const script = BOSS_SCRIPTS[enemy.kind];
-  const stage = script?.stages[enemy.ai.stage ?? 0];
-  if (stage) return Math.floor(stage[0] * enemy.maxHp);
-  // The last stage: the boss can't fall before it has run its course.
-  return script && !stageDone(enemy) ? 1 : 0;
-}
-
-/** Whether the boss's current stage has lasted its minimum time (see `stageTime`). */
-function stageDone(boss) {
-  const script = BOSS_SCRIPTS[boss.kind];
-  return !script || (boss.ai.fightTime ?? 0) - (boss.ai.stageAt ?? 0) >= script.stageTime;
-}
-
 /** Host: the boss crosses into its next stage. */
 function startStage(boss, [, mechanic, count]) {
   const { ai } = boss;
   ai.stage = (ai.stage ?? 0) + 1;
-  ai.stageAt = ai.fightTime ?? 0;
   ai.stageSpeed = (ai.stageSpeed ?? 1) * 0.92; // every stage attacks a little faster
   const title = mechanic === 'interrupt' ? RITUALS[boss.kind] ?? MECHANICS.interrupt.title : MECHANICS[mechanic].title;
   stageEffects(boss, ai.stage, title);
@@ -1857,7 +1834,8 @@ function startInterrupt(boss, title) {
   const { ai } = boss;
   ai.mode = 'interrupt';
   ai.timer = INTERRUPT.time;
-  const need = Math.round(boss.maxHp * INTERRUPT.share * (coop ? 1 + 0.5 * (coop.size - 1) : 1));
+  // A share of the boss's health before its `hp` boost, so breaking the ritual takes the same burst as ever.
+  const need = Math.round((boss.maxHp * INTERRUPT.share * (coop ? 1 + 0.5 * (coop.size - 1) : 1)) / (BOSS_SCRIPTS[boss.kind]?.hp ?? 1));
   boss.glowColor.set(0x9a3cff);
   beginRitual(boss, need, title);
   share({ k: 'brk', id: boss.netId, need, n: title });
@@ -2467,6 +2445,27 @@ function updateQueen(boss, delta) {
       stingerRain(boss);
     }
   }
+  // The next stage starts as soon as its health fraction is crossed (see BOSS_SCRIPTS), or a strong build would burst
+  // through the stages before they began: a shield goes up even mid-attack or mid-stagger. A mechanic that takes
+  // over the boss's moves (a ritual, a blade storm) cuts its attack or stagger short (breaking a ritual staggers it
+  // again), but waits for a ritual or blade storm that is already going. During a cataclysm only the stages without
+  // circles of their own can start, so nobody has to tell two sets of circles apart.
+  const stage = script?.stages[ai.stage ?? 0];
+  const takesOver = stage && (stage[1] === 'interrupt' || stage[1] === 'blades');
+  const occupied = ai.mode === 'interrupt' || ai.mode === 'blades';
+  const waitsForCataclysm = cataclysm && stage && (takesOver || ['lights', 'soak', 'mark'].includes(stage[1]));
+  if (stage && !raid && !waitsForCataclysm && !(takesOver && occupied) && boss.hp <= stage[0] * boss.maxHp) {
+    if (takesOver) {
+      ai.staggerLeft = 0;
+      boss.glow = 0;
+      if (ai.telegraph) {
+        removeTelegraph(ai.telegraph); // a charge it was winding up
+        ai.telegraph = null;
+        share({ k: 'teleOff', id: boss.netId });
+      }
+    }
+    startStage(boss, stage);
+  }
   // Staggered after its shield broke: dazed, open to everything.
   if (ai.staggerLeft > 0) {
     ai.staggerLeft -= delta;
@@ -2479,10 +2478,6 @@ function updateQueen(boss, delta) {
     hud.setBoss(boss);
     return;
   }
-  // The next stage starts at its health fraction (see BOSS_SCRIPTS), once the boss is free to start it.
-  const stage = script?.stages[ai.stage ?? 0];
-  const busy = ['channel', 'interrupt', 'blades', 'windup', 'charge', 'spiral', 'volley', 'halo', 'brimstone', 'pillars'].includes(ai.mode);
-  if (stage && !raid && !cataclysm && !busy && boss.hp <= stageFloor(boss) && stageDone(boss)) startStage(boss, stage);
   const enraged = boss.hp < boss.maxHp / 2;
   const nextPhase = BOSS_PHASES[boss.kind]?.[ai.phase ?? 0];
   if (nextPhase && !boss.shielded && boss.hp / boss.maxHp < nextPhase) bossRoar(boss);
@@ -2490,7 +2485,7 @@ function updateQueen(boss, delta) {
   const shieldCalm = boss.shielded ? 1.25 : 1;
   const delayScale =
     (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1) * shieldCalm * (ai.stageSpeed ?? 1) * (boss.enraged ? ENRAGE.attackScale : 1);
-  const target = targetFor(boss.position);
+  const target = targetFor(boss.position, false);
   directionTo(boss.position, target, chase);
 
   switch (ai.mode) {
@@ -2598,7 +2593,7 @@ function updateQueen(boss, delta) {
       if (ai.timer <= 0) {
         ai.timer = 0.32;
         ai.pillarsLeft--;
-        const spot = targetFor(boss.position).clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0));
+        const spot = targetFor(boss.position, false).clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, 0));
         sharedStrike(spot, { damage: 0, radius: 44, delay: 0.75, hurtsPlayer: true, hitsBees: false, color: '#ff4a10', from: spot.clone().setZ(500) });
         if (ai.pillarsLeft <= 0) {
           boss.glow = 0;
@@ -2909,6 +2904,7 @@ function updateEnemyProjectiles(delta) {
 // --- Abilities ---
 function spit() {
   const { stats } = player;
+  player.rig?.flick();
   spitCooldownLeft = stats.spitCooldown;
   spitShots++;
   play('spit');
@@ -2947,18 +2943,21 @@ function fireSpit(origin, direction, damage, { child = false, hits } = {}) {
     radius: (child ? 2.5 : 3.5) * (1 + 0.08 * ascension.tier),
     color,
     emissive,
+    shape: stats.spitStyle,
   });
-  projectile.trail = settings.calmFx ? null : SPIT_TRAILS[ascension.tier];
+  projectile.homing = stats.spitHoming;
+  projectile.trail = settings.calmFx ? null : stats.spitStyle === 'bolt' ? BOLT_TRAIL : SPIT_TRAILS[ascension.tier];
   projectile.child = child;
   if (hits) hits.forEach((enemy) => projectile.hits.add(enemy));
   projectiles.push(projectile);
   scene.add(projectile.mesh);
-  share({ k: 'spit', o: [origin.x, origin.y], d: [direction.x, direction.y], s: projectile.speed, r: projectile.range, rad: projectile.radius });
+  share({ k: 'spit', o: [origin.x, origin.y], d: [direction.x, direction.y], s: projectile.speed, r: projectile.range, rad: projectile.radius, st: stats.spitStyle });
 }
+const BOLT_TRAIL = ['#e0d0ff', '#b48cff', '#ffffff'];
 
 /** A teammate's spit: it flies and splatters, but the damage is done on their side. */
-function visualSpit(origin, direction, speed, range, radius) {
-  const projectile = new Projectile(origin, direction, { speed, range, damage: 0, radius });
+function visualSpit(origin, direction, speed, range, radius, shape = null) {
+  const projectile = new Projectile(origin, direction, { speed, range, damage: 0, radius, shape });
   projectile.visual = true;
   projectiles.push(projectile);
   scene.add(projectile.mesh);
@@ -3026,8 +3025,28 @@ function onSpitHit(target, projectile) {
   }
 }
 
+const steerTo = new THREE.Vector3();
+/** The Mage's bolts curve toward the nearest bee they haven't hit, if it's roughly ahead. */
+function steer(projectile, delta) {
+  let best = null;
+  let bestDistance = 260 ** 2;
+  for (const enemy of targetable()) {
+    if (projectile.hits.has(enemy)) continue;
+    const distance = distanceSqXY(enemy.position, projectile.position);
+    if (distance > bestDistance) continue;
+    steerTo.subVectors(enemy.position, projectile.position).setZ(0);
+    if (steerTo.dot(projectile.direction) < 0) continue; // not behind it
+    best = enemy;
+    bestDistance = distance;
+  }
+  if (!best) return;
+  steerTo.subVectors(best.position, projectile.position).setZ(0).normalize();
+  projectile.direction.lerp(steerTo, 1 - Math.exp(-7 * projectile.homing * delta)).normalize();
+}
+
 function updateProjectiles(delta) {
   for (const projectile of [...projectiles]) {
+    if (projectile.homing) steer(projectile, delta);
     projectile.update(delta);
     if (projectile.trail && Math.random() < 0.6) {
       particles.burst(projectile.position.clone().setZ(0), {
@@ -3159,13 +3178,23 @@ function updateBombs(delta) {
 function teaBlast(center) {
   const { stats } = player;
   const radius = stats.splashRadius * (weather.info.splashRadius ?? 1);
+  // The Alchemist's brews bubble over: fire, frost or lightning, at random.
+  const element = stats.bombElements ? ['fire', 'frost', 'storm'][Math.floor(Math.random() * 3)] : null;
   splash(center, {
     radius,
     damage: stats.splashDamage,
     knockback: stats.splashKnockback,
-    burn: stats.splashBurn,
-    slow: stats.splashSlow,
+    burn: stats.splashBurn + (element === 'fire' ? 2 : 0),
+    slow: Math.max(stats.splashSlow, element === 'frost' ? 0.6 : 0),
+    color: { fire: '#ff6a3d', frost: '#8fdcff', storm: '#c8b0ff' }[element],
   });
+  if (element === 'storm') {
+    aliveEnemies()
+      .filter((enemy) => distanceSqXY(enemy.position, center) < (radius * 1.6) ** 2)
+      .slice(0, 3)
+      .forEach((enemy, i) => sharedStrike(enemy.position, { damage: Math.max(4, Math.round(stats.splashDamage * 0.75)), radius: 30, delay: 0.05 * i }));
+  }
+  if (element) particles.burst(center, { count: 20, colors: { fire: FIRE, frost: ICE, storm: ['#ffffff', '#c8b0ff', '#9fb8ff'] }[element], speed: 160, up: 140, size: 2, glow: true });
   effects.ring(center, { radius: radius * 1.15, color: '#fff1d0', duration: 0.45, thickness: 0.15 });
   particles.burst(center, { count: 24, colors: ['#ffffff', '#f3eadf', '#e8dcc8'], speed: 60, up: 180, size: 3, height: 4, gravity: -60, life: 0.9 });
   postfx.pulse({ bloom: 0.4, aberration: 0.25 });
@@ -3200,9 +3229,15 @@ function kettleLanding() {
 
 function tryDash(direction) {
   if (hexLeft > CURSED.hex - CURSED.hexNoDash) return; // a fresh hex holds Tode's legs for a moment
+  const from = player.position.clone();
   if (!player.startDash(direction)) return;
   play('dash');
   particles.burst(player.position, { count: 8, colors: DUST, speed: 50, up: 25, size: 2, height: 1 });
+  // The Ninja vanishes in smoke and leaves a decoy where he stood.
+  if (player.stats.dashDecoy) {
+    placeDecoy(from);
+    share({ k: 'decoy', p: [Math.round(from.x), Math.round(from.y)] });
+  }
   const { dashHealEvery } = player.stats;
   if (dashHealEvery && player.dashes % dashHealEvery === 0) healPlayer(1);
 }
@@ -3468,6 +3503,110 @@ class Biscuit {
   dispose() {
     this.mesh.removeFromParent();
   }
+}
+
+// --- Class mechanics: the Ninja's decoys and the Summoner's pond toads (see Classes.js) ---------------
+const DECOY = { life: 2.2, lure: 320 };
+const decoys = []; // { position, left, mesh }: logs the bees chase for a moment
+const logGeometry = new THREE.BoxGeometry(9, 9, 16);
+const logMaterial = new THREE.MeshStandardMaterial({ color: '#8a5a33', flatShading: true, roughness: 0.9 });
+const SMOKE = ['#ffffff', '#e8e4dc', '#cfc8bc'];
+
+/** A decoy log where a Ninja vanished (every screen shows it; the host's bees chase it). */
+function placeDecoy(position) {
+  const mesh = new THREE.Mesh(logGeometry, logMaterial);
+  mesh.position.set(position.x, position.y, 5);
+  mesh.rotation.set(0.3, 0, Math.random() * Math.PI);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  decoys.push({ position: mesh.position, left: DECOY.life, mesh, decoy: true });
+  particles.burst(position, { count: 26, colors: SMOKE, speed: 90, up: 70, size: 4, height: 8, gravity: -20, life: 0.8 });
+  play('dash');
+}
+
+function updateDecoys(delta) {
+  for (const decoy of [...decoys]) {
+    decoy.left -= delta;
+    if (decoy.left > 0) continue;
+    particles.burst(decoy.position, { count: 18, colors: SMOKE, speed: 70, up: 60, size: 3.5, height: 6, gravity: -20, life: 0.7 });
+    removeDecoy(decoy);
+  }
+}
+
+function removeDecoy(decoy) {
+  decoys.splice(decoys.indexOf(decoy), 1);
+  decoy.mesh.removeFromParent();
+}
+
+// The Summoner's pond toads hop at his side and spit at bees: two, one more at levels 8 and 16.
+const COMPANION = { radius: 46, speed: 230, fireEvery: 0.75, range: 320, damage: 0.6, scale: 0.7 };
+const companions = []; // { group, rig, slot, hop, fireTimer, velocity }
+
+function wantedCompanions() {
+  const base = player.stats.companions;
+  return base ? base + (playerLevel >= 8 ? 1 : 0) + (playerLevel >= 16 ? 1 : 0) : 0;
+}
+
+function addCompanion() {
+  const rig = buildFrog('pondling');
+  rig.inPlace = true;
+  rig.root.rotation.x = Math.PI / 2;
+  rig.root.scale.setScalar(FROG_SCALE * COMPANION.scale);
+  rig.root.traverse((child) => child.isMesh && (child.castShadow = true));
+  const group = new THREE.Group();
+  group.add(rig.root);
+  group.position.copy(player.position);
+  scene.add(group);
+  companions.push({ group, rig, hop: Math.random() * Math.PI, fireTimer: Math.random(), facing: 0 });
+  particles.burst(group.position, { count: 16, colors: SMOKE, speed: 60, up: 60, size: 3, height: 6, gravity: -20, life: 0.6 });
+  effects.ring(group.position, { radius: 26, color: '#ff9a3a', duration: 0.5 });
+}
+
+function clearCompanions() {
+  for (const { group } of companions.splice(0)) group.removeFromParent();
+}
+
+const companionTarget = new THREE.Vector3();
+function updateCompanions(delta) {
+  while (companions.length < wantedCompanions()) addCompanion();
+  const visible = !player.downed && player.group.visible;
+  companions.forEach((buddy, i) => {
+    const { group, rig } = buddy;
+    group.visible = visible;
+    // A spot on a ring around the Summoner, turning slowly.
+    const angle = clock.elapsedTime * 0.4 + (i / companions.length) * Math.PI * 2;
+    companionTarget.set(player.position.x + Math.cos(angle) * COMPANION.radius, player.position.y + Math.sin(angle) * COMPANION.radius, 0);
+    const distance = Math.sqrt(distanceSqXY(group.position, companionTarget));
+    const step = Math.min(distance, COMPANION.speed * delta);
+    const moving = distance > 3;
+    if (moving) {
+      group.position.x += ((companionTarget.x - group.position.x) / distance) * step;
+      group.position.y += ((companionTarget.y - group.position.y) / distance) * step;
+      buddy.facing = Math.atan2(companionTarget.x - group.position.x, -(companionTarget.y - group.position.y));
+    }
+    // Little hops while it moves.
+    buddy.hop = moving ? buddy.hop + delta * 12 : 0;
+    const height = Math.abs(Math.sin(buddy.hop)) * 3;
+    rig.root.position.z = height;
+    rig.setLocomotion(moving ? height / 3 : 0);
+    // Spit at the nearest bee in range.
+    buddy.fireTimer -= delta;
+    let target = null;
+    let best = COMPANION.range ** 2;
+    for (const enemy of targetable()) {
+      const d = distanceSqXY(enemy.position, group.position);
+      if (d < best) [best, target] = [d, enemy];
+    }
+    if (target) buddy.facing = Math.atan2(target.position.x - group.position.x, -(target.position.y - group.position.y));
+    rig.root.rotation.y = buddy.facing;
+    if (target && buddy.fireTimer <= 0 && visible && PLAYING.has(phase)) {
+      buddy.fireTimer = COMPANION.fireEvery * (0.85 + Math.random() * 0.3);
+      const direction = target.position.clone().sub(group.position).setZ(0).normalize();
+      fireSpit(group.position.clone().addScaledVector(direction, 8), direction, Math.max(1, Math.round(player.stats.spitDamage * COMPANION.damage)));
+      rig.flick();
+    }
+    rig.update(delta);
+  });
 }
 
 // --- Shrines: optional risks during a wave (see Shrines.js) -----------------------------------
@@ -4949,6 +5088,7 @@ function updateStory(delta) {
     camera.position.set(80 - k * 20, -80 + k * 20, 40 - k * 8);
     camera.lookAt(tode.x, tode.y, tode.z + 14);
     if (!storyBees.flared && t > 7.5) {
+      player.rig.play('victory', { once: true, length: 2 });
       storyBees.flared = true;
       play('ascend');
       shake = 10;
@@ -5011,6 +5151,11 @@ function updateEnding(delta) {
   camera.position.copy(local.add(tableSpot).sub(player.position));
   camera.lookAt(tableSpot.x, tableSpot.y, 12);
 
+  // …and pours himself a fresh cup (every class sips: it's tea time).
+  if (t > 5.8 && !updateEnding.sipped) {
+    updateEnding.sipped = true;
+    player.rig.play('sip', { once: true, length: 4 });
+  }
   if (t > 6 && Math.random() < 0.4) {
     particles.burst(tableSpot.clone().add(new THREE.Vector3(-3, 0, 0)), { count: 1, colors: ['#ffffff', '#f3eadf'], speed: 6, up: 30, gravity: -10, height: 26, size: 2, life: 1.4 });
   }
@@ -5022,6 +5167,7 @@ function updateEnding(delta) {
   }
   if (t >= ENDING_TIME) {
     updateEnding.sparkled = false;
+    updateEnding.sipped = false;
     hud.hideBossIntro();
     setPhase('victory');
     play('victory');
@@ -5041,7 +5187,8 @@ function startBossIntro(boss) {
   memory.met++;
   saveMeta();
   hud.showBossIntro(boss.type.name, BOSS_EPITHETS[boss.kind] ?? '', taunt);
-  babble(BOSS_VOICE, taunt, 0.6, 28);
+  // It speaks once its roar has died down, as the line appears on its card (see .boss-card-taunt).
+  babble(BOSS_VOICES[boss.kind], taunt, BOSS_SPEAKS_AT, 32);
   hud.setBoss(boss);
 }
 
@@ -5057,7 +5204,7 @@ function updateBossIntro(delta) {
   cameraPan.copy(toBoss).multiplyScalar(0.5 - 0.5 * Math.cos(pan * Math.PI));
   cameraZoom = 1 - 0.25 * Math.sin(Math.min(1, elapsed / BOSS_INTRO_TIME) * Math.PI);
 
-  if (elapsed >= 1.2 && !introBoss.ai.roared) {
+  if (elapsed >= BOSS_ROARS_AT && !introBoss.ai.roared) {
     introBoss.ai.roared = true;
     play('roar');
     shake = 12;
@@ -5078,7 +5225,10 @@ const TRANSFORM_AT = 2.1; // seconds into the cut-scene: the moment of transform
 let ascendResume = null;
 
 /** `resume` (a mid-wave transformation): the fight to go back to; otherwise the next wave follows. */
+let titleMoveIn = 3;
+
 function startAscension(tier, resume = null) {
+  player.rig.play('victory', { once: true, length: ASCEND_DURATION });
   ascendResume = resume;
   ascendingTo = tier;
   setPhase('ascending', ASCEND_DURATION);
@@ -5358,6 +5508,9 @@ function handleNet(from, message) {
     case 'bomb':
       launchBomb(vec(message.o), vec(message.t), false);
       break;
+    case 'decoy':
+      placeDecoy(vec(message.p));
+      break;
     case 'strike':
       effects.strike(vec(message.p), {
         damage: message.dm,
@@ -5386,7 +5539,8 @@ function handleNet(from, message) {
       break;
     }
     case 'spit':
-      visualSpit(vec(message.o), vec(message.d), message.s, message.r, message.rad);
+      visualSpit(vec(message.o), vec(message.d), message.s, message.r, message.rad, message.st);
+      remote?.puppet.rig?.flick();
       break;
     case 'splash':
       splashVisual(vec(message.p), message.r, message.c);
@@ -5680,6 +5834,7 @@ function sendState() {
     tier: ascension.tier,
     down: Boolean(player.downed),
     sh: player.shield ? 1 : 0,
+    c: player.frogClass,
   });
 }
 
@@ -5710,6 +5865,7 @@ function updateCoop(realDelta, delta) {
 
 // --- Game flow ---
 function clearWorld() {
+  for (const decoy of [...decoys]) removeDecoy(decoy);
   for (const enemy of [...enemies]) removeEnemy(enemy);
   for (const projectile of [...projectiles]) removeFrom(projectiles, projectile);
   bullets.clear();
@@ -5753,6 +5909,9 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   setArena(ARENAS[0]);
   player.reset();
   player.downed = false;
+  runClass = daily ? classOfTheDay(todayKey()) : chosenClass();
+  player.setClass(runClass.id);
+  clearCompanions();
   coopScore = 0;
   ascension.setTier(0);
   divinity.setTier(0);
@@ -5770,8 +5929,21 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   steep = steepLevel(vows);
   hud.setSteep(steep);
 
-  // Tode's Pantry: permanent upgrades (unless a vow locked it).
+  // The class first (see Classes.js): the Pantry and the keepsake build on it.
   const { stats } = player;
+  runClass.apply({
+    stats,
+    player,
+    grant: {
+      skill: (id) => skills.learn(id),
+      ultimate: (id, gauge) => {
+        player.ultimate = id;
+        player.gauge = gauge;
+      },
+    },
+  });
+
+  // Tode's Pantry: permanent upgrades (unless a vow locked it).
   const pantry = (id) => (vow('pantry') ? 0 : pantryLevel(id));
   stats.maxHp += pantry('heart') - vow('shell');
   stats.damageMultiplier = 1 + 0.08 * pantry('damage');
@@ -5806,6 +5978,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   });
   stats.maxHp = Math.max(1, stats.maxHp);
   player.hp = stats.maxHp;
+  if (fullGaugeStart && player.ultimate) player.gauge = 100; // the Tiny Crown on a Summoner
   hud.setXp(0, 0, pendingLevels);
   if (awaken) {
     ascension.setTier(1);
@@ -5846,6 +6019,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
 
 function endRun({ victory = false } = {}) {
   setPhase('gameover');
+  clearCompanions();
   hud.setWaiting(null);
   coopMenuOpen = false;
   combo = 0;
@@ -5892,6 +6066,7 @@ function endRun({ victory = false } = {}) {
     victory,
     daily: isDaily(),
     steep,
+    cls: runClass.id,
   };
   lastBuild = runBuild();
   hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild });
@@ -5913,6 +6088,7 @@ function runBuild() {
   const ultimate = player.ultimate && ULTIMATES[player.ultimate];
   return {
     form: TIERS[ascension.tier].name,
+    frogClass: runClass.name,
     keepsake: keepsake ? { icon: keepsake.icon, name: keepsake.name, color: '#c9a2ff' } : null,
     charms: charmList(),
     ultimate: ultimate ? { icon: ultimate.icon, name: ultimate.name } : null,
@@ -6036,6 +6212,7 @@ function canRestart() {
 function goToTitle() {
   stopDaily();
   clearWorld();
+  clearCompanions();
   setArena(ARENAS[0]);
   player.reset();
   ascension.setTier(0);
@@ -6050,6 +6227,7 @@ function goToTitle() {
   reticle.visible = false;
   muffleMusic(false);
   setPhase('title');
+  player.setClass(chosenClass().id);
   ascension.setTier(TITLE_TIER);
   hud.showTitle(bestScore);
 }
@@ -6088,6 +6266,7 @@ function showPauseMenu() {
     form: TIERS[ascension.tier].name,
     sound: soundSettings(),
     coop: Boolean(coop),
+    frogClass: runClass,
   });
 }
 
@@ -6171,6 +6350,17 @@ const MENU_ACTIONS = {
   submit: ({ name }) => submitRun(name ?? ''),
   pantry: () => hud.showPantry(),
   keepsakes: () => hud.showKeepsakes(),
+  classes: () => hud.showClasses(),
+  class: ({ id }) => {
+    if (chooseClass(id) && player.frogClass !== id) {
+      play('pick');
+      player.setClass(id);
+      ascension.setTier(TITLE_TIER);
+      player.rig.play('signature', { once: true }); // say hello
+      titleMoveIn = 8;
+    }
+    hud.showClasses();
+  },
   keepsake: ({ id }) => {
     if (chooseKeepsake(id)) play('pick');
     hud.showKeepsakes();
@@ -6367,6 +6557,8 @@ function updateGame(delta) {
   hud.setCombo(combo);
 
   updatePowers(delta);
+  updateDecoys(delta);
+  updateCompanions(delta);
   skills.update(delta);
   updateProjectiles(delta);
   updateBombs(delta);
@@ -6444,6 +6636,13 @@ function frame(realDelta, render = true) {
     }
     divinity.update(delta);
     ascension.update(delta);
+    player.rig.inPlace = PLAYING.has(phase) || phase === 'clash';
+    player.animate(delta);
+    // On the title screen the frog shows off now and then.
+    if (phase === 'title' && (titleMoveIn -= delta) <= 0) {
+      titleMoveIn = 7 + Math.random() * 4;
+      player.rig.play(Math.random() < 0.7 ? 'signature' : 'victory', { once: true });
+    }
   }
   updateCoop(realDelta, delta);
   touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate));
@@ -6505,7 +6704,7 @@ renderer.setAnimationLoop(() => {
 });
 
 // --- Load assets, then show the title screen ---
-Promise.all([player.load(), loadEnemyModel(), loadHouse(HOME)])
+Promise.all([player.load(chosenClass().id), loadEnemyModel(), loadHouse(HOME)])
   .then(([, , home]) => {
     houses = [home];
     map.add(home.house);
@@ -6608,6 +6807,10 @@ if (import.meta.env.DEV) {
     get hex() {
       return hexLeft;
     },
+    decoys,
+    companions,
+    /** Plays as a class from the next run on: game.setClass('ninja'). */
+    setClass: (id) => chooseClass(id) && (player.setClass(id), ascension.setTier(ascension.tier)),
     /** Puts a shrine in the arena right away: 'chance', 'bitter' or 'cursed'. */
     shrine: (type = 'chance') => setupShrine(wave, type),
     get shrineState() {

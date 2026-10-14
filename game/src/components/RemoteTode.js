@@ -55,6 +55,11 @@ export class RemoteTode {
     this.maxHp = state.mh;
     this.alive = !state.down;
     this.puppet.shield = Boolean(state.sh);
+    if (state.c && state.c !== this.puppet.frogClass) {
+      // Their class (see Classes.js): a new frog, with their current ascension colours.
+      this.puppet.setClass(state.c);
+      this.ascension?.setTier(this.tier);
+    }
     if (state.tier !== this.tier) this.setTier(state.tier);
   }
 
@@ -77,6 +82,10 @@ export class RemoteTode {
     this.puppet.position.lerp(this.target, 1 - Math.exp(-SMOOTHING * delta));
     this.puppet.model.position.z = this.puppet.groundOffset + (this.hop ?? 0);
     this.puppet.adornments.position.z = this.hop ?? 0;
+    // Their frog animates too: legs out in every hop (a dash hop stretches them all the way).
+    this.puppet.rig.inPlace = true;
+    this.puppet.rig.setLocomotion((this.hop ?? 0) / 5);
+    this.puppet.animate(delta);
     this.puppet.shieldBubble.visible = this.puppet.shield && visible;
     if (visible) this.ascension.update(delta);
     this.hud.updateNameTag(this.tag, this.position, visible, this.hp, this.maxHp);

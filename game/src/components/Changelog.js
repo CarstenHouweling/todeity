@@ -3,6 +3,32 @@
 
 export const CHANGELOG = [
   {
+    version: '0.17.0',
+    date: '2026-10-14',
+    title: 'Choose your frog',
+    changes: [
+      '🐸 Seven frogs to play, all open: Tode, the Bullfrog Brawler, the Tree Frog Sharpshooter, the Toad Alchemist, the Starleaf Mage, the Toad Summoner and the Ninja Toad. Pick one under Start run',
+      '🥊 Each plays differently: a shotgun spit and 8 hearts, piercing long-range darts, elemental tea bombs, homing magic bolts, little pond toads that fight at your side, or throwing stars and a decoy log that fools the bees',
+      '✨ Every frog is new and fully animated: they hop with their legs, snap their tongue when they spit, cheer, and each has a signature move (watch the title screen)',
+      '📜 The Summoner\'s ultimate calls up his own giant: the Ancient Pond Toad',
+      '📅 The Daily Brew picks a class of the day, the same for everybody',
+      '🏆 The leaderboard shows which frog played',
+    ],
+  },
+  {
+    version: '0.16.0',
+    date: '2026-10-14',
+    title: 'Every hit counts',
+    changes: [
+      '⚔ Bosses no longer shrug off your hits between stages: apart from their shield they always take damage, and your ultimate always lands',
+      '❤ Instead, bosses have much more health (up to twelve times as much for Bee-zebub), so the fights still last',
+      '🛡 Stages start the moment you cross their threshold, even mid-attack, so a big burst can\'t skip a boss\'s mechanics',
+      '🗣 You can now hear the bosses taunt you: they speak after their roar instead of under it, loud and clear over the boss theme, which dips while they talk',
+      '👑 Every boss has its own voice: a shrill Queen, a gruff Shogun, the Seraph\'s choir, the Empress\'s ringing tones and Bee-zebub\'s growl',
+      '🔊 New voices for everyone, the tea spirits too: every syllable is a vowel now, and they come through clearly on phone, tablet and laptop speakers',
+    ],
+  },
+  {
     version: '0.15.1',
     date: '2026-10-14',
     title: 'Busier co-op starts',

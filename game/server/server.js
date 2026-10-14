@@ -19,6 +19,7 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { handleSave, loadSaves } from './saves.js';
+import { CLASSES } from '../src/components/Classes.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -28,6 +29,7 @@ const SCORES_FILE = join(DATA_DIR, 'scores.json');
 const KEEP = 100; // entries kept per board
 const POST_INTERVAL = 10_000; // ms between submissions per IP
 const MAX_BODY = 4_096; // bytes
+const CLASS_IDS = CLASSES.map((c) => c.id);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -103,6 +105,7 @@ function parseEntry(body) {
     victory: Boolean(body.victory),
     clear: clampInt(body.clear, 0, 86_400), // seconds to beat Bee-zebub (0: not beaten)
     steep: clampInt(body.steep, 0, 40), // Steeping vows taken (they multiply the score)
+    cls: CLASS_IDS.includes(body.cls) ? body.cls : 'tode', // the frog that played (src/components/Classes.js)
     at: Date.now(),
   };
   // A loose sanity check: scores grow with time and kills, not out of nowhere.
