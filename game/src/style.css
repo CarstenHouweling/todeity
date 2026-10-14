@@ -2311,3 +2311,65 @@ body.touch .steep-badge {
   font-size: 22px;
   filter: drop-shadow(0 0 6px rgba(160, 230, 255, 0.9));
 }
+
+/* Raid bosses: enrage timer and break bar (v0.12) */
+.boss-timer {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffd0c0;
+  text-shadow: 0 1px 2px #000;
+}
+
+.boss-timer:empty {
+  display: none;
+}
+
+.boss-timer.urgent {
+  color: #ff6a4a;
+  animation: clash-throb 0.5s ease-in-out infinite alternate;
+}
+
+.boss-bar[data-state='enraged'] .boss-fill {
+  background: linear-gradient(90deg, #ff2a10, #ff8a3a);
+  box-shadow: 0 0 14px #ff3b1f;
+}
+
+.boss-bar[data-state='enraged'] .boss-name {
+  color: #ff8a6a;
+}
+
+.break-bar {
+  position: relative;
+  height: 14px;
+  margin-top: 6px;
+  border-radius: 7px;
+  border: 2px solid #fff3c4;
+  background: rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.break-bar[hidden] {
+  display: none;
+}
+
+.break-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffd36b, #fff3c4);
+}
+
+.break-bar::after {
+  content: attr(data-label);
+  position: absolute;
+  inset: 0;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 10px;
+  color: #2a1a00;
+  text-align: center;
+}
+
+.form[data-tier='5'] {
+  color: #ffffff;
+  text-shadow: 0 0 10px #c8d8ff, 0 0 22px #9ff4ff, 0 0 30px #c8b0ff, 0 1px 2px #000;
+}

@@ -11,7 +11,7 @@ import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TIL
 import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
-import { BLENDS, CURSES, brewById, describe, rollBrews } from './components/PowerUps.js';
+import { BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
 import { babble, hush, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
@@ -135,8 +135,9 @@ const SPIT_LOOKS = [
   [0xffd23f, 0xb07a00],
   [0xfff0a0, 0xffb000],
   [0xffffff, 0xff9ee8],
+  [0xffffff, 0x9fb8ff],
 ];
-const SPIT_TRAILS = [null, null, ['#ffe680', '#ffc93c'], ['#fff3c4', '#ffd36b', '#9fd8ff'], ['#ffffff', '#ffd6f5', '#c8b0ff']];
+const SPIT_TRAILS = [null, null, ['#ffe680', '#ffc93c'], ['#fff3c4', '#ffd36b', '#9fd8ff'], ['#ffffff', '#ffd6f5', '#c8b0ff'], ['#ffffff', '#c8d8ff', '#9ff4ff']];
 
 // Brew mechanics
 const SPLIT_ANGLE = 0.7; // radians between the pieces of a Geyser Spit
@@ -321,6 +322,7 @@ let score = 0;
 let bestScore = Number(safeStorage('get', 'tode-best-score')) || 0;
 let persistBest = true; // dev: game.persist = false
 let killsSinceHoney = 0;
+let lastLifesteal = -99; // play time of the last heart from Stolen Honey or Herbal Remedy
 let spitShots = 0;
 let spitHits = 0;
 let regenTimer = 0;
@@ -354,6 +356,10 @@ const TIPS = {
     touch.enabled
       ? 'Skills cast themselves at the right moment.'
       : 'Skills cast themselves at the right moment. Prefer Q / E / F? Switch in the pause menu.',
+  tiles: () =>
+    touch.enabled
+      ? 'Red cursed tiles call an ambush when you step on them. Walk around them, or tap 💨 to hop over.'
+      : 'Red cursed tiles call an ambush when you step on them. Walk around them, or hop-dash over them.',
   dash: () =>
     touch.enabled
       ? 'Tap 💨 to hop-dash right through bees: it hurts them, not you.'
@@ -703,6 +709,7 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   // More frogs, mightier bosses.
   if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + COOP_BOSS_HP * (coop.size - 1)));
   if (enemy.type.boss && vow('royal')) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + 0.3 * vow('royal')));
+  if (enemy.damage > 0) enemy.damage += config.contactBonus ?? 0;
   let spot = at ?? freeCorner(enemy.radius);
   // A requested spot can be blocked (a huge boss at a corner, a summon inside a tree): step toward the middle.
   if (at) {
@@ -744,6 +751,14 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
     }
     return;
   }
+  // Co-op: an attuned ward or guardian only takes its owner's hits.
+  if (enemy.owner && source !== 'net' && enemy.owner !== net.id && !ownerAway(enemy.owner)) {
+    if (clock.elapsedTime - (enemy.lastShieldPing ?? 0) > 0.4) {
+      enemy.lastShieldPing = clock.elapsedTime;
+      hud.damageNumber(enemy.position, '🔒', enemy.height + 4, 'frost');
+    }
+    return;
+  }
   // A teammate's hit forwarded to the host is already final; local hits get Tode's multipliers.
   const fromTeammate = source === 'net';
   let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
@@ -756,12 +771,21 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
 
   if (isGuest()) {
     net.queue('host', { k: 'hit', id: enemy.netId, dm: damage, kx: direction ? direction.x * force : 0, ky: direction ? direction.y * force : 0 });
+  } else {
+    // Phase lock: a boss can't be pushed past its next stage before that stage has begun.
+    const floor = stageFloor(enemy);
+    if (floor && enemy.hp - damage < floor) {
+      damage = Math.max(0, Math.ceil(enemy.hp - floor));
+      if (!damage) return;
+    }
   }
+  const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
   if (source !== 'burn' && !fromTeammate) play('hit');
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate) hitStop(0.045);
   hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
-  if (source !== 'ultimate' && !fromTeammate) addGauge(damage * GAUGE_PER_DAMAGE);
+  // The gauge fills per bee's worth of health, not per raw damage: late-game hits are huge, bees too.
+  if (source !== 'ultimate' && !fromTeammate) addGauge((landed * GAUGE_PER_DAMAGE) / (config?.hpScale ?? 1));
   if (procs) charmHit(enemy, amount, crit);
   if (killed) {
     onEnemyKilled(enemy);
@@ -773,7 +797,7 @@ function onEnemyKilled(enemy) {
   dropLeaves(enemy);
   dropCharms(enemy);
   if (enemy.kind === 'nest') objectiveDone();
-  if (enemy.type.ward) wardSmashed(enemy);
+  if (enemy.type.ward || enemy.kind === 'guardian') wardSmashed(enemy);
   // Vengeful Swarm: dying bees burst into stingers (the host fires them for everyone).
   if (waveMods.has('vengeful') && !enemy.type.boss && !enemy.type.structure && !isGuest()) fireRing(enemy, 6, 150, Math.random() * Math.PI);
   kills++;
@@ -801,8 +825,9 @@ function onEnemyKilled(enemy) {
   if (enemy.ai.telegraph) removeTelegraph(enemy.ai.telegraph);
 
   const { honeyEvery } = player.stats;
-  if (honeyEvery && ++killsSinceHoney >= honeyEvery) {
+  if (honeyEvery && ++killsSinceHoney >= honeyEvery && timeAlive - lastLifesteal >= LIFESTEAL_COOLDOWN) {
     killsSinceHoney = 0;
+    lastLifesteal = timeAlive;
     healPlayer(1);
   }
 
@@ -822,8 +847,7 @@ function onEnemyKilled(enemy) {
 let beezebubTime = 0; // play time when Bee-zebub fell (the speed leaderboard)
 
 function bossDefeated(name, score, kind) {
-  clearRaid();
-  clearCataclysm();
+  clearBossMechanics();
   if (name.includes('zebub') && !beezebubTime) beezebubTime = Math.max(1, Math.floor(timeAlive));
   if (kind) bossMemory(kind).beaten++;
   const achievement = name.includes('Empress') ? 'empress' : name.includes('zebub') ? 'beezebub' : name.includes('Buzzbelle') ? 'queen' : null;
@@ -1008,6 +1032,7 @@ function checkContact(enemy) {
     if (dashDamage > 0) damageEnemy(enemy, dashDamage, player.dash.direction, DASH_KNOCKBACK, 'dash');
     return;
   }
+  if (!enemy.damage) return; // nurses
   const charging = enemy.type.boss && enemy.ai.mode === 'charge';
   hurtPlayer(charging ? QUEEN.chargeDamage : enemy.damage, enemy);
 }
@@ -1099,9 +1124,9 @@ function fireStinger(enemy, direction, speed, quiet = false) {
 }
 
 /** Every player simulates the bullets themselves and only checks hits on their own Tode. */
-function launchStinger(origin, direction, speed, quiet = false) {
+function launchStinger(origin, direction, speed, quiet = false, range = STINGER.range * 1.6) {
   speed *= 1 + 0.15 * vow('stingers');
-  bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range: STINGER.range * 1.6, color: arena.bullet ?? '#c070ff' });
+  bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range, color: arena.bullet ?? '#c070ff' });
   if (!quiet) play('sting');
 }
 
@@ -1299,20 +1324,39 @@ function stingerRain(boss) {
   }
 }
 
-// --- Raid mechanics: boss shields, stagger and the cataclysm ---------------------------------------
-// At these health fractions a boss raises a shield and takes no damage until a task is done: smash the shield
-// wards tethered to it, or hold circles of light. [fraction, task, count]
-const BOSS_WARDS = {
-  queen: [[0.7, 'wards', 3]],
-  shogun: [[0.75, 'wards', 4]],
-  seraph: [[0.8, 'lights', 3], [0.45, 'wards', 4]],
-  empress: [[0.8, 'wards', 4], [0.5, 'lights', 3]],
-  beezebub: [[0.8, 'wards', 4], [0.55, 'lights', 3], [0.25, 'wards', 5]],
+// --- Raid bosses: fights in stages, shields, mechanics and an enrage timer ------------------------------
+// At each health fraction a boss enters its next stage: it roars, attacks a little faster and starts a mechanic.
+// Shield tasks ('wards', 'lights', 'guardians') make it immune until they are done; 'interrupt' is a damage race
+// against its channel; 'nurses', 'soak', 'mark' and 'blades' become attacks it keeps repeating; 'firering' closes
+// the arena for the rest of the fight. `enrage`: seconds of fighting before it enrages. [fraction, mechanic, count]
+const BOSS_SCRIPTS = {
+  queen: { enrage: 120, stages: [[0.7, 'wards', 3], [0.4, 'nurses']] },
+  shogun: { enrage: 150, stages: [[0.8, 'interrupt'], [0.55, 'wards', 4], [0.3, 'blades']] },
+  seraph: { enrage: 170, stages: [[0.8, 'lights', 3], [0.6, 'mark'], [0.4, 'guardians', 2], [0.2, 'soak']] },
+  empress: { enrage: 190, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
+  beezebub: { enrage: 220, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
 };
+// Titles for the stage banners; `every`: seconds between casts of a repeating mechanic.
+const MECHANICS = {
+  wards: { title: 'Shield of Wards' },
+  lights: { title: 'Veil of Light' },
+  guardians: { title: 'The Royal Guard' },
+  interrupt: { title: 'Dark Ritual' },
+  nurses: { title: 'Royal Nurses', every: 20 },
+  soak: { title: 'Falling Stars', every: 17 },
+  mark: { title: 'Judgement', every: 19 },
+  blades: { title: 'Blade Storm', every: 15 },
+  firering: { title: 'Ring of Fire' },
+};
+const RITUALS = { shogun: 'Thousand Cuts', beezebub: 'Infernal Feast' };
+// Enraged: attacks come much faster, the boss moves faster and hits harder, and stingers rain down.
+const ENRAGE = { attackScale: 0.55, speedScale: 1.3, rainEvery: 3.5 };
+// Interrupt: deal `share` of the boss's health within `time` seconds, or the ritual heals and empowers it.
+const INTERRUPT = { time: 8, share: 0.18, heal: 0.15, stagger: 4 };
 // `time`: seconds before the shield overloads (everyone takes a hit, the boss heals); the lights take longer, as
 // they mean running between them. `stagger`: seconds the boss is dazed after its shield breaks, taking
 // `staggerBonus` × damage. `lightTime`: seconds to hold a circle of light.
-const WARD = { time: { wards: 30, lights: 40 }, overloadHeal: 0.1, stagger: 5, staggerBonus: 1.5, guardEvery: 6, lightTime: 3.5 };
+const WARD = { time: { wards: 30, lights: 40, guardians: 40 }, overloadHeal: 0.1, stagger: 4, staggerBonus: 1.5, guardEvery: 6, lightTime: 3.5 };
 // The cataclysm: the boss channels, then everything outside the circles of light is hit for `damage` hearts.
 const CATACLYSM = { channel: 3.4, damage: 2, cooldown: 20 };
 const SHIELD_COLOR = '#7fd8ff';
@@ -1324,15 +1368,56 @@ const targetable = () => aliveEnemies().filter((enemy) => !enemy.shielded);
 
 /** Host: the shield goes up, the task appears for everyone. */
 function startWard(boss, [, task, count]) {
-  boss.ai.wardIndex = (boss.ai.wardIndex ?? 0) + 1;
   const turn = Math.random() * Math.PI * 2;
   const spots = Array.from({ length: count }, (_, i) => {
     const angle = turn + (i / count) * Math.PI * 2;
     return new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(MAP_HALF_SIZE * (task === 'lights' ? 0.42 : 0.55));
   });
-  beginRaid(boss, task, spots);
-  if (task === 'wards') for (const spot of spots) spawnEnemy('ward', spot, { elite: null });
-  share({ k: 'ward', id: boss.netId, t: task, p: spots.map((p) => [Math.round(p.x), Math.round(p.y)]) });
+  // Wards spawn first: a spot can be blocked, and the task counts only the ones that made it.
+  const placed = task === 'wards' ? spawnLinked('ward', spots) : spots;
+  beginRaid(boss, task, placed);
+  share({ k: 'ward', id: boss.netId, t: task, p: placed.map((p) => [Math.round(p.x), Math.round(p.y)]), o: task === 'wards' ? linkedOwners : [] });
+}
+
+/**
+ * Spawns a ward or guardian at each spot (kept inside the arena); returns where they actually stand. In co-op each
+ * one is attuned to a player in turn (`owner`): only that player's hits break it, so everyone has to take part.
+ */
+function spawnLinked(kind, spots) {
+  const limit = MAP_HALF_SIZE - 40;
+  const players = coop ? [net.id, ...coop.remotes.keys()] : [];
+  const placed = spots
+    .map((spot) => spawnEnemy(kind, spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0), { elite: null }))
+    .filter(Boolean);
+  placed.forEach((enemy, i) => players.length && attune(enemy, players[i % players.length]));
+  linkedOwners = placed.map((enemy) => enemy.owner ?? null);
+  return placed.map((enemy) => enemy.position.clone());
+}
+let linkedOwners = []; // the owners of the last wards or guardians spawned, sent along with the 'ward' message
+let pendingOwners = []; // guests: owners for wards and guardians that haven't arrived yet: { p, o }
+
+/** Co-op: only `owner`'s hits break this ward or guardian; its label says whose it is. */
+function attune(enemy, owner) {
+  enemy.owner = owner;
+  const mine = owner === net.id;
+  const info = mine ? null : coop?.remotes.get(owner);
+  const color = mine ? net.players.find((p) => p.id === net.id)?.color ?? '#7fd8ff' : info?.color ?? '#7fd8ff';
+  hud.setEnemyLabel(enemy, mine ? '🛡 YOURS' : `🛡 ${info?.name ?? 'Teammate'}'s`, color);
+}
+
+/** A ward's owner who is down or gone can't break it, so then anyone may. */
+function ownerAway(owner) {
+  if (owner === net.id) return Boolean(player.downed);
+  const remote = coop?.remotes.get(owner);
+  return !remote || !remote.alive;
+}
+
+/** Guests: a ward or guardian mirror takes the owner sent for the spot it stands on. */
+function claimOwner(enemy) {
+  const index = pendingOwners.findIndex(({ p }) => distanceSqXY(p, enemy.position) < 70 ** 2);
+  if (index < 0) return;
+  attune(enemy, pendingOwners[index].o);
+  pendingOwners.splice(index, 1);
 }
 
 /** Everyone: the shield and its task (on guests the wards themselves arrive like any other bee). */
@@ -1346,7 +1431,7 @@ function beginRaid(boss, task, spots) {
   postfx.flash(SHIELD_COLOR, 0.4);
   shake = Math.max(shake, 12);
   effects.ring(boss.position, { radius: 280, color: SHIELD_COLOR, duration: 0.8, thickness: 0.2 });
-  const job = task === 'wards' ? `Smash the ${spots.length} shield wards!` : `Hold the ${spots.length} circles of light!`;
+  const job = { wards: `Smash the ${spots.length} shield wards!`, lights: `Hold the ${spots.length} circles of light!`, guardians: `Defeat the ${spots.length} Hive Guardians!` }[task];
   hud.showBanner(`🛡 ${boss.type.name} is shielded!`, job, 2.6);
 }
 
@@ -1359,8 +1444,8 @@ function updateRaid(delta) {
     clearRaid();
     return;
   }
-  // Tethers of light from every ward to the boss.
-  const wards = enemies.filter((enemy) => enemy.type.ward && !enemy.dying);
+  // Tethers of light from every ward (or guardian) to the boss.
+  const wards = enemies.filter((enemy) => (raid.task === 'guardians' ? enemy.kind === 'guardian' : enemy.type.ward) && !enemy.dying);
   for (const [ward, tether] of raid.tethers) {
     if (wards.includes(ward)) continue;
     tether.removeFromParent();
@@ -1382,20 +1467,20 @@ function updateRaid(delta) {
   for (const zone of raid.zones) {
     zone.emblem.rotation.z += delta * (zone.done ? 0.5 : 2);
     if (zone.done) continue;
-    const holders = standingTodes().filter((tode) => distanceSqXY(tode.position, zone.position) < ZONE_RADIUS ** 2).length;
+    const holders = circleHolders(zone);
     zone.progress = THREE.MathUtils.clamp(zone.progress + (holders ? (delta / WARD.lightTime) * (1 + 0.3 * (holders - 1)) : -delta / 10), 0, 1);
     zone.fill.geometry.dispose();
     zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, zone.progress * Math.PI * 2));
     if (zone.progress >= 1) {
       zone.done = true;
-      zone.beam.material.color.set('#ffffff');
+      retireZone(zone);
       effects.ring(zone.position, { radius: 160, color: '#fff1b8', duration: 0.6, thickness: 0.2 });
       play('legendary');
     }
   }
-  const done = raid.task === 'wards' ? raid.count - wards.length : raid.zones.filter((zone) => zone.done).length;
+  const done = raid.task === 'lights' ? raid.zones.filter((zone) => zone.done).length : raid.count - wards.length;
   raid.timer -= delta;
-  const what = raid.task === 'wards' ? 'wards smashed' : 'lights held';
+  const what = { wards: 'wards smashed', lights: 'lights held', guardians: 'guardians down' }[raid.task];
   hud.setRaid(`🛡 Break the shield: ${Math.max(0, done)}/${raid.count} ${what} · ${Math.max(0, Math.ceil(raid.timer))}s`, raid.timer < 8);
   if (isGuest()) return; // the host decides when the shield breaks or overloads
   if (done >= raid.count) {
@@ -1403,8 +1488,8 @@ function updateRaid(delta) {
     breakShield();
     return;
   }
-  // The hive sends guards to whoever is busy with the task.
-  if ((raid.guardTimer -= delta) <= 0) {
+  // The hive sends guards to whoever is busy with the task (guardians fight for themselves).
+  if (raid.task !== 'guardians' && (raid.guardTimer -= delta) <= 0) {
     raid.guardTimer = WARD.guardEvery * (wave < 10 ? 1.5 : 1);
     const posts = [...wards.map((ward) => ward.position), ...raid.zones.filter((zone) => !zone.done).map((zone) => zone.position)];
     const post = posts[Math.floor(Math.random() * posts.length)];
@@ -1422,18 +1507,25 @@ function updateRaid(delta) {
 
 function raidTargets() {
   if (cataclysm) return cataclysm.zones.map((zone) => zone.position);
-  if (!raid) return [];
-  return raid.task === 'wards'
-    ? enemies.filter((enemy) => enemy.type.ward && !enemy.dying).map((enemy) => enemy.position)
-    : raid.zones.filter((zone) => !zone.done).map((zone) => zone.position);
+  if (marked?.mine) return [marked.zone.position];
+  const urgent = [
+    ...soaks.flatMap((soak) => soak.zones.map((zone) => zone.position)),
+    ...enemies.filter((enemy) => enemy.kind === 'nurse' && !enemy.dying).map((enemy) => enemy.position),
+  ];
+  if (!raid) return urgent;
+  const task = raid.task === 'lights'
+    ? raid.zones.filter((zone) => !zone.done).map((zone) => zone.position)
+    : enemies.filter((enemy) => (raid.task === 'guardians' ? enemy.kind === 'guardian' : enemy.type.ward) && !enemy.dying).map((enemy) => enemy.position);
+  return [...urgent, ...task];
 }
 
+/** A ward or a guardian down: one step closer to breaking the shield. */
 function wardSmashed(ward) {
   particles.burst(ward.position, { count: 40, colors: ['#ffffff', SHIELD_COLOR, '#bff0ff'], speed: 220, up: 200, size: 2.2, glow: true, height: 20 });
   effects.ring(ward.position, { radius: 120, color: SHIELD_COLOR, duration: 0.5, thickness: 0.2 });
   play('zap');
-  const left = enemies.filter((enemy) => enemy.type.ward && !enemy.dying).length;
-  if (left > 0) hud.showCallout(`🛡 Ward smashed! ${left} to go`);
+  const left = enemies.filter((enemy) => enemy.kind === ward.kind && !enemy.dying).length;
+  if (left > 0) hud.showCallout(ward.kind === 'guardian' ? `🛡 Guardian down! ${left} to go` : `🛡 Ward smashed! ${left} to go`);
 }
 
 /** Too slow: the shield overloads. Everyone takes a hit and the countdown starts over. */
@@ -1548,6 +1640,485 @@ function clearCataclysm() {
   hud.setRaid(raid ? '' : null);
 }
 
+// --- Boss stages: entering a stage and the mechanics that come with it ------------------------------
+let soaks = []; // falling stars: { boss, zones, stars, time }
+let marked = null; // Judgement: { who, mine, name, zone, time }
+let bladeStorm = null; // { origin, angle, speed, time, meshes }
+let closing = null; // the Ring of Fire: { radius, time, wall, floor, burn }
+let ritual = null; // a channel to interrupt (guests show its bar): { boss, from, need, time, title }
+const SOAK = { delay: 4.2, failDamage: 2, failHeal: 0.05 };
+const MARK = { time: 6.5, damage: 2 };
+const BLADES = { windup: 1, spin: 3.4, length: 900, width: 16, speed: 0.55 };
+const CLOSING = { time: 22, to: 0.42 };
+
+/** The health a boss can't drop below until its next stage starts (0: none left). */
+function stageFloor(enemy) {
+  if (!enemy.type.boss || ritual?.boss === enemy) return 0; // a ritual must be breakable
+
+  const stage = BOSS_SCRIPTS[enemy.kind]?.stages[enemy.ai.stage ?? 0];
+  return stage ? Math.floor(stage[0] * enemy.maxHp) : 0;
+}
+
+/** Host: the boss crosses into its next stage. */
+function startStage(boss, [, mechanic, count]) {
+  const { ai } = boss;
+  ai.stage = (ai.stage ?? 0) + 1;
+  ai.stageSpeed = (ai.stageSpeed ?? 1) * 0.92; // every stage attacks a little faster
+  const title = mechanic === 'interrupt' ? RITUALS[boss.kind] ?? MECHANICS.interrupt.title : MECHANICS[mechanic].title;
+  stageEffects(boss, ai.stage, title);
+  share({ k: 'stage', id: boss.netId, n: ai.stage, t: title });
+  if (mechanic === 'wards' || mechanic === 'lights') startWard(boss, [0, mechanic, count]);
+  else if (mechanic === 'guardians') startGuardians(boss, count);
+  else if (mechanic === 'interrupt') startInterrupt(boss, title);
+  else if (mechanic === 'firering') {
+    share({ k: 'closing' });
+    beginClosingRing();
+  } else {
+    (ai.unlocked ??= new Set()).add(mechanic);
+    castMechanic(boss, mechanic);
+  }
+}
+
+/** Everyone: the stage callout and a roar. */
+function stageEffects(boss, stage, title) {
+  play('roar');
+  shake = Math.max(shake, 14);
+  postfx.flash('#ff3b1f', 0.3);
+  if (boss) effects.ring(boss.position, { radius: 340, color: '#ffb000', duration: 0.7, thickness: 0.2 });
+  hud.showCallout(`Stage ${stage + 1}: ${title}`);
+}
+
+/** Host: a repeating mechanic, now or when its cooldown is over. */
+function castMechanic(boss, mechanic) {
+  (boss.ai.cast ??= {})[mechanic] = timeAlive;
+  if (mechanic === 'nurses') summonNurses(boss);
+  else if (mechanic === 'soak') startSoak(boss);
+  else if (mechanic === 'mark') startMark();
+  else if (mechanic === 'blades') startBlades(boss);
+}
+
+/** The repeating mechanic that is due, if any (never while a shield, a cataclysm or a soak is going on). */
+function dueMechanic(boss) {
+  if (raid || cataclysm || soaks.length || marked || bladeStorm) return null;
+  const speedUp = boss.enraged ? 1.5 : 1;
+  return [...(boss.ai.unlocked ?? [])].find((m) => timeAlive - (boss.ai.cast?.[m] ?? -99) > MECHANICS[m].every / speedUp) ?? null;
+}
+
+/** Everyone: a big banner for a mechanic (the host shares it). */
+function announce(title, sub) {
+  hud.showBanner(title, sub, 2.2);
+  share({ k: 'say', t: title, s: sub });
+}
+
+// Enrage: the boss runs out of patience.
+function enrageBoss(boss) {
+  boss.enraged = true;
+  boss.speed *= ENRAGE.speedScale;
+  boss.damage += 1;
+  boss.ai.rainTimer = 1;
+  share({ k: 'enrage', id: boss.netId });
+  enrageEffects(boss);
+}
+
+function enrageEffects(boss) {
+  boss.enraged = true;
+  play('roar');
+  play('boss');
+  shake = Math.max(shake, 22);
+  postfx.flash('#ff2a10', 0.6);
+  postfx.pulse({ warp: 1, aberration: 1 });
+  effects.ring(boss.position, { radius: 500, color: '#ff2a10', duration: 1, thickness: 0.2 });
+  hud.showBanner(`😡 ${boss.type.name} is ENRAGED!`, 'Finish it, fast!', 2.6);
+}
+
+/** Enraged bosses burn with a red aura. */
+function enrageAura(boss) {
+  if (Math.random() > 0.6) return;
+  particles.burst(boss.position, { count: 2, colors: ['#ff2a10', '#ff8a3a', '#ffd36b'], ring: boss.radius * 0.8, speed: 15, up: 80, gravity: -40, size: 2.4, glow: true, height: boss.height * 0.2, life: 0.6 });
+}
+
+// --- Royal Nurses: they fly to the boss and heal it, unless they are stopped -------------------------
+function summonNurses(boss) {
+  const count = 3 + Math.floor(wave / 7) + (coop ? coop.size - 1 : 0);
+  const turn = Math.random() * Math.PI * 2;
+  for (let i = 0; i < count; i++) {
+    const angle = turn + (i / count) * Math.PI * 2;
+    const nurse = spawnEnemy('nurse', new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(MAP_HALF_SIZE * 0.85), { elite: null });
+    if (nurse) nurse.healTarget = boss;
+  }
+  announce('💚 Royal Nurses!', `Stop them before they heal ${boss.type.name}!`);
+}
+
+function updateNurse(nurse, delta) {
+  const boss = nurse.healTarget;
+  if (!boss || boss.dying || !enemies.includes(boss)) {
+    nurse.die();
+    return;
+  }
+  const distance = directionTo(nurse.position, boss.position, chase);
+  nurse.faceDirection(chase.x, chase.y);
+  moveEnemy(nurse, chase.x * nurse.speed, chase.y * nurse.speed, delta);
+  if (Math.random() < 0.3) particles.burst(nurse.position, { count: 1, colors: ['#6dffa8', '#c8ffd8'], speed: 10, up: 20, gravity: -20, size: 1.4, glow: true, height: nurse.height * 0.5, life: 0.5 });
+  if (distance > boss.radius + nurse.radius + 12) return;
+  // It made it: the boss heals.
+  const heal = Math.round(boss.maxHp * (boss.enraged ? 0.06 : 0.04));
+  boss.hp = Math.min(boss.maxHp, boss.hp + heal);
+  hud.damageNumber(boss.position, `+${heal}`, boss.height + 6, 'heal');
+  effects.ring(boss.position, { radius: boss.radius * 2, color: '#6dffa8', duration: 0.5 });
+  play('heal');
+  removeEnemy(nurse);
+}
+
+// --- The Royal Guard: guardians keep the boss shielded until they fall --------------------------------
+function startGuardians(boss, count) {
+  const turn = Math.random() * Math.PI * 2;
+  const spots = Array.from({ length: count }, (_, i) => {
+    const angle = turn + (i / count) * Math.PI * 2;
+    return boss.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(boss.radius + 90));
+  });
+  const placed = spawnLinked('guardian', spots);
+  if (!placed.length) return;
+  beginRaid(boss, 'guardians', placed);
+  share({ k: 'ward', id: boss.netId, t: 'guardians', p: placed.map((p) => [Math.round(p.x), Math.round(p.y)]), o: linkedOwners });
+}
+
+// --- Interrupt: a ritual that only enough damage can break -----------------------------------------
+function startInterrupt(boss, title) {
+  const { ai } = boss;
+  ai.mode = 'interrupt';
+  ai.timer = INTERRUPT.time;
+  const need = Math.round(boss.maxHp * INTERRUPT.share * (coop ? 1 + 0.5 * (coop.size - 1) : 1));
+  boss.glowColor.set(0x9a3cff);
+  beginRitual(boss, need, title);
+  share({ k: 'brk', id: boss.netId, need, n: title });
+}
+
+function beginRitual(boss, need, title) {
+  ritual = { boss, from: boss.hp, need, title, time: 0 };
+  play('beamCharge');
+  hud.showBanner(`⚠ ${title}`, `Interrupt it: hit ${boss.type.name} hard, now!`, 2.2);
+}
+
+/** Everyone: the break bar. The host also runs the boss's side in updateQueen. */
+function updateRitual(delta) {
+  if (!ritual) return;
+  ritual.time += delta;
+  const { boss } = ritual;
+  if (!enemies.includes(boss) || boss.dying || ritual.time > INTERRUPT.time + 2) {
+    endRitual(null);
+    return;
+  }
+  hud.setBreakBar((ritual.from - boss.hp) / ritual.need, `${ritual.title} · ${Math.max(0, INTERRUPT.time - ritual.time).toFixed(1)}s`);
+  particles.burst(boss.position, { count: 2, colors: ['#9a3cff', '#d8b0ff'], ring: 200, speed: -300, up: 20, size: 2, glow: true, height: 14, life: 0.6 });
+}
+
+/** Host: has the channel been broken (true), has it finished (false), or is it still going (null)? */
+function ritualResult(boss) {
+  if (!ritual || ritual.boss !== boss) return false;
+  if (ritual.from - boss.hp >= ritual.need) return true;
+  return ritual.time >= INTERRUPT.time ? false : null;
+}
+
+/** Everyone: how it ended. `broken`: interrupted (stagger), false: completed (heal), null: just tidy up. */
+function endRitual(broken) {
+  const boss = ritual?.boss;
+  ritual = null;
+  hud.setBreakBar(null);
+  if (broken === null || !boss) return;
+  if (broken) {
+    postfx.shatter(0.6, 0.5);
+    postfx.flash('#ffffff', 0.5);
+    shake = Math.max(shake, 18);
+    play('boom');
+    hud.showBanner('Interrupted!', `${boss.type.name} is staggered: strike now!`, 2);
+  } else {
+    postfx.flash('#9a3cff', 0.6);
+    shake = Math.max(shake, 16);
+    play('roar');
+    effects.ring(boss.position, { radius: 400, color: '#9a3cff', duration: 0.9, thickness: 0.2 });
+    hud.showBanner('The ritual is complete!', `${boss.type.name} heals and grows stronger`, 2.4);
+  }
+}
+
+// --- Falling Stars: stand in the circles to catch them, or they hit everyone ------------------------
+const starGeometry = new THREE.IcosahedronGeometry(16, 1);
+
+function startSoak(boss) {
+  const todes = standingTodes();
+  const count = Math.max(1, Math.min(3, todes.length)) + (boss.enraged ? 1 : 0);
+  const limit = MAP_HALF_SIZE - ZONE_RADIUS - 20;
+  const spots = Array.from({ length: count }, (_, i) => {
+    const tode = todes[i % Math.max(1, todes.length)] ?? player;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 140 + Math.random() * 120;
+    const spot = tode.position.clone().add(new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle) * distance, 0));
+    return spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0);
+  });
+  beginSoak(boss, spots);
+  share({ k: 'soak', id: boss.netId, s: spots.map((p) => [Math.round(p.x), Math.round(p.y)]) });
+  announce('☄ Falling Stars!', count > 1 ? 'Catch them: stand in every circle!' : 'Catch it: stand in the circle!');
+}
+
+function beginSoak(boss, spots) {
+  const zones = spots.map((position) => createZone(position, '#ffd36b'));
+  const stars = spots.map((position) => {
+    const star = new THREE.Mesh(starGeometry, additive('#ffd36b', 0.9));
+    star.position.copy(position).setZ(700);
+    scene.add(star);
+    return star;
+  });
+  soaks.push({ boss, zones, stars, time: 0 });
+  play('whistle');
+}
+
+function updateSoaks(delta) {
+  for (const soak of [...soaks]) {
+    soak.time += delta;
+    const k = Math.min(1, soak.time / SOAK.delay);
+    soak.zones.forEach((zone, i) => {
+      zone.emblem.rotation.z += delta * 3;
+      zone.fill.geometry.dispose();
+      zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, k * Math.PI * 2));
+      soak.stars[i].position.z = 700 * (1 - k * k) + 10;
+      soak.stars[i].rotation.x += delta * 4;
+    });
+    const inMine = soak.zones.some((zone) => distanceSqXY(player.position, zone.position) < ZONE_RADIUS ** 2);
+    hud.setRaid(`☄ ${inMine ? 'Hold on: catch the star!' : 'Stand in the circle!'} · ${Math.max(0, SOAK.delay - soak.time).toFixed(1)}s`, !inMine);
+    if (k < 1) continue;
+    // Impact: every circle somebody stands in is caught; a missed one hits everyone (the host decides).
+    for (const zone of soak.zones) {
+      particles.burst(zone.position, { count: 40, colors: ['#ffffff', '#ffd36b', '#ffb02e'], speed: 220, up: 220, size: 2.4, glow: true });
+      effects.ring(zone.position, { radius: ZONE_RADIUS * 1.6, color: '#ffd36b', duration: 0.5, thickness: 0.2 });
+    }
+    play('boom');
+    shake = Math.max(shake, 12);
+    if (!isGuest()) {
+      const missed = soak.zones.filter((zone) => !standingTodes().some((tode) => distanceSqXY(tode.position, zone.position) < ZONE_RADIUS ** 2)).length;
+      if (missed) {
+        if (soak.boss && enemies.includes(soak.boss)) soak.boss.hp = Math.min(soak.boss.maxHp, soak.boss.hp + soak.boss.maxHp * SOAK.failHeal);
+        share({ k: 'soakFail' });
+        soakFailed();
+      } else {
+        hud.showCallout('Caught!');
+      }
+    }
+    clearSoak(soak);
+  }
+}
+
+/** Everyone: a star hit the ground: a shockwave across the whole arena. */
+function soakFailed() {
+  postfx.flash('#ffb02e', 0.7);
+  shake = Math.max(shake, 22);
+  hud.showCallout('A star fell! Everyone is hit');
+  if (!player.downed) {
+    player.invulnerableLeft = 0;
+    player.dash = null;
+    hurtPlayer(SOAK.failDamage);
+  }
+}
+
+function clearSoak(soak) {
+  soaks.splice(soaks.indexOf(soak), 1);
+  for (const zone of soak.zones) disposeTree(zone.group);
+  for (const star of soak.stars) {
+    star.removeFromParent();
+    star.material.dispose(); // the geometry is shared
+  }
+  if (!soaks.length) hud.setRaid(null);
+}
+
+// --- Judgement: one Tode is marked and must reach the cleansing circle before it goes off ------------
+function startMark() {
+  const todes = standingTodes();
+  const tode = todes[Math.floor(Math.random() * todes.length)];
+  if (!tode) return;
+  const who = tode === player ? (coop ? net.id : 'solo') : tode.id;
+  const angle = Math.random() * Math.PI * 2;
+  const limit = MAP_HALF_SIZE - ZONE_RADIUS - 20;
+  const spot = tode.position.clone().add(new THREE.Vector3(Math.cos(angle) * 300, Math.sin(angle) * 300, 0));
+  spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0);
+  beginMark(who, spot);
+  share({ k: 'mark', who, p: [Math.round(spot.x), Math.round(spot.y)] });
+}
+
+function beginMark(who, spot) {
+  clearMark();
+  const mine = who === 'solo' || (coop && who === net.id);
+  const name = mine ? 'You' : coop?.remotes.get(who)?.name ?? 'A frog';
+  marked = { who, mine, name, zone: createZone(spot, '#c070ff'), time: 0, pulse: 0 };
+  play('charge');
+  if (mine) hud.showBanner('💀 Judgement!', 'You are marked: run to the purple circle!', 2.2);
+  else hud.showCallout(`💀 ${name} is marked!`);
+}
+
+function updateMark(delta) {
+  if (!marked) return;
+  marked.time += delta;
+  marked.zone.emblem.rotation.z += delta * 4;
+  const left = MARK.time - marked.time;
+  const tode = marked.mine ? player : coop?.remotes.get(marked.who);
+  if (tode && (marked.pulse -= delta) <= 0) {
+    marked.pulse = Math.max(0.15, left / 10);
+    effects.ring(tode.position, { radius: 45, color: '#c070ff', duration: 0.4 });
+  }
+  hud.setRaid(marked.mine ? `💀 Marked! Reach the purple circle · ${Math.max(0, left).toFixed(1)}s` : `💀 ${marked.name} is marked · ${Math.max(0, left).toFixed(1)}s`, marked.mine);
+  if (!marked.mine) {
+    if (left < -1) clearMark(); // the marked frog's own screen reports the result
+    return;
+  }
+  if (distanceSqXY(player.position, marked.zone.position) < ZONE_RADIUS ** 2) {
+    effects.ring(player.position, { radius: 120, color: '#ffffff', duration: 0.5 });
+    play('heal');
+    hud.showCallout('Cleansed!');
+    share({ k: 'markOff' });
+    clearMark();
+  } else if (left <= 0) {
+    postfx.flash('#c070ff', 0.7);
+    shake = Math.max(shake, 20);
+    play('boom');
+    effects.ring(player.position, { radius: 200, color: '#c070ff', duration: 0.6, thickness: 0.25 });
+    player.invulnerableLeft = 0;
+    player.dash = null;
+    hurtPlayer(MARK.damage);
+    hud.showCallout('Judged!');
+    share({ k: 'markOff' });
+    clearMark();
+  }
+}
+
+function clearMark() {
+  if (!marked) return;
+  disposeTree(marked.zone.group);
+  marked = null;
+  hud.setRaid(null);
+}
+
+// --- Blade Storm: lines of light sweep around the boss; stay clear of them ---------------------------
+function startBlades(boss) {
+  const count = (boss.enraged ? 6 : 4) + (boss.type.hellfire ? 1 : 0);
+  const angle = Math.random() * Math.PI * 2;
+  const speed = BLADES.speed * (boss.enraged ? 1.4 : 1) * (Math.random() < 0.5 ? -1 : 1);
+  boss.ai.mode = 'blades';
+  boss.ai.timer = BLADES.windup + BLADES.spin;
+  beginBlades(boss.position, count, angle, speed);
+  share({ k: 'blades', o: [boss.position.x, boss.position.y], n: count, a: angle, s: speed });
+  announce('⚔ Blade Storm!', 'Stay out of the sweeping blades!');
+}
+
+function beginBlades(origin, count, angle, speed) {
+  clearBlades();
+  const meshes = Array.from({ length: count }, () => {
+    const geometry = new THREE.PlaneGeometry(BLADES.length, BLADES.width).translate(BLADES.length / 2, 0, 0);
+    const mesh = new THREE.Mesh(geometry, additive('#ff6a3d', 0.25));
+    mesh.position.set(origin.x, origin.y, 1.2);
+    scene.add(mesh);
+    return mesh;
+  });
+  bladeStorm = { origin: origin.clone().setZ(0), count, angle, speed, time: 0, meshes };
+}
+
+const bladeDirection = new THREE.Vector3();
+
+function updateBlades(delta) {
+  if (!bladeStorm) return;
+  const storm = bladeStorm;
+  storm.time += delta;
+  const live = storm.time > BLADES.windup;
+  if (live) storm.angle += storm.speed * delta;
+  storm.meshes.forEach((mesh, i) => {
+    const angle = storm.angle + (i / storm.count) * Math.PI * 2;
+    mesh.rotation.z = angle;
+    mesh.material.opacity = live ? 0.8 + 0.2 * Math.sin(storm.time * 30) : 0.15 + 0.15 * Math.sin(storm.time * 20);
+    mesh.material.color.set(live ? '#ff7a1a' : '#ff3b1f');
+    if (!live || player.downed) return;
+    // Hit when Tode is close to the blade's line (and on its side of the boss).
+    bladeDirection.set(Math.cos(angle), Math.sin(angle), 0);
+    const dx = player.position.x - storm.origin.x;
+    const dy = player.position.y - storm.origin.y;
+    const along = dx * bladeDirection.x + dy * bladeDirection.y;
+    const across = Math.abs(dx * bladeDirection.y - dy * bladeDirection.x);
+    if (along > 0 && along < BLADES.length && across < BLADES.width / 2 + player.radius * 0.5) hurtPlayer(1);
+  });
+  if (live && Math.random() < 0.5) play('sting');
+  if (storm.time > BLADES.windup + BLADES.spin) clearBlades();
+}
+
+function clearBlades() {
+  if (!bladeStorm) return;
+  for (const mesh of bladeStorm.meshes) disposeTree(mesh);
+  bladeStorm = null;
+}
+
+// --- Ring of Fire: the arena closes in for the rest of the fight ---------------------------------------
+const FIRE_FLOOR_MATERIAL = new THREE.MeshBasicMaterial({ color: '#ff3b10', transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
+
+function beginClosingRing() {
+  clearClosingRing();
+  const wall = new THREE.Mesh(FIRE_WALL_GEOMETRY, FIRE_WALL_MATERIAL);
+  wall.frustumCulled = false;
+  const floor = new THREE.Mesh(new THREE.RingGeometry(1, 4, 96), FIRE_FLOOR_MATERIAL);
+  floor.position.z = 0.7;
+  scene.add(wall, floor);
+  closing = { radius: MAP_HALF_SIZE * 1.45, time: 0, wall, floor, burn: 0 };
+  play('roar');
+  hud.showBanner('🔥 Ring of Fire!', 'The arena closes in: stay inside the flames', 2.4);
+}
+
+function updateClosingRing(delta) {
+  if (!closing) return;
+  closing.time += delta;
+  const k = Math.min(1, closing.time / CLOSING.time);
+  closing.radius = THREE.MathUtils.lerp(MAP_HALF_SIZE * 1.45, MAP_HALF_SIZE * CLOSING.to, k * (2 - k));
+  closing.wall.scale.set(closing.radius, closing.radius, BRIMSTONE.height * 1.6);
+  closing.floor.scale.setScalar(closing.radius);
+  for (let i = 0; i < 3; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    particles.burst(new THREE.Vector3(Math.cos(angle) * closing.radius, Math.sin(angle) * closing.radius, 0), { count: 1, colors: FIRE, speed: 10, up: 80, gravity: -30, size: 2.6, glow: true, height: 4 });
+  }
+  // Outside the ring, the flames burn.
+  const outside = !player.downed && Math.hypot(player.position.x, player.position.y) > closing.radius - player.radius;
+  if (!outside) {
+    closing.burn = 0.4;
+    return;
+  }
+  if ((closing.burn -= delta) <= 0) {
+    closing.burn = 1;
+    if (hurtPlayer(1)) hud.showCallout('The flames! Get inside!');
+  }
+}
+
+function clearClosingRing() {
+  if (!closing) return;
+  closing.wall.removeFromParent();
+  closing.floor.removeFromParent();
+  closing.floor.geometry.dispose();
+  closing = null;
+}
+
+/** Everything a boss fight leaves behind (the boss fell, or the world is cleared). */
+function clearBossMechanics() {
+  clearRaid();
+  clearCataclysm();
+  for (const soak of [...soaks]) clearSoak(soak);
+  clearMark();
+  clearBlades();
+  clearClosingRing();
+  endRitual(null);
+  hud.setBossTimer(null);
+  hud.setRaid(null);
+}
+
+function updateBossMechanics(delta) {
+  updateRaid(delta);
+  updateCataclysm(delta);
+  updateSoaks(delta);
+  updateMark(delta);
+  updateBlades(delta);
+  updateClosingRing(delta);
+  updateRitual(delta);
+}
+
 // --- Hive tactics: bees work together, more and more as the run goes on --------------------------
 // From these waves: flankers spiral in from the sides, packs lunge together along telegraphed lines, stingers fire
 // in synchronized volleys, and some stingers lead their shots. The Hive Mind vow brings them all in from wave 2.
@@ -1596,7 +2167,7 @@ function startPounce(tw) {
   const pack = aliveEnemies()
     .filter(
       (enemy) =>
-        !enemy.type.boss && !enemy.type.structure && !enemy.type.ranged && !enemy.ai.mode && !(enemy.marchLeft > 0) && !enemy.isFrozen &&
+        !enemy.type.boss && !enemy.type.structure && !enemy.type.ranged && enemy.kind !== 'nurse' && !enemy.ai.mode && !(enemy.marchLeft > 0) && !enemy.isFrozen &&
         distanceSqXY(enemy.position, tode.position) < 380 ** 2 && distanceSqXY(enemy.position, tode.position) > 60 ** 2
     )
     .sort((a, b) => distanceSqXY(a.position, tode.position) - distanceSqXY(b.position, tode.position))
@@ -1723,6 +2294,18 @@ function hellfireAura(boss) {
 
 function updateQueen(boss, delta) {
   const { ai } = boss;
+  // The enrage timer runs through everything (shields and staggers too): a race against the clock.
+  const script = BOSS_SCRIPTS[boss.kind];
+  ai.fightTime = (ai.fightTime ?? 0) + delta;
+  if (script && !boss.enraged && ai.fightTime > script.enrage) enrageBoss(boss);
+  hud.setBossTimer(script && !boss.enraged ? script.enrage - ai.fightTime : null);
+  if (boss.enraged) {
+    enrageAura(boss);
+    if ((ai.rainTimer -= delta) <= 0) {
+      ai.rainTimer = ENRAGE.rainEvery;
+      stingerRain(boss);
+    }
+  }
   // Staggered after its shield broke: dazed, open to everything.
   if (ai.staggerLeft > 0) {
     ai.staggerLeft -= delta;
@@ -1735,15 +2318,17 @@ function updateQueen(boss, delta) {
     hud.setBoss(boss);
     return;
   }
-  // A raid shield goes up at set health fractions (see BOSS_WARDS).
-  const ward = BOSS_WARDS[boss.kind]?.[ai.wardIndex ?? 0];
-  if (ward && !raid && !cataclysm && ai.mode !== 'channel' && boss.hp / boss.maxHp < ward[0]) startWard(boss, ward);
+  // The next stage starts at its health fraction (see BOSS_SCRIPTS), once the boss is free to start it.
+  const stage = script?.stages[ai.stage ?? 0];
+  const busy = ['channel', 'interrupt', 'blades', 'windup', 'charge', 'spiral', 'volley', 'halo', 'brimstone', 'pillars'].includes(ai.mode);
+  if (stage && !raid && !cataclysm && !busy && boss.hp <= stageFloor(boss)) startStage(boss, stage);
   const enraged = boss.hp < boss.maxHp / 2;
   const nextPhase = BOSS_PHASES[boss.kind]?.[ai.phase ?? 0];
   if (nextPhase && !boss.shielded && boss.hp / boss.maxHp < nextPhase) bossRoar(boss);
   // Shielded bosses attack less often: the wards are the job (the first bosses go easier still).
   const shieldCalm = boss.shielded ? (wave < 10 ? 1.7 : 1.35) : 1;
-  const delayScale = (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1) * shieldCalm;
+  const delayScale =
+    (boss.type.attackDelayScale ?? 1) * (enraged ? QUEEN.enragedDelayScale : 1) * shieldCalm * (ai.stageSpeed ?? 1) * (boss.enraged ? ENRAGE.attackScale : 1);
   const target = targetFor(boss.position);
   directionTo(boss.position, target, chase);
 
@@ -1869,6 +2454,39 @@ function updateQueen(boss, delta) {
         ai.timer = QUEEN.attackDelay * delayScale;
       }
       break;
+    case 'interrupt': {
+      // Channelling a ritual: only enough damage in time breaks it (the bar is updateRitual).
+      ai.timer -= delta;
+      moveEnemy(boss, 0, 0, delta);
+      boss.glow = 0.5 + 0.5 * Math.sin(ai.timer * 12);
+      const result = ritualResult(boss);
+      if (result === null) break;
+      share({ k: 'brkOff', ok: result });
+      endRitual(result);
+      if (result) {
+        ai.staggerLeft = INTERRUPT.stagger;
+      } else {
+        boss.hp = Math.min(boss.maxHp, boss.hp + boss.maxHp * INTERRUPT.heal);
+        ai.stageSpeed = (ai.stageSpeed ?? 1) * 0.85; // empowered for the rest of the fight
+        fireRing(boss, 28, 170, Math.random());
+      }
+      boss.glow = 0;
+      ai.mode = 'recover';
+      ai.timer = 0.8;
+      break;
+    }
+    case 'blades':
+      // Standing still at the heart of the Blade Storm (updateBlades runs the blades).
+      ai.timer -= delta;
+      moveEnemy(boss, 0, 0, delta);
+      boss.glowColor.set(0xffb000);
+      boss.glow = 0.4 + 0.3 * Math.sin(ai.timer * 15);
+      if (ai.timer <= 0) {
+        boss.glow = 0;
+        ai.mode = 'recover';
+        ai.timer = 0.6;
+      }
+      break;
     case 'channel':
       // Gathering the cataclysm: power pours in from the whole arena (the blast itself is updateCataclysm).
       ai.timer -= delta;
@@ -1887,7 +2505,16 @@ function updateQueen(boss, delta) {
       boss.faceTowards(target);
       moveEnemy(boss, chase.x * boss.speed, chase.y * boss.speed, delta);
       if (!boss.isFrozen) ai.timer -= delta;
-      if (ai.timer <= 0) startQueenAttack(boss, enraged, delayScale);
+      if (ai.timer <= 0) {
+        // A stage's repeating mechanic comes before the usual attacks.
+        const mechanic = dueMechanic(boss);
+        if (mechanic) {
+          castMechanic(boss, mechanic);
+          if (ai.mode === 'chase') ai.timer = QUEEN.attackDelay * delayScale;
+        } else {
+          startQueenAttack(boss, enraged, delayScale);
+        }
+      }
   }
   hud.setBoss(boss);
 }
@@ -2031,6 +2658,7 @@ function updateMirrors(delta) {
   const follow = 1 - Math.exp(-12 * delta);
   for (const enemy of [...enemies]) {
     enemy.update(delta);
+    if (enemy.enraged && !enemy.dying) enrageAura(enemy);
     if (enemy.netTarget) enemy.position.lerp(enemy.netTarget, follow);
     if (enemy.dying) {
       if (enemy.isGone) removeEnemy(enemy);
@@ -2084,6 +2712,10 @@ function updateEnemies(delta) {
     if (enemy.type.structure) {
       if (!enemy.type.ward) updateNest(enemy, delta);
       continue; // hives and wards don't move or bite
+    }
+    if (enemy.kind === 'nurse') {
+      updateNurse(enemy, delta);
+      continue; // nurses never bite: they only heal
     }
     if (enemy.type.boss) updateQueen(enemy, delta);
     else if (enemy.type.ranged) updateStinger(enemy, delta);
@@ -2225,7 +2857,11 @@ function onSpitHit(target, projectile) {
       });
     }
   }
-  if (stats.spitHealEvery && ++spitHits % stats.spitHealEvery === 0) healPlayer(1);
+  if (stats.spitHealEvery && ++spitHits >= stats.spitHealEvery && timeAlive - lastLifesteal >= LIFESTEAL_COOLDOWN) {
+    spitHits = 0;
+    lastLifesteal = timeAlive;
+    healPlayer(1);
+  }
 }
 
 function updateProjectiles(delta) {
@@ -2591,7 +3227,7 @@ function charmHit(enemy, amount, crit) {
 }
 
 function charmKill(enemy) {
-  if (charms('battery')) addGauge(charms('battery'));
+  if (charms('battery')) addGauge(0.3 * charms('battery'));
   if (charms('firecracker') && procs(0.25)) {
     const at = enemy.position.clone().setZ(0);
     const n = charms('firecracker');
@@ -3186,6 +3822,7 @@ function beginWave(number, weatherKind, mods = []) {
   startHazards(number);
   if (number === 1 || arenaForWave(number - 1) !== arena) setupObjective();
   setupShrine(number);
+  setupCursedTiles(number);
   if (coop) {
     // More frogs, more bees: bigger swarms, tougher bees, faster spawning.
     const extra = coop.size - 1;
@@ -3205,7 +3842,7 @@ function beginWave(number, weatherKind, mods = []) {
   spawnTimer = 0;
 
   weather.set(timeOfDay(number), weatherKind);
-  weather.setCosmic(ascension.tier === 4);
+  weather.setCosmic(ascension.tier >= 4);
   hud.setWeather(weather.info);
 
   setPhase('intro', WAVE_INTRO_TIME);
@@ -3215,6 +3852,7 @@ function beginWave(number, weatherKind, mods = []) {
   if (number === HELL_WAVE) hud.showBanner('The Final Battle', 'Bee-zebub awakens!', WAVE_INTRO_TIME + 0.6);
   else if (number === FINAL_WAVE) hud.showBanner(`Wave ${wave}`, 'The Empress of the hive descends!', WAVE_INTRO_TIME + 0.6);
   else if (config.isBoss) hud.showBanner(`Wave ${wave}`, `${bossName} approaches!`, WAVE_INTRO_TIME + 0.4);
+  else if (config.endless) hud.showBanner(`Endless ${config.endless}`, `Bees ×${config.hpScale.toFixed(0)} tougher · ${mods.map((id) => MODIFIERS[id].icon).join(' ')}`, WAVE_INTRO_TIME + 0.4);
   else if (mods.length) hud.showBanner(`Wave ${wave}`, mods.map((id) => `${MODIFIERS[id].icon} ${MODIFIERS[id].name}`).join(' + '), WAVE_INTRO_TIME + 0.4);
   else hud.showBanner(`Wave ${wave}`, `${config.count} bees incoming`, WAVE_INTRO_TIME);
 }
@@ -3261,6 +3899,39 @@ function setupObjective() {
   hud.showCallout(`${def.icon} ${def.label}!`);
 }
 
+/**
+ * How many Todes hold a circle: in co-op it only counts when every standing frog is in it together (the whole team
+ * has to take part); with some of them in it, a callout asks for the rest.
+ */
+function circleHolders(zone) {
+  const todes = standingTodes();
+  const inside = todes.filter((tode) => distanceSqXY(tode.position, zone.position) < ZONE_RADIUS ** 2).length;
+  if (inside && inside < todes.length && clock.elapsedTime - (zone.hintAt ?? -9) > 4) {
+    zone.hintAt = clock.elapsedTime;
+    hud.showCallout(`👥 Everyone into the circle! ${inside}/${todes.length}`);
+  }
+  return inside && inside === todes.length ? inside : 0;
+}
+
+/** A finished circle swells and fades out, then it's gone. */
+function retireZone(zone) {
+  const { group } = zone;
+  let t = 0;
+  effects.addEffect({
+    update(delta) {
+      t = Math.min(1, t + delta / 0.7);
+      group.scale.setScalar(1 + t * 0.3);
+      group.traverse((child) => {
+        if (!child.material) return;
+        child.material.userData.opacity ??= child.material.opacity;
+        child.material.opacity = child.material.userData.opacity * (1 - t);
+      });
+      return t < 1;
+    },
+    dispose: () => disposeTree(group),
+  });
+}
+
 /** A shrine circle with a pillar of light; the circle fills while a Tode stands in it. */
 function createZone(position, color) {
   const group = new THREE.Group();
@@ -3286,7 +3957,7 @@ function updateObjective(delta) {
     zone.emblem.rotation.z += delta * (zone.done ? 0.5 : 2);
     zone.emblem.position.z = 40 + Math.sin(clock.elapsedTime * 2) * 5;
     if (zone.done) continue;
-    const holders = standingTodes().filter((tode) => distanceSqXY(tode.position, zone.position) < ZONE_RADIUS ** 2).length;
+    const holders = circleHolders(zone);
     zone.progress = THREE.MathUtils.clamp(zone.progress + (holders ? (delta / ZONE_TIME) * (1 + 0.3 * (holders - 1)) : -delta / 15), 0, 1);
     zone.fill.geometry.dispose();
     zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, zone.progress * Math.PI * 2));
@@ -3301,8 +3972,7 @@ function updateObjective(delta) {
     }
     if (zone.progress >= 1) {
       zone.done = true;
-      zone.beam.material.color.set('#ffffff');
-      zone.edge.material.color.set('#ffffff');
+      retireZone(zone); // a finished circle fades away, so only the open ones are left to read
       effects.ring(zone.position, { radius: 220, color: zone.color, duration: 0.8, thickness: 0.2 });
       particles.burst(zone.position, { count: 50, colors: ['#ffffff', zone.color], speed: 240, up: 220, size: 2.4, glow: true });
       charmDrops.drop(zone.position, rollCharm());
@@ -3351,6 +4021,141 @@ function updateNest(nest, delta) {
   spawnEnemy(Math.random() < 0.75 ? 'drone' : 'zipper', spot, { elite: null });
 }
 
+// --- Forbidden tiles: cursed ground that calls an ambush when Tode walks onto it -----------------------
+// From wave 3 every wave (but a boss's) lays out new cursed tiles, more the deeper the run. Stepping on one calls
+// a ring of bees; a hop-dash over it is safe. A tile re-arms after a while.
+const CURSED = { from: 3, size: TILE_SIZE * 2, rearm: 9 };
+let cursedTiles = []; // { x, y, mesh, cooldown }
+let cursedWave = 0; // the wave the tiles were laid out for (guests may get them before their own wave starts)
+let cursedTexture = null;
+
+function cursedTileTexture() {
+  cursedTexture ??= (() => {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(70, 0, 25, 0.7)';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#ff2a5a';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(6, 6, size - 12, size - 12);
+    // A warding glyph: a circle with a cross through it.
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 90, 120, 0.9)';
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, 30, 0, Math.PI * 2);
+    ctx.moveTo(size / 2 - 22, size / 2 - 22);
+    ctx.lineTo(size / 2 + 22, size / 2 + 22);
+    ctx.moveTo(size / 2 + 22, size / 2 - 22);
+    ctx.lineTo(size / 2 - 22, size / 2 + 22);
+    ctx.stroke();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  })();
+  return cursedTexture;
+}
+
+/** `spots` come from the host in co-op; otherwise they are rolled here (seeded for the Daily Brew). */
+function setupCursedTiles(number, spots = null) {
+  if (!spots && isGuest() && cursedWave === number) return; // the host's layout already arrived
+  clearCursedTiles();
+  cursedWave = number;
+  if (number < CURSED.from || waveConfig(number).isBoss) return;
+  if (!spots) {
+    if (isGuest()) return;
+    spots = seeded(() => rollCursedSpots(number));
+    share({ k: 'tiles', n: number, t: spots });
+  }
+  cursedTiles = spots.map(([x, y]) => {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(CURSED.size, CURSED.size),
+      new THREE.MeshBasicMaterial({ map: cursedTileTexture(), transparent: true, opacity: 0.85, depthWrite: false })
+    );
+    mesh.position.set(x, y, 1.1);
+    scene.add(mesh);
+    return { x, y, mesh, cooldown: 0 };
+  });
+  if (cursedTiles.length) tip('tiles');
+}
+
+/** Tiles on the floor grid, clear of Tode, the objectives, the shrine and each other. */
+function rollCursedSpots(number) {
+  const count = Math.min(16, 2 + Math.floor(number * 0.6)) + (coop ? coop.size - 1 : 0);
+  const cells = Math.floor((MAP_HALF_SIZE - CURSED.size) / TILE_SIZE);
+  const avoid = [
+    ...standingTodes().map((tode) => [tode.position, 130]),
+    ...(objective?.zones ?? []).map((zone) => [zone.position, ZONE_RADIUS + 50]),
+    ...enemies.filter((enemy) => enemy.kind === 'nest').map((enemy) => [enemy.position, 70]),
+    ...(shrine ? [[shrine.position, SHRINE_RADIUS + 50]] : []),
+  ];
+  const spots = [];
+  for (let tries = 0; spots.length < count && tries < count * 30; tries++) {
+    const x = (Math.floor(Math.random() * cells * 2) - cells) * TILE_SIZE + TILE_SIZE / 2;
+    const y = (Math.floor(Math.random() * cells * 2) - cells) * TILE_SIZE + TILE_SIZE / 2;
+    const near = (p, r) => (p.x - x) ** 2 + (p.y - y) ** 2 < r * r;
+    if (avoid.some(([p, r]) => near(p, r)) || spots.some(([sx, sy]) => (sx - x) ** 2 + (sy - y) ** 2 < (CURSED.size * 1.6) ** 2)) continue;
+    spots.push([x, y]);
+  }
+  return spots;
+}
+
+function updateCursedTiles(delta) {
+  const time = clock.elapsedTime;
+  cursedTiles.forEach((tile, i) => {
+    tile.cooldown = Math.max(0, tile.cooldown - delta);
+    tile.mesh.material.opacity = tile.cooldown > 0 ? 0.25 : 0.7 + 0.2 * Math.sin(time * 4 + i);
+    if (tile.cooldown > 0 || phase !== 'fighting' || player.downed || player.isDashing) return;
+    const half = CURSED.size / 2;
+    if (Math.abs(player.position.x - tile.x) > half || Math.abs(player.position.y - tile.y) > half) return;
+    if (isGuest()) net.queue('host', { k: 'ambush', i });
+    else ambush(i);
+    tileTriggered(i);
+    share({ k: 'tileHit', i });
+  });
+}
+
+/** Everyone: the tile flares up and goes dormant for a while. */
+function tileTriggered(i) {
+  const tile = cursedTiles[i];
+  if (!tile || tile.cooldown > 0) return;
+  tile.cooldown = CURSED.rearm;
+  const at = new THREE.Vector3(tile.x, tile.y, 0);
+  effects.ring(at, { radius: 90, color: '#ff2a5a', duration: 0.5, thickness: 0.25 });
+  particles.burst(at, { count: 24, colors: ['#ff2a5a', '#ff8aa0', '#3a0010'], speed: 120, up: 120, size: 2, glow: true });
+  play('roar');
+  hud.showCallout('Cursed ground! Ambush!');
+}
+
+/** Host: a ring of bees around the tile. */
+/** `fromGuest`: a teammate stepped on it (its flare may have arrived first, so the cooldown doesn't count). */
+function ambush(i, fromGuest = false) {
+  const tile = cursedTiles[i];
+  if (!tile || (tile.cooldown > 0 && !fromGuest)) return;
+  const count = 3 + Math.floor(wave / 3) + (coop ? coop.size - 1 : 0);
+  const kinds = wave >= 12 ? ['drone', 'zipper', 'stinger', 'brute'] : wave >= 8 ? ['drone', 'zipper', 'stinger'] : ['drone', 'zipper'];
+  const limit = MAP_HALF_SIZE - 30;
+  const turn = Math.random() * Math.PI * 2;
+  for (let n = 0; n < count; n++) {
+    const angle = turn + (n / count) * Math.PI * 2;
+    const spot = new THREE.Vector3(tile.x + Math.cos(angle) * 190, tile.y + Math.sin(angle) * 190, 0);
+    spot.set(THREE.MathUtils.clamp(spot.x, -limit, limit), THREE.MathUtils.clamp(spot.y, -limit, limit), 0);
+    effects.ring(spot, { radius: 36, color: '#ff2a5a', duration: 0.6 });
+    spawnEnemy(kinds[n % kinds.length], spot);
+  }
+}
+
+function clearCursedTiles() {
+  cursedWave = 0;
+  for (const tile of cursedTiles) {
+    tile.mesh.removeFromParent();
+    tile.mesh.geometry.dispose();
+    tile.mesh.material.dispose(); // the texture is shared and stays
+  }
+  cursedTiles = [];
+}
+
 // --- Chaos: hazards falling from the sky and coordinated squads of bees ---------------
 // Each arena past the garden has its own hazard from its second wave on, more often deeper into the run.
 const HAZARDS = {
@@ -3360,15 +4165,19 @@ const HAZARDS = {
   cosmos: { kind: 'meteor', from: 16, every: 4.5, radius: 62, damage: 18 },
   hell: { kind: 'brimstone', from: 21, every: 3, radius: 66, damage: 22 },
 };
-const hazard = { timer: 0, every: 0, squadTimer: 0, squadsLeft: 0 };
+const hazard = { timer: 0, every: 0, squadTimer: 0, squadsLeft: 0, curtainTimer: 0, curtainEvery: 0 };
+// Bullet curtains: walls of stingers sweeping across the arena with one gap to slip through.
+const CURTAIN = { from: 13, spacing: 24, gap: 3, speed: 135 };
 
 function startHazards(number) {
   const plan = HAZARDS[arena.id] ?? HAZARDS.garden;
   const active = number >= plan.from || waveMods.has('meteors');
   // A meteor shower is much faster than an arena's own hazard.
-  hazard.every = waveMods.has('meteors') ? 1.4 : active ? plan.every / (1 + (number - plan.from) * 0.08) : 0;
+  hazard.every = waveMods.has('meteors') ? 1.4 : active ? plan.every / (1 + (number - plan.from) * 0.15) : 0;
   hazard.timer = 3 + Math.random() * 2;
-  hazard.squadsLeft = number >= 16 ? 3 : number >= 11 ? 2 : number >= 6 ? 1 : 0;
+  hazard.squadsLeft = number >= 16 ? 3 + Math.floor((number - 16) / 3) : number >= 11 ? 2 : number >= 6 ? 1 : 0;
+  hazard.curtainEvery = number >= CURTAIN.from ? Math.max(3.5, 13 - (number - CURTAIN.from) * 0.7) : 0;
+  hazard.curtainTimer = hazard.curtainEvery * 0.6;
   hazard.squadTimer = 7 + Math.random() * 5;
 }
 
@@ -3376,8 +4185,13 @@ function updateHazards(delta) {
   if (isGuest() || phase !== 'fighting') return;
   if (hazard.every > 0 && (hazard.timer -= delta) <= 0) {
     hazard.timer = hazard.every * (0.7 + Math.random() * 0.6);
-    const count = 1 + (wave >= 15 ? 1 : 0) + (wave >= 20 ? 1 : 0);
-    for (let i = 0; i < count; i++) dropHazard(i * 0.25);
+    // More and more at once: late on the arena is full of them.
+    const count = Math.min(8, 1 + Math.floor(Math.max(0, wave - 10) / 3));
+    for (let i = 0; i < count; i++) dropHazard(i * 0.2);
+  }
+  if (hazard.curtainEvery > 0 && (hazard.curtainTimer -= delta) <= 0) {
+    hazard.curtainTimer = hazard.curtainEvery * (0.8 + Math.random() * 0.4);
+    bulletCurtain();
   }
   if (hazard.squadsLeft > 0 && (hazard.squadTimer -= delta) <= 0) {
     hazard.squadsLeft--;
@@ -3405,6 +4219,27 @@ function dropHazard(extraDelay) {
   const options = { kind, radius: plan.radius ?? 60, damage: plan.damage ?? 16, delay: 1.25 + extraDelay };
   effects.meteor(spot, options);
   share({ k: 'meteor', p: [spot.x, spot.y], o: options });
+}
+
+/** A wall of stingers sweeps across the arena from one side; find the gap (or hop-dash through). */
+function bulletCurtain() {
+  const side = Math.floor(Math.random() * 4);
+  const edge = MAP_HALF_SIZE + 20;
+  const direction = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0)][side];
+  const along = new THREE.Vector3(-direction.y, direction.x, 0);
+  const count = Math.ceil((edge * 2) / CURTAIN.spacing);
+  // The gap lands near a Tode, so there is always a way through.
+  const todes = standingTodes();
+  const tode = todes[Math.floor(Math.random() * todes.length)] ?? player;
+  const gapAt = THREE.MathUtils.clamp(Math.round((tode.position.dot(along) + edge) / CURTAIN.spacing + (Math.random() - 0.5) * 6), 1, count - CURTAIN.gap - 1);
+  const speed = CURTAIN.speed * (1 + Math.max(0, wave - CURTAIN.from) * 0.02);
+  for (let i = 0; i < count; i++) {
+    if (i >= gapAt && i < gapAt + CURTAIN.gap) continue;
+    const origin = direction.clone().multiplyScalar(-edge).addScaledVector(along, -edge + i * CURTAIN.spacing);
+    launchStinger(origin, direction, speed, i > 0, edge * 2.2);
+    share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed, q: i > 0, r: edge * 2.2 });
+  }
+  hud.showCallout('Bullet curtain!');
 }
 
 /** Bees working together: an encirclement, a marching phalanx, or a firing squad. */
@@ -3469,7 +4304,7 @@ function updateWave(delta) {
   } else if (phase === 'fighting' && !isGuest()) {
     spawnTimer -= delta;
     // Bigger swarms in every arena: a bullet hell needs a horde.
-    const maxAlive = MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + (coop ? 12 * (coop.size - 1) : 0);
+    const maxAlive = Math.min(130, MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + 2 * Math.max(0, wave - 12) + (coop ? 12 * (coop.size - 1) : 0));
     if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < maxAlive) {
       if (spawnEnemy(spawnQueue[0])) spawnQueue.shift();
       spawnTimer = config.spawnInterval;
@@ -3888,6 +4723,8 @@ function updateAscending(delta) {
     // The quake builds, the ground cracks, rocks float up, lightning strikes around him.
     shake = Math.max(shake, 1 + charge * charge * 9);
     particles.burst(player.position, { count: 6, colors: ['#ffffff', color], ring: 90, speed: -190, up: 0, gravity: -20, height: 10 + lift, life: 0.5, glow: true });
+    // Stars and sparks pour into him from all around, faster and faster.
+    ascension.charge(delta, ascendingTo, charge);
     if (Math.random() < delta * 14) {
       particles.burst(player.position, { count: 2, colors: ['#8a7a6a', '#6a5a4a', '#a89880'], ring: 40 + Math.random() * 80, speed: 5, up: 40, gravity: -25, size: 2.6, height: 1, life: 1.6 });
     }
@@ -3906,7 +4743,7 @@ function updateAscending(delta) {
   } else if (ascension.tier !== ascendingTo) {
     updateAscending.roared = false;
     ascension.setTier(ascendingTo);
-    achieve(['', 'awakened', 'golden', 'radiant', 'god'][ascendingTo]);
+    achieve(['', 'awakened', 'golden', 'radiant', 'god', 'infinite'][ascendingTo]);
     divinity.setTier(ascendingTo);
     const { banner, sub, name } = TIERS[ascendingTo];
     hud.setForm(name, ascendingTo);
@@ -3924,7 +4761,7 @@ function updateAscending(delta) {
     ascendPillar = new THREE.Mesh(new THREE.CylinderGeometry(26, 40, 900, 32, 1, true).rotateX(Math.PI / 2).translate(0, 0, 450), additive(color, 0.6));
     ascendPillar.position.copy(player.position);
     scene.add(ascendPillar);
-    if (ascendingTo === 4) weather.setCosmic(true);
+    if (ascendingTo >= 4) weather.setCosmic(true);
     meta.maxTier = Math.max(meta.maxTier, ascendingTo);
   }
   if (ascendPillar) {
@@ -3949,7 +4786,7 @@ function updateAscending(delta) {
 }
 
 // --- Co-op ---------------------------------------------------------------------------
-const KINDS = ['drone', 'zipper', 'brute', 'stinger', 'queen', 'empress', 'beezebub', 'shogun', 'seraph', 'nest', 'ward'];
+const KINDS = ['drone', 'zipper', 'brute', 'stinger', 'queen', 'empress', 'beezebub', 'shogun', 'seraph', 'nest', 'ward', 'nurse', 'guardian'];
 const MODS = Object.keys(ELITE_MODS);
 const COOP_TILES = [SOLO_TILES, 31, 35, 41]; // garden size by number of players
 const SNAPSHOT_RATE = 15; // host bee snapshots per second
@@ -4009,7 +4846,8 @@ function snapshot() {
     (enemy.glow > 0.3 ? 16 : 0) |
     (enemy.ai.mode === 'charge' ? 32 : 0) |
     (enemy.shielded ? 64 : 0) |
-    (enemy.ai.staggerLeft > 0 ? 128 : 0);
+    (enemy.ai.staggerLeft > 0 ? 128 : 0) |
+    (enemy.enraged ? 256 : 0);
   return {
     k: 'snap',
     sc: Math.floor(score),
@@ -4041,6 +4879,7 @@ function createMirror(id, kind, elite, x, y) {
   mirrors.set(id, enemy);
   scene.add(enemy.group);
   if (!enemy.type.boss) hud.attachHealthBar(enemy);
+  if (enemy.type.ward || kind === 'guardian') claimOwner(enemy);
   if (pendingIntro === id) {
     pendingIntro = null;
     startBossIntro(enemy);
@@ -4071,15 +4910,20 @@ function applySnapshot(snap) {
     enemy.ai.mode = flags & 32 ? 'charge' : 'chase';
     if (Boolean(flags & 64) !== Boolean(enemy.shielded)) enemy.setShield(flags & 64);
     enemy.ai.staggerLeft = flags & 128 ? 1 : 0;
+    enemy.enraged = Boolean(flags & 256);
     if (flags & 1) {
       enemy.die();
       dropLeaves(enemy);
       dropCharms(enemy);
       if (enemy.kind === 'nest') objectiveDone();
-      if (enemy.type.ward) wardSmashed(enemy);
+      if (enemy.type.ward || enemy.kind === 'guardian') wardSmashed(enemy);
       hud.removeHealthBar(enemy);
     }
-    if (enemy.type.boss && !enemy.dying) hud.setBoss(enemy);
+    if (enemy.type.boss && !enemy.dying) {
+      hud.setBoss(enemy);
+      const enrage = BOSS_SCRIPTS[enemy.kind]?.enrage;
+      hud.setBossTimer(enrage && !enemy.enraged ? enrage - enemy.age + BOSS_INTRO_TIME : null);
+    }
   }
   for (const [id, enemy] of mirrors) {
     if (seen.has(id) || enemy.dying) continue;
@@ -4089,9 +4933,9 @@ function applySnapshot(snap) {
   }
 }
 
-function hostApplyHit({ id, dm, kx, ky }) {
+function hostApplyHit({ id, dm, kx, ky }, from) {
   const enemy = enemies.find((e) => e.netId === id && !e.dying);
-  if (!enemy) return;
+  if (!enemy || (enemy.owner && enemy.owner !== from && !ownerAway(enemy.owner))) return; // attuned to someone else
   const force = Math.hypot(kx, ky);
   damageEnemy(enemy, dm, force > 0 ? new THREE.Vector3(kx / force, ky / force, 0) : null, force, 'net');
 }
@@ -4109,7 +4953,7 @@ function handleNet(from, message) {
       if (isGuest()) applySnapshot(message);
       break;
     case 'hit':
-      if (coop?.host) hostApplyHit(message);
+      if (coop?.host) hostApplyHit(message, from);
       break;
     case 'st': {
       const enemy = coop?.host && enemies.find((e) => e.netId === message.id);
@@ -4118,7 +4962,7 @@ function handleNet(from, message) {
       break;
     }
     case 'sting':
-      launchStinger(vec(message.o), vec(message.d), message.s, message.q);
+      launchStinger(vec(message.o), vec(message.d), message.s, message.q, message.r);
       break;
     case 'fring':
       launchFireRing(vec(message.o));
@@ -4196,8 +5040,23 @@ function handleNet(from, message) {
     case 'fin':
       finisher(message.big);
       break;
+    case 'tiles':
+      setupCursedTiles(message.n, message.t);
+      break;
+    case 'tileHit':
+      tileTriggered(message.i);
+      break;
+    case 'ambush':
+      if (coop?.host) {
+        ambush(message.i, true);
+        tileTriggered(message.i);
+      }
+      break;
     case 'ward':
       if (mirror()) beginRaid(mirror(), message.t, message.p.map((p) => vec(p)));
+      // Who each ward or guardian belongs to (some may already be here, the rest arrive with the next snapshots).
+      pendingOwners = (message.o ?? []).map((o, i) => o && { p: vec(message.p[i]), o }).filter(Boolean);
+      for (const enemy of enemies) if ((enemy.type.ward || enemy.kind === 'guardian') && !enemy.owner) claimOwner(enemy);
       break;
     case 'wardOff':
       breakShield();
@@ -4207,6 +5066,39 @@ function handleNet(from, message) {
       break;
     case 'cata':
       startCataclysm(mirror() ?? null, message.s.map((p) => vec(p)));
+      break;
+    case 'stage':
+      stageEffects(mirror(), message.n, message.t);
+      break;
+    case 'say':
+      hud.showBanner(message.t, message.s, 2.2);
+      break;
+    case 'enrage':
+      if (mirror()) enrageEffects(mirror());
+      break;
+    case 'brk':
+      if (mirror()) beginRitual(mirror(), message.need, message.n);
+      break;
+    case 'brkOff':
+      endRitual(message.ok);
+      break;
+    case 'soak':
+      beginSoak(mirror(), message.s.map((p) => vec(p)));
+      break;
+    case 'soakFail':
+      soakFailed();
+      break;
+    case 'mark':
+      beginMark(message.who, vec(message.p));
+      break;
+    case 'markOff':
+      clearMark();
+      break;
+    case 'blades':
+      beginBlades(vec(message.o), message.n, message.a, message.s);
+      break;
+    case 'closing':
+      beginClosingRing();
       break;
     case 'bossDown':
       bossDefeated(message.n, message.s, message.kd);
@@ -4416,8 +5308,8 @@ function clearWorld() {
   leaves.clear();
   charmDrops.clear();
   clearShrine();
-  clearRaid();
-  clearCataclysm();
+  clearCursedTiles();
+  clearBossMechanics();
   clearObjective();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
@@ -4517,6 +5409,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   bossKills = 0;
   points = 0;
   killsSinceHoney = spitShots = spitHits = 0;
+  lastLifesteal = -99;
   regenTimer = stormCloudTimer = steamDistance = 0;
   spitCooldownLeft = 0;
   splashCooldownLeft = 0;
@@ -4570,7 +5463,7 @@ function endRun({ victory = false } = {}) {
   meta.bestWave = Math.max(meta.bestWave, wave);
   saveMeta();
 
-  const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier === 4, killer });
+  const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier >= 4, killer });
   lastRun = {
     score: finalScore,
     wave,
@@ -4957,8 +5850,8 @@ function updateGame(delta) {
   updateHazards(delta);
   updateObjective(delta);
   updateShrines(delta);
-  updateRaid(delta);
-  updateCataclysm(delta);
+  updateCursedTiles(delta);
+  updateBossMechanics(delta);
   // Raid targets first (they matter most), then the arena's objective.
   hud.setObjectiveArrows([...raidTargets(), ...objectiveArrows]);
   for (const charm of charmDrops.update(delta, player.position, !player.downed)) gainCharm(charm);
@@ -5194,9 +6087,12 @@ if (import.meta.env.DEV) {
     get level() {
       return playerLevel;
     },
+    get mapHalfSize() {
+      return MAP_HALF_SIZE;
+    },
     /** Unfinished shrine positions, nearest first (for the bot). */
     get objectiveZones() {
-      return [...(cataclysm?.zones ?? []), ...(raid?.zones ?? []), ...(objective?.zones ?? [])]
+      return [...(marked?.mine ? [marked.zone] : []), ...(cataclysm?.zones ?? []), ...soaks.flatMap((soak) => soak.zones), ...(raid?.zones ?? []), ...(objective?.zones ?? [])]
         .filter((zone) => !zone.done)
         .map((zone) => zone.position)
         .sort((a, b) => distanceSqXY(a, player.position) - distanceSqXY(b, player.position));
@@ -5259,7 +6155,7 @@ if (import.meta.env.DEV) {
       ascension.setTier(tier);
       divinity.setTier(tier);
       hud.setForm(TIERS[tier].name, tier);
-      weather.setCosmic(tier === 4);
+      weather.setCosmic(tier >= 4);
     },
     setWeather: (time, kind) => {
       weather.set(time, kind);

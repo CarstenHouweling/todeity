@@ -61,20 +61,25 @@ export function makeBot(game) {
       const alive = game.enemies.filter((e) => !e.dying);
       // Flee from nearby bees (the queen counts triple), drift back toward the middle,
       // and stay out of the corners where bees spawn.
-      let fx = -p.x * 0.05;
-      let fy = -p.y * 0.05;
-      // Shrine objectives: walk into the nearest unfinished circle.
+      // Shrine objectives (circles of light, safe spots, …): walk into the nearest one; then the pull to the
+      // middle is weak, or it would cancel the walk to circles far out in the big arenas.
       const shrine = game.objectiveZones?.[0];
+      let fx = -p.x * (shrine ? 0.005 : 0.05);
+      let fy = -p.y * (shrine ? 0.005 : 0.05);
       if (shrine) {
         const dx = shrine.x - p.x;
         const dy = shrine.y - p.y;
         const distance = Math.hypot(dx, dy) || 1;
-        if (distance > 30) {
-          fx += (dx / distance) * 6;
-          fy += (dy / distance) * 6;
+        // Head for it, and once inside keep to its middle (bees would shove it out otherwise).
+        if (distance > 12) {
+          const pull = distance > 60 ? 10 : 25;
+          fx += (dx / distance) * pull;
+          fy += (dy / distance) * pull;
         }
       }
-      for (const [cx, cy] of [[-330, -330], [330, -330], [-330, 330], [330, 330]]) {
+      // Keep away from the corners where bees spawn (the arenas grow, so ask how big this one is).
+      const edge = (game.mapHalfSize ?? 400) - 70;
+      for (const [cx, cy] of [[-edge, -edge], [edge, -edge], [-edge, edge], [edge, edge]]) {
         const dx = p.x - cx;
         const dy = p.y - cy;
         const weight = 3000 / (dx * dx + dy * dy + 1);
@@ -84,7 +89,8 @@ export function makeBot(game) {
       for (const e of alive) {
         const dx = p.x - e.position.x;
         const dy = p.y - e.position.y;
-        const weight = ((e.type.boss ? 3 : 1) * 1000) / (dx * dx + dy * dy + 1);
+        // With a circle to reach, it braves the bees (a player would too).
+        const weight = ((e.type.boss ? 3 : 1) * (shrine ? 250 : 1000)) / (dx * dx + dy * dy + 1);
         fx += dx * weight;
         fy += dy * weight;
       }

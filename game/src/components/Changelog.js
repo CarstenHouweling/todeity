@@ -3,6 +3,37 @@
 
 export const CHANGELOG = [
   {
+    version: '0.13.0',
+    date: '2026-10-14',
+    title: 'Infinite Tode and a much harder hive',
+    changes: [
+      '✨ Every ascension is new and unique: white wind spirals, a towering golden flame, golden lightning with stars streaming in, a vortex of divine fire',
+      '🌌 A fifth form, Infinite Tode: a silver-violet flame, a galaxy under his feet and stars pouring into him',
+      '⛔ Cursed tiles from wave 3: step on one and an ambush of bees appears (hop-dash over them)',
+      '☄ Much harder late waves: bigger, stinger-heavy swarms, harder hits from the Tournament on, hazards everywhere and sweeping bullet curtains',
+      '∞ Endless mode keeps getting harder, and every boss comes back in turn',
+      '🌠 New floors for the Tournament of the Gods and the Underworld',
+      '👥 Co-op: every frog must stand in a circle to fill it, and each shield ward or guardian is attuned to one player',
+      'Finished objective circles disappear',
+      'Fixes: Petal Shield and Stolen Honey upgrades always improve; kill and hit healing has a 12 s cooldown; the ultimate charges by the health it takes off bees (no more instant refills)',
+    ],
+  },
+  {
+    version: '0.12.0',
+    date: '2026-10-14',
+    title: 'Raid bosses in stages',
+    changes: [
+      '⚔ Every boss fights in stages (2 for the Queen, up to 7 for Bee-zebub), and damage can no longer skip a stage',
+      '😡 Enrage timers: beat the boss in time, or it attacks much faster, hits harder and rains stingers',
+      '🛡 New shield task: defeat the Hive Guardians',
+      '⚠ Interrupt the ritual: deal enough damage before the channel completes, or the boss heals and grows stronger',
+      '💚 Royal Nurses fly in to heal the boss: stop them',
+      '☄ Falling Stars: stand in the circles to catch them, or everyone is hit',
+      '💀 Judgement: a marked frog must reach the purple circle in time',
+      '🗡 Blade Storm: sweeping blades around the boss; 🔥 Ring of Fire: the Underworld closes in',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-10-14',
     title: 'Raid bosses and a smarter hive',

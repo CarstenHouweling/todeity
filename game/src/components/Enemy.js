@@ -53,6 +53,9 @@ export const ENEMY_TYPES = {
   },
   // A hive that keeps letting out bees until it is smashed (a side objective).
   nest: { name: 'Wild Hive', scale: 11, hp: 30, speed: 0, damage: 0, score: 150, knockback: 0, structure: true },
+  // Raid adds (see BOSS_SCRIPTS in main.js): nurses fly to the boss and heal it; guardians keep it shielded.
+  nurse: { name: 'Royal Nurse', scale: 4.5, hp: 2, speed: 0.8, damage: 0, score: 40, tint: '#6dffa8', knockback: 0.6, model: 'zipper', label: '💚 Nurse' },
+  guardian: { name: 'Hive Guardian', scale: 10, hp: 12, speed: 0.75, damage: 2, score: 250, tint: '#ffd36b', knockback: 0.15, model: 'brute', label: '🛡 Guardian' },
   // A crystal that keeps a boss's shield up until it is smashed (a raid mechanic, see main.js).
   ward: { name: 'Shield Ward', scale: 9, hp: 7, speed: 0, damage: 0, score: 100, knockback: 0, structure: true, ward: true },
   // Sage Mountain's boss: armoured, fast, and fond of charging.
@@ -259,7 +262,7 @@ export class Enemy {
       this.materials.push(...this.rig.materials);
     } else if (graphicsLevel > 0) {
       // A new species for every arena after the garden (see BeeModels.js).
-      this.rig = buildBee(kind, graphicsLevel);
+      this.rig = buildBee(type.model ?? kind, graphicsLevel);
       model = this.rig.root;
       model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
       this.materials.push(...this.rig.materials);

@@ -23,6 +23,12 @@ export const RARITIES = [
 
 const percent = (value) => `${Math.round(value * 100)}%`;
 
+// Defensive brews with a first pick and upgrades, per rarity [common, rare, epic].
+const HONEY = { first: [16, 12, 9], cheaper: [0.2, 0.28, 0.36], cooldown: 12 };
+const PETAL = { first: [14, 11, 9], faster: [0.2, 0.28, 0.36] };
+/** Seconds between two hearts from kills or hits (Stolen Honey, Herbal Remedy): they would snowball late on. */
+export const LIFESTEAL_COOLDOWN = HONEY.cooldown;
+
 const BREWS = [
   // --- Green Tea: spit -------------------------------------------------------
   {
@@ -152,10 +158,15 @@ const BREWS = [
     },
   },
   {
-    id: 'honey', blend: 'chamomile', name: 'Stolen Honey', icon: '🍯', maxLevel: 2,
-    values: [15, 10, 6],
-    text: (v) => `Restore a heart every ${v} bees defeated.`,
-    apply: ({ stats }, v) => (stats.honeyEvery = stats.honeyEvery ? Math.min(stats.honeyEvery, v) : v),
+    // The first pick sets how many bees a heart costs; every upgrade makes it cheaper (never dearer).
+    id: 'honey', blend: 'chamomile', name: 'Stolen Honey', icon: '🍯', maxLevel: 3,
+    values: [0, 1, 2],
+    text: (r, level = 1) =>
+      level > 1
+        ? `Stolen Honey needs ${percent(HONEY.cheaper[r])} fewer bees per heart.`
+        : `Restore a heart every ${HONEY.first[r]} bees defeated (at most one every ${HONEY.cooldown} s).`,
+    apply: ({ stats }, r) =>
+      (stats.honeyEvery = stats.honeyEvery ? Math.max(4, Math.round(stats.honeyEvery * (1 - HONEY.cheaper[r]))) : HONEY.first[r]),
   },
   {
     id: 'lastsip', blend: 'chamomile', name: 'Last Sip', icon: '🫗', maxLevel: 2,
@@ -167,10 +178,13 @@ const BREWS = [
     },
   },
   {
-    id: 'petal', blend: 'chamomile', name: 'Petal Shield', icon: '🌸', maxLevel: 2,
-    values: [14, 10, 7],
-    text: (v) => `A petal shield blocks one hit. Regrows after ${v}s.`,
-    apply: ({ stats }, v) => (stats.shieldEvery = stats.shieldEvery ? Math.min(stats.shieldEvery, v) : v),
+    // The first pick grows the shield; every upgrade makes it regrow faster (never slower).
+    id: 'petal', blend: 'chamomile', name: 'Petal Shield', icon: '🌸', maxLevel: 3,
+    values: [0, 1, 2],
+    text: (r, level = 1) =>
+      level > 1 ? `Your petal shield regrows ${percent(PETAL.faster[r])} faster.` : `A petal shield blocks one hit. Regrows after ${PETAL.first[r]} s.`,
+    apply: ({ stats }, r) =>
+      (stats.shieldEvery = stats.shieldEvery ? Math.max(3, +(stats.shieldEvery * (1 - PETAL.faster[r])).toFixed(1)) : PETAL.first[r]),
   },
   {
     id: 'hug', blend: 'chamomile', name: 'Warm Hug', icon: '🤗', maxLevel: 2,
@@ -233,7 +247,7 @@ const DUOS = [
   },
   {
     id: 'herbal', blends: ['green', 'chamomile'], name: 'Herbal Remedy', icon: '🌿',
-    text: 'Every 50 spit hits restore a heart.',
+    text: `Every 50 spit hits restore a heart (at most one every ${HONEY.cooldown} s).`,
     apply: ({ stats }) => (stats.spitHealEvery = 50),
   },
   {
@@ -398,5 +412,5 @@ export function rollBrews(levels, { wave, luck = 0, hasUltimate = false, count =
 
 /** Text shown on the card for an offer. */
 export function describe(offer) {
-  return typeof offer.brew.text === 'function' ? offer.brew.text(offer.value) : offer.brew.text;
+  return typeof offer.brew.text === 'function' ? offer.brew.text(offer.value, offer.level) : offer.brew.text;
 }

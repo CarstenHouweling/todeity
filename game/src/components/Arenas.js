@@ -136,6 +136,62 @@ function ground(texture, { roughness = 0.85, metalness = 0, emissiveMap = null, 
   return mesh;
 }
 
+// --- Living floors: an additive glow layer over a field (the late arenas are seen mostly as floor) -------------
+const FLOOR_NOISE = /* glsl */ `
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+      v += a * noise(p);
+      p *= 2.03;
+      a *= 0.5;
+    }
+    return v;
+  }`;
+
+/**
+ * A plane over the field whose shader `body` sets `vec3 glow` from `p` (field coordinates), `time` and `halfSize`
+ * (half the field's size). It is additive, so it only adds light; colours stay under the bloom threshold.
+ */
+function floorOverlay(body, margin = 0) {
+  const size = MAP_HALF_SIZE * 2 + margin * 2;
+  const material = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, halfSize: { value: size / 2 } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float time;
+      uniform float halfSize;
+      varying vec2 vUv;
+      ${FLOOR_NOISE}
+      void main() {
+        vec2 p = (vUv - 0.5) * halfSize * 2.0;
+        vec3 glow = vec3(0.0);
+        ${body}
+        gl_FragColor = vec4(min(glow, vec3(0.9)), 1.0);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);
+  mesh.position.z = 0.35;
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
 /** The thick slab under a floating field. */
 function slab(color, depth, margin) {
   const half = MAP_HALF_SIZE + margin;
@@ -1071,8 +1127,9 @@ function buildCosmos() {
     const tile = size / tiles;
     for (let row = 0; row < tiles; row++) {
       for (let col = 0; col < tiles; col++) {
-        const shade = 168 + Math.floor(range(-14, 10));
-        ctx.fillStyle = `rgb(${shade}, ${shade - 4}, ${shade - 12})`;
+        // Dark polished obsidian: the celestial glow layer (below) shines through it.
+        const shade = 46 + Math.floor(range(-8, 8));
+        ctx.fillStyle = `rgb(${shade + 6}, ${shade}, ${shade + 22})`;
         ctx.fillRect(col * tile + 3, row * tile + 3, tile - 6, tile - 6);
       }
     }
@@ -1110,8 +1167,28 @@ function buildCosmos() {
     ctx.lineTo(c + 120, c - 120);
     ctx.stroke();
   });
-  group.add(ground(texture, { roughness: 0.6, margin: 30 }));
-  group.add(slab('#6f6878', 120, 30));
+  group.add(ground(texture, { roughness: 0.35, metalness: 0.3, margin: 30 }));
+  group.add(slab('#3a3448', 120, 30));
+  // The ring is alive: a nebula drifts under the stone, the seams pulse with light rippling out from the middle,
+  // stars twinkle in the tiles and a ring of runes turns around the field.
+  const celestial = floorOverlay(`
+    float tile = halfSize * 2.0 / 10.0;
+    vec2 g = abs(fract(p / tile) - 0.5);
+    float seam = smoothstep(0.47, 0.5, max(g.x, g.y));
+    float r = length(p);
+    float ripple = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(time * 2.2 - r * 0.025), 3.0);
+    glow += seam * ripple * vec3(0.32, 0.2, 0.7);
+    float n = fbm(p * 0.006 + vec2(time * 0.03, -time * 0.02));
+    glow += smoothstep(0.45, 0.85, n) * mix(vec3(0.35, 0.1, 0.6), vec3(0.05, 0.45, 0.6), fbm(p * 0.004 - time * 0.01)) * 0.55;
+    vec2 cell = floor(p / 10.0);
+    float h = hash(cell);
+    float twinkle = 0.5 + 0.5 * sin(time * (2.0 + h * 4.0) + h * 60.0);
+    glow += step(0.972, h) * twinkle * smoothstep(0.32, 0.0, length(fract(p / 10.0) - 0.5)) * vec3(0.85, 0.85, 1.0);
+    float ringR = halfSize * 0.86;
+    float ring = exp(-pow((r - ringR) / 5.0, 2.0)) * step(0.35, fract(atan(p.y, p.x) * 48.0 / 6.2832 + time * 0.15));
+    glow += ring * vec3(0.9, 0.45, 0.2) * 0.8;`, 30);
+  group.add(celestial);
+  updates.push((time) => (celestial.material.uniforms.time.value = time));
   // Steps around the ring.
   const steps = model([
     ...[0, 1, 2].map((i) =>
@@ -1220,7 +1297,7 @@ function buildCosmos() {
   const scale = new THREE.Vector3();
   const matrix = new THREE.Matrix4();
 
-  const stardust = motes({ count: 220, colors: ['#c8a8ff', '#9ff4ff', '#ffffff'], size: 3, height: 200, speed: 15, sway: 30 });
+  const stardust = motes({ count: 380, colors: ['#c8a8ff', '#9ff4ff', '#ffffff'], size: 3, height: 200, speed: 15, sway: 30 });
   group.add(stardust.points);
 
   updates.push((time) => {
@@ -1309,6 +1386,33 @@ function buildUnderworld() {
   const floor = ground(texture, { roughness: 0.55, metalness: 0.15, emissiveMap: glowMap, emissive: '#ff5a14', margin: 30 });
   group.add(floor);
   group.add(slab('#241a1a', 140, 30));
+  // Magma moves under the floor, a summoning sigil burns in the middle, and sparks flicker across the stone.
+  const inferno = floorOverlay(`
+    float n = fbm(p * 0.006 + vec2(time * 0.04, time * 0.015));
+    float m = fbm(p * 0.013 - vec2(time * 0.06, 0.0));
+    glow += smoothstep(0.55, 0.8, n) * (0.5 + 0.5 * m) * vec3(0.55, 0.12, 0.02);
+    float r = length(p);
+    float a = atan(p.y, p.x);
+    float R = halfSize * 0.42;
+    float circles = exp(-pow((r - R) / 3.0, 2.0)) + exp(-pow((r - R * 0.78) / 2.2, 2.0)) * 0.8;
+    // Six spokes of a star between the circles, turning slowly.
+    float spokes = 0.0;
+    for (int i = 0; i < 6; i++) {
+      float ang = float(i) * 1.0472 + time * 0.05;
+      vec2 d = vec2(cos(ang), sin(ang));
+      vec2 e = vec2(cos(ang + 2.0944), sin(ang + 2.0944));
+      vec2 pa = p - d * R * 0.78;
+      vec2 ba = (e - d) * R * 0.78;
+      float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+      spokes += exp(-pow(length(pa - ba * t) / 2.0, 2.0));
+    }
+    float runes = exp(-pow((r - R * 1.1) / 4.0, 2.0)) * step(0.55, fract(a * 36.0 / 6.2832 - time * 0.1));
+    float pulse = 0.55 + 0.45 * sin(time * 1.8);
+    glow += (circles + spokes * 0.7 + runes) * pulse * vec3(0.85, 0.12, 0.04);
+    vec2 cell = floor(p / 8.0);
+    float h = hash(cell + floor(time * 0.5));
+    glow += step(0.992, h) * smoothstep(0.35, 0.0, length(fract(p / 8.0) - 0.5)) * vec3(0.9, 0.5, 0.1);`, 30);
+  group.add(inferno);
 
   // A sea of lava.
   const lava = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE), lavaMaterial());
@@ -1402,13 +1506,14 @@ function buildUnderworld() {
   );
   group.add(single(rib, { ...xy(-640, 640), z: -70, scale: 1.2, rotation: 0.7 }));
 
-  const embers = motes({ count: 260, colors: ['#ff6a00', '#ffb020', '#ff3b1f'], size: 3.5, height: 220, speed: 30, sway: 25 });
+  const embers = motes({ count: 420, colors: ['#ff6a00', '#ffb020', '#ff3b1f'], size: 3.5, height: 220, speed: 30, sway: 25 });
   const ash = motes({ count: 140, colors: ['#5a4a48', '#3a302e'], size: 4, height: 220, speed: -14, sway: 30, additive: false, opacity: 0.7 });
   group.add(embers.points, ash.points);
 
   updates.push((time) => {
     lava.material.uniforms.time.value = time;
     poolLava.material.uniforms.time.value = time;
+    inferno.material.uniforms.time.value = time;
     for (const gate of gates) gate.material.uniforms.time.value = time;
     floor.material.emissiveIntensity = 0.75 + 0.35 * Math.sin(time * 1.6) + 0.15 * Math.sin(time * 4.3);
     flames.update(time);

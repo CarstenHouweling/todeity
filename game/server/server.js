@@ -94,7 +94,7 @@ function parseEntry(body) {
     score: clampInt(body.score, 0, 10_000_000),
     wave: clampInt(body.wave, 1, 999),
     level: clampInt(body.level, 0, 999),
-    tier: clampInt(body.tier, 0, 4),
+    tier: clampInt(body.tier, 0, 5),
     kills: clampInt(body.kills, 0, 1_000_000),
     time: clampInt(body.time, 0, 86_400),
     victory: Boolean(body.victory),

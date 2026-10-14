@@ -94,6 +94,11 @@ export class Hud {
     this.boss = element('boss-bar', this.top);
     this.bossName = element('boss-name', this.boss);
     this.bossFill = element('boss-fill', element('boss-track', this.boss));
+    // Raid bosses: the enrage countdown and, while it channels, the bar to break.
+    this.bossTimer = element('boss-timer', this.boss);
+    this.breakBar = element('break-bar', this.boss);
+    this.breakFill = element('break-fill', this.breakBar);
+    this.breakBar.hidden = true;
     this.boss.hidden = true;
 
     this.banner = element('banner', this.root);
@@ -270,10 +275,25 @@ export class Hud {
   setBoss(enemy) {
     setProp(this.boss, 'hidden', !enemy);
     if (!enemy) return;
-    const state = enemy.shielded ? 'shielded' : enemy.ai?.staggerLeft > 0 ? 'staggered' : '';
+    const state = enemy.shielded ? 'shielded' : enemy.ai?.staggerLeft > 0 ? 'staggered' : enemy.enraged ? 'enraged' : '';
     if (this.boss.dataset.state !== state) this.boss.dataset.state = state;
-    setText(this.bossName, enemy.shielded ? `🛡 ${enemy.type.name} · SHIELDED` : state ? `💫 ${enemy.type.name} · STAGGERED` : enemy.type.name);
+    const names = { shielded: `🛡 ${enemy.type.name} · SHIELDED`, staggered: `💫 ${enemy.type.name} · STAGGERED`, enraged: `😡 ${enemy.type.name} · ENRAGED` };
+    setText(this.bossName, names[state] ?? enemy.type.name);
     setStyle(this.bossFill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
+  }
+
+  /** Seconds until the boss enrages (null hides the timer). */
+  setBossTimer(seconds) {
+    setText(this.bossTimer, seconds === null ? '' : seconds > 0 ? `⏱ Enrage in ${formatTime(seconds)}` : '');
+    if (this.bossTimer.classList.contains('urgent') !== (seconds !== null && seconds < 20)) this.bossTimer.classList.toggle('urgent');
+  }
+
+  /** The boss's channel to interrupt: `fraction` 0–1 of the damage needed (null hides it). */
+  setBreakBar(fraction, label = '') {
+    setProp(this.breakBar, 'hidden', fraction === null);
+    if (fraction === null) return;
+    setStyle(this.breakFill, 'width', `${(Math.min(1, fraction) * 100).toFixed(1)}%`);
+    this.breakBar.dataset.label = label;
   }
 
   setCooldown(id, left, total) {
@@ -572,13 +592,26 @@ export class Hud {
   }
 
   attachHealthBar(enemy) {
-    const bar = element(enemy.elite ? 'health-bar elite' : 'health-bar', this.worldLayer);
-    if (enemy.elite) {
+    const tagged = enemy.elite || enemy.type.label;
+    const bar = element(tagged ? 'health-bar elite' : 'health-bar', this.worldLayer);
+    if (tagged) {
       const label = element('elite-label', bar);
-      label.textContent = `${enemy.elite.icon} ${enemy.elite.name}`;
-      label.style.color = enemy.elite.color;
+      label.textContent = enemy.type.label ?? `${enemy.elite.icon} ${enemy.elite.name}`;
+      label.style.color = enemy.type.label ? enemy.type.tint : enemy.elite.color;
     }
     enemy.healthBar = { bar, fill: element('health-fill', bar) };
+  }
+
+  /** A label over a bee's health bar (co-op attuned wards and guardians); the bar then always shows. */
+  setEnemyLabel(enemy, text, color) {
+    enemy.labelText = text;
+    if (!enemy.healthBar) return;
+    const { bar } = enemy.healthBar;
+    bar.classList.add('elite');
+    const label = bar.querySelector('.elite-label') ?? element('elite-label', bar);
+    if (!label.parentNode || label !== bar.firstChild) bar.prepend(label);
+    label.textContent = text;
+    label.style.color = color;
   }
 
   removeHealthBar(enemy) {
@@ -1066,7 +1099,7 @@ ${
     for (const enemy of enemies) {
       if (!enemy.healthBar) continue;
       const { bar, fill } = enemy.healthBar;
-      const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite) && this.place(bar, enemy.position, enemy.height + 8);
+      const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite || enemy.type.label || enemy.labelText) && this.place(bar, enemy.position, enemy.height + 8);
       setStyle(bar, 'display', visible ? '' : 'none');
       if (visible) setStyle(fill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
     }

@@ -101,13 +101,16 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   chill, lightning, lava pool). 2 charges, 2.2 s each. **Hop dash**
   (~175 units, 1 s recharge) passes through bees, hurting and bumping them (2 damage base), and leaves Tode
   safe for 0.25 s after landing.
-- **Ascension:** brew levels (+2 per Duo/Legendary, +2 for the ultimate, 1 + level per skill) give "power"; at
-  thresholds 3/7/12/18 Tode transforms with a cut-scene: a quake, rising debris and lightning, then a burst that
-  shatters reality and a pillar of light. The stages (`STAGES` in `Ascension.js`) are like a martial-arts hero
-  powering up: Awakened (white aura), Golden (golden flame and spiky golden crest), Radiant (bigger crest,
-  constant crackling lightning), God of Tea (calm crimson flame, ruby crest, halo, runes and a storm of twinkling
-  sparkles). It can happen mid-wave after a skill pick. In the garden **the world transforms with him**
-  (blossoms → lanterns and petals → crystals and floating islands → a marble heaven above the clouds).
+- **Ascension** (`components/Ascension.js`): power (brew levels, +2 per Duo/Legendary, +2 for the ultimate,
+  1 + level per skill) crosses 3/10/20/36/54 and Tode transforms with a cut-scene (a quake, stars pouring into him via
+  `ascension.charge`, a burst that shatters reality and a pillar of light). Five unique forms (`STAGES`), each built
+  from a noise-driven flame aura shell (`auraShell`, tall and spiky enough to read from the gameplay camera),
+  spiral ribbons (`swirlRibbons`, energy or `fire`), stars flying into him (`pullStars`, an instanced stream),
+  lightning arcs, orbiting sparkles, rising debris, a crest, halo, runes and a galaxy: Awakened (white wind),
+  Golden (towering golden flame), Radiant (gold spirals, lightning, debris, stars), God of Tea (crimson flame in a
+  vortex of fire, halo, runes), Infinite (silver-violet, galaxy underfoot, a constant star stream). Additive layers
+  stack, so colours stay under the bloom threshold (0.93) or the screen washes out white. In the garden **the world
+  transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
@@ -117,15 +120,28 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   Brimstone Rings (walls of fire spreading from him: only a hop-dash gets you through), chasing Hellfire Pillars,
   hellfire rain and an Infernal Spiral, with two rage phases where he grows. Beating him plays the ending
   cut-scene back home in the garden, and credits.
-- **Raid bosses** (`BOSS_WARDS`, `WARD`, `startWard`/`updateRaid` in main.js): at set health fractions a boss
-  raises a shield (`Enemy.setShield`, a bubble; `damageEnemy` ignores shielded bees and `targetable()` hides them
-  from aiming, skills and bombs). The task: smash 3–5 **Shield Wards** (`ward` structure bees, `buildWard` in
-  BeeModels.js, tethered to the boss) or hold 3 circles of light. The boss keeps attacking (less often) and guards
-  come; if the timer runs out (30 s wards, 40 s lights) the shield overloads: everyone takes a hit and the boss heals
-  10%. Done: the shield shatters and the boss is **staggered** for 5 s (×1.5 damage). The Seraph (from her first
-  roar), Empress and Bee-zebub also cast a **cataclysm** (`CATACLYSM`): they channel, the arena glows red and only
-  circles of light are safe (2 hearts otherwise, a hop-dash doesn't help). Co-op: the host decides; `ward`,
-  `wardOff`, `overload` and `cata` messages, snapshot flags 64 (shielded) and 128 (staggered).
+- **Raid bosses** (`BOSS_SCRIPTS`, `MECHANICS` and the "Raid bosses" / "Boss stages" sections in main.js): every
+  boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic; a **phase lock**
+  (`stageFloor`, in `damageEnemy`) keeps its health at the threshold until that stage has begun, so damage can't
+  skip stages (except during a ritual, which must be breakable). An **enrage timer** per boss (2:00 to 3:40 of
+  fighting, shown under the boss bar) makes it much faster and harder hitting with stinger rain (`ENRAGE`).
+  Mechanics:
+  - Shields (`startWard`, `startGuardians`, `updateRaid`): the boss is immune (`Enemy.setShield`; `damageEnemy`
+    ignores it, `targetable()` hides it from aiming, skills and bombs) until its **Shield Wards** (`ward` bees,
+    tethered) are smashed, 3 circles of light are held, or its **Hive Guardians** (`guardian` bees) fall. Guards
+    come meanwhile; when the timer (30/40 s) runs out the shield overloads (everyone hit, boss heals 10%). Broken:
+    the boss is **staggered** 4 s (×1.5 damage).
+  - **Interrupt** (`startInterrupt`, `ritual`): it channels for 8 s; deal 18% of its health (more in co-op) to break
+    it (stagger), or it heals 15% and attacks faster for good. A break bar shows under the boss bar.
+  - Repeating ones, cast whenever due (`dueMechanic`, `MECHANICS.every`): **Royal Nurses** (`nurse` bees fly to the
+    boss and heal it 4%), **Falling Stars** (`soaks`: stand in every circle, or everyone takes 2 and it heals),
+    **Judgement** (`marked`: the marked Tode must reach a purple circle in 6.5 s or take 2), **Blade Storm**
+    (`bladeStorm`: rotating blades from the boss, telegraphed for 1 s).
+  - **Ring of Fire** (`closing`, Bee-zebub): a fire wall closes in to 42% of the arena for the rest of the fight.
+  - **Cataclysm** (`CATACLYSM`, Seraph/Empress/Bee-zebub attack): only circles of light are safe (2 hearts).
+  Co-op: the host decides; messages `stage`, `say`, `ward`, `wardOff`, `overload`, `cata`, `enrage`, `brk`,
+  `brkOff`, `soak`, `soakFail`, `mark`, `markOff`, `blades`, `closing`; snapshot flags 64 (shielded), 128
+  (staggered), 256 (enraged). Mechanics that hurt are checked on every screen for its own Tode.
 - **Hive tactics** (`TACTICS`, `updateTactics`, host only): from wave 4 chasers may be flankers (`assignFlank`:
   they spiral in from the sides), from wave 7 packs near a Tode lunge together along telegraphed lines
   (`startPounce`/`updatePounce`), from wave 11 stingers fire synchronized volleys (`tactics.volleyIn`), from wave 15
@@ -140,6 +156,18 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
 - **Achievements** (`components/Achievements.js`): 16, each worth 15 Golden Leaves, shown in the Pantry.
   First-run **tips** appear once each (`meta.tips`).
+- **Cursed tiles** ("Forbidden tiles" section in main.js, `CURSED`): from wave 3 every non-boss wave lays out
+  2×2-grid tiles (more each wave, rolled away from Tode and the objectives; seeded for the Daily Brew; the host
+  shares them in co-op). Stepping on one (not while hop-dashing) calls a ring of bees (`ambush`, the host spawns;
+  guests send `ambush`); it re-arms after 9 s.
+- **Difficulty curve** (`waveConfig`): past wave 10 swarms grow quadratically and more of them are stingers; from
+  wave 16 bees hit for an extra heart; hazards fall in growing numbers (up to 8 at once) and from wave 13 **bullet
+  curtains** (`bulletCurtain`: a wall of stingers sweeping across with a gap near a Tode) come more and more often.
+  **Endless** (waves past 21): bees +10% health per wave, always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`),
+  +1 contact damage every 10 waves.
+- **Co-op objectives:** a circle (arena objective or a boss's circles of light) only fills while every standing
+  frog is in it (`circleHolders`). Shield wards and guardians are attuned to one player each (`attune`, labelled;
+  `owner`; the host ignores other players' hits, and an owner who is down or gone frees it).
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
@@ -182,6 +210,10 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari);
   hidden where the browser can't do it (iPhone Safari). Menus redraw on `fullscreenchange` (`refreshMenu`).
+- **Healing and the ultimate:** Stolen Honey and Herbal Remedy share a 12 s cooldown (`LIFESTEAL_COOLDOWN`);
+  Petal Shield and Stolen Honey upgrades always improve the current value (their card text depends on the level).
+  The ultimate gauge fills by the health actually taken off bees divided by the wave's `hpScale`, so it charges at
+  the same pace all run.
 - **Sharing a run:** the game-over screen shows everything gathered (ultimate, skills, brews) and a 📤 Share button
   that opens a popup with a 1200×630 card drawn on a canvas (`ShareCard.js`: score, time, wave, level, bees, form,
   build, the last frame as a backdrop) plus a text line. Share uses the native share sheet (image + text) where
@@ -210,6 +242,10 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   past the bloom threshold and hazed the screen.
 - **Renderer:** ACES filmic tone mapping from level 1. Arena palettes keep their lights low and set `exposure`
   instead, because bloom (threshold 0.93) runs *before* exposure/tone mapping: bright lit floors would bloom.
+- **Living floors** (`floorOverlay` in Arenas.js): the Tournament and the Underworld are seen mostly as floor, so
+  each gets an additive shader layer over its stone: a drifting nebula, pulsing seams, twinkling stars and a rune
+  ring (Tournament), magma under the floor, a turning summoning sigil and sparks (Underworld). GLSL note: `half`
+  is a reserved word.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
   shader that caps point size and fades points near the camera.
@@ -343,10 +379,15 @@ const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of wav
 ```
 
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game
-with `game.step()` and take a screenshot to see the result. `step()` renders only its last frame; CSS animations
+with `game.step()` and take a screenshot to see the result. A hidden pane can also show a stale canvas; for exact
+shots copy `game.renderer.domElement.toDataURL()` into a full-screen `<img>` right after a step. Setting
+`game.player.invulnerableLeft` makes Tode blink (model and aura hidden on some frames). Co-op can be tested with
+two tabs against `npm run server` (stepping each tab in turn, with short awaits for the messages). `step()` renders only its last frame; CSS animations
 (banners) run on real time, so a screenshot right after a long step can still show them.
 
-Balance reference (Oct 14, v0.11 with raid bosses and tactics): the bot (perfect aim, random picks, dodges bullets
+Balance reference (Oct 14, v0.12): the bot can't do raid mechanics well (it flees the boss instead of walking to
+circles), so it dies at the first or second boss; with 80 hearts a Queen fight took ~50 s and a Shogun fight ~45–70 s
+through all stages. Earlier (v0.11 with raid bosses and tactics): the bot (perfect aim, random picks, dodges bullets
 but not telegraphed strikes or lunges, walks into shrines and circles of light) died at waves 5, 10 and 15 (the
 Shogun's charges during his shield phase are its usual end). Before v0.11 it died at the wave-10 Shogun twice and
 at wave 16 once. Humans will find the bullet patterns harder than the bot does. See `SUBMISSION.md` for the contest post kit.
