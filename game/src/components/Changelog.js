@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.15.1',
+    date: '2026-10-14',
+    title: 'Busier co-op starts',
+    changes: [
+      '👥 Co-op: the first waves bring far more bees, and they come in faster. A party of three gets about twice as many in wave 1, and the extra fades out by wave 7. You still level at the usual pace',
+      '⏸ The pause menu puts its buttons first, and a big build scrolls in its own box, so Resume is always within reach on tablets',
+      'Fix: "Ultimate ready" now shows the right key (E, or ✨ on touch screens)',
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-10-14',
     title: 'A sterner hive',

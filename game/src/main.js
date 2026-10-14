@@ -122,11 +122,15 @@ const ELITE_FROM_WAVE = 6;
 
 // Co-op: per extra frog, waves get COOP_BEES more bees that are COOP_HP tougher, and bosses COOP_BOSS_HP more health.
 // Every player collects their own copy of the leaves and charms, so those are shared out over the bigger swarm:
-// each frog levels at about the solo pace.
+// each frog levels at about the solo pace. The first waves are thin for a team, so they get COOP_EARLY more bees per
+// extra frog on top (all of it at wave 1, fading out by wave COOP_EARLY_UNTIL).
 const COOP_BEES = 0.6;
+const COOP_EARLY = 1;
+const COOP_EARLY_UNTIL = 7;
 const COOP_HP = 0.3;
 const COOP_BOSS_HP = 0.8;
-const coopShare = () => (coop ? 1 + COOP_BEES * (coop.size - 1) : 1);
+const coopEarly = () => COOP_EARLY * THREE.MathUtils.clamp((COOP_EARLY_UNTIL - wave) / (COOP_EARLY_UNTIL - 1), 0, 1);
+const coopShare = () => (coop ? 1 + (COOP_BEES + coopEarly()) * (coop.size - 1) : 1);
 
 // Divinity makes Tode's spit stronger and more radiant: [color, glow] per ascension tier.
 const TIER_DAMAGE_BONUS = 0.06; // +6% damage per tier
@@ -272,7 +276,6 @@ const renderer = createRenderer();
 const postfx = new PostFX(renderer, scene, camera);
 const input = new Input(renderer.domElement);
 const touch = new TouchControls(input);
-// Phones can't use Q/E/F, so skills always cast themselves there.
 const hud = new Hud(camera);
 const particles = new Particles();
 scene.add(particles.mesh);
@@ -969,7 +972,7 @@ function addGauge(amount) {
   if (player.gauge >= 100) {
     tip('ultimate');
     play('ultimateReady');
-    hud.damageNumber(player.position, 'ULTIMATE READY · R', 40, 'ready');
+    hud.damageNumber(player.position, touch.enabled ? 'ULTIMATE READY · ✨' : 'ULTIMATE READY · E', 40, 'ready');
   }
 }
 
@@ -3986,11 +3989,11 @@ function beginWave(number, weatherKind, mods = []) {
   setupShrine(number);
   setupCursedTiles(number);
   if (coop) {
-    // More frogs, more bees: bigger swarms, tougher bees, faster spawning.
+    // More frogs, more bees: bigger swarms, tougher bees, spawning as much faster as the swarm is bigger.
     const extra = coop.size - 1;
     config.count = Math.round(config.count * coopShare());
     config.hpScale *= 1 + COOP_HP * extra;
-    config.spawnInterval /= 1 + 0.5 * extra;
+    config.spawnInterval /= coopShare();
     reviveIfDown();
     hud.setWaiting(null);
   }

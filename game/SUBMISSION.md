@@ -27,7 +27,7 @@ world, music and sound all generated in code.
 
 ## Feature highlights (for the longer post or the video captions)
 
-- **Roguelite core, Hades-inspired:** 26 brews in 5 Blends (Green Tea, Ember Black, Frost Mint, Chamomile,
+- **Roguelite core, Hades-inspired:** 27 brews in 5 Blends (Green Tea, Ember Black, Frost Mint, Chamomile,
   Storm Oolong) with rarities, 8 Duo brews and 5 Legendaries, each offered by a talking tea spirit.
 - **Ascension:** five transformations with cut-scenes: golden flame aura, spiky crest, lightning, a halo and a
   reality-warping god form. The spit evolves from green to radiant gold.

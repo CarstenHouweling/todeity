@@ -762,15 +762,30 @@ canvas.game {
 }
 
 /* Panels: pause, pantry */
+/* `dvh`: on tablets `vh` includes the browser bars, which pushed the bottom of tall panels off the screen.
+   The body blocks touch scrolling for the sticks (touch-action: none), so scrolling boxes allow it again. */
 .menu .panel {
   max-width: min(680px, 92vw);
   max-height: 92vh;
+  max-height: 92dvh;
   overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 .pause,
 .pantry {
   cursor: default;
+}
+
+/* Pause: a big build scrolls in its own box below the buttons. */
+.pause .build {
+  max-height: 42vh;
+  max-height: 42dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
 .build {
@@ -1778,7 +1793,10 @@ body.touch .owned {
 .modal .panel {
   width: min(680px, 100%);
   max-height: 92vh;
+  max-height: 92dvh;
   overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
   padding: 22px 24px;
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-radius: 18px;
@@ -1871,6 +1889,7 @@ body.touch .owned {
   .menu {
     overflow-y: auto;
     justify-content: safe center;
+    touch-action: pan-y;
   }
 
   .menu.title-screen {
@@ -1896,14 +1915,10 @@ body.touch .owned {
     max-height: calc(50vh / 0.68);
   }
 
-  /* Pause: the buttons first, the build list below them. */
-  .pause .panel {
-    display: flex;
-    flex-direction: column;
-  }
-
+  /* Here the whole menu scrolls, the build list with it. */
   .pause .build {
-    order: 1;
+    max-height: none;
+    overflow: visible;
   }
 
   .score,

@@ -221,7 +221,10 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Touch HUD:** the brew and charm rows (`.inventory`) are replaced by a one-line count under the hearts
   (`.inventory-summary`); charm pickups float up from Tode instead of toasts; at most 2 toasts, low on the left;
   weather and modifier lines show only their names; banners and callouts wrap. Narrow screens (`max-width: 600px`)
-  shrink hearts and score and move the wave line below them. The pause menu still lists the whole build.
+  shrink hearts and score and move the wave line below them. The pause menu still lists the whole build, below its
+  buttons and in its own scrolling box (`.pause .build`), so Resume stays reachable. The body has
+  `touch-action: none` for the sticks, so every scrolling menu box sets `touch-action: pan-y`; panel heights use
+  `dvh` (tablet `vh` includes the browser bars).
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
@@ -303,7 +306,10 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 - **Flow.** After a wave each player picks their own rewards; the host waits until everyone is ready (or 40 s).
   A fallen Tode is *downed*: it spectates a teammate and gets back up at the next wave. The run ends when everyone
   is down. The garden grows (25 → 31 → 35 → 41 tiles), and per extra player waves get 60% more bees that are 30%
-  tougher, bosses 80% more health (`COOP_*` in main.js); bigger maps get extra spawn points on the edges.
+  tougher, bosses 80% more health (`COOP_*` in main.js); bigger maps get extra spawn points on the edges. The first
+  waves felt empty for a team, so they get another 100% per extra player on top (`COOP_EARLY`, fading out by wave 7,
+  `coopEarly()`), and the spawn interval is divided by the same factor (`coopShare()`), so bigger swarms don't
+  trickle in.
 - **Experience in co-op:** everyone collects their own copy of every bee's leaves (and charm drops), so leaf values
   and charm odds are divided by the swarm growth (`coopShare()`): each frog levels at about the solo pace.
 - **Code.** `components/Net.js` (WebSocket client, batched messages), `components/RemoteTode.js` (teammate

@@ -1004,15 +1004,13 @@ ${
           .join('')
       : '<p class="sub">No brews yet. Clear a wave to choose one.</p>';
     const ult = ultimate ? `<p class="sub">Ultimate: ${ULTIMATES[ultimate].icon} <b>${ULTIMATES[ultimate].name}</b></p>` : '';
+    // The buttons come first and the build scrolls in its own box, so a big build never pushes Resume out of reach.
     this.showMenu(
       'pause',
       `
       <div class="panel">
         <h2>${coop ? 'Menu' : 'Paused'}</h2>
         ${coop ? '<p class="sub">The run keeps going for your teammates while this menu is open.</p>' : ''}
-        <p class="sub">${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
-        ${ult}
-        <div class="build">${brews}</div>
         <div class="menu-buttons">
           <button class="menu-button primary" data-action="resume">▶ Resume</button>
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
@@ -1023,6 +1021,9 @@ ${
           ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}
           <button class="menu-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
         </div>
+        <p class="sub">${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
+        ${ult}
+        <div class="build">${brews}</div>
       </div>`
     );
   }
