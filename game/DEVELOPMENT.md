@@ -38,14 +38,14 @@ only dependency is `ws`). With the Azure CLI (`az login` first), from the `game/
 
 ```bash
 npm install && npm run build
-az webapp up --name todeity-<something-unique> --runtime "NODE:20-lts" --sku B1 --location westeurope
+az webapp up --name todeity-<something-unique> --runtime "NODE:24-lts" --sku B1 --location westeurope
 az webapp config set --name todeity-<something-unique> --resource-group <the group az webapp up printed> \
   --startup-file "npm start" --web-sockets-enabled true
 az webapp config appsettings set --name todeity-<something-unique> --resource-group <group> \
   --settings DATA_DIR=/home/data
 ```
 
-- **Web sockets must be enabled** for co-op. `DATA_DIR=/home/data` keeps scores across restarts and redeploys.
+- **Web sockets must be enabled** for co-op (Linux apps always have them on; the portal hides the toggle there). `DATA_DIR=/home/data` keeps scores across restarts and redeploys.
 - App Service sets `PORT` itself. B1 is the cheapest tier that keeps the app awake (Free/F1 sleeps, which drops
   co-op rooms). Redeploy after changes with the same `az webapp up` command.
 - The game also works from any static host (just `dist/`), without the leaderboard and co-op.
