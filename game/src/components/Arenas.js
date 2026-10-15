@@ -190,6 +190,7 @@ function floorOverlay(body, margin = 0) {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);
   mesh.position.z = 0.35;
   mesh.renderOrder = 1;
+  mesh.userData.arenaFx = true; // Low graphics hide it (main.js)
   return mesh;
 }
 
@@ -453,10 +454,12 @@ function motes({ count, colors, size = 3, area = MAP_HALF_SIZE + 200, height = 1
     })
   );
   points.frustumCulled = false;
+  points.userData.arenaFx = true; // Low graphics hide it (main.js)
   const travel = height / Math.max(1, Math.abs(speed));
   return {
     points,
     update(time) {
+      if (!points.visible) return;
       seeds.forEach((seed, i) => {
         const t = (time / travel * seed.rate + seed.phase) % 1;
         const base = seed.emitter ?? { x: 0, y: 0, z: 0 };

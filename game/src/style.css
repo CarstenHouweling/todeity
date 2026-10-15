@@ -2963,3 +2963,29 @@ body.touch .steep-badge {
 .trinket.locked small { font-size: 10px; }
 
 .garden-tray .menu-buttons { position: static; margin-top: 8px; }
+
+/* Graphics (v0.19.1): the FPS counter and the CSS vignette that stands in for the shader's on Low */
+.fps-meter {
+  position: fixed;
+  left: max(8px, var(--safe-left));
+  bottom: max(8px, var(--safe-bottom));
+  z-index: 50;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #c8f77a;
+  font: 600 12px/1.4 ui-monospace, monospace;
+  pointer-events: none;
+}
+
+.fps-meter[hidden],
+.css-vignette[hidden] {
+  display: none;
+}
+
+.css-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.3) 100%);
+}

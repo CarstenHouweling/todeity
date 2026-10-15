@@ -15,6 +15,7 @@ import { CHARM_RARITIES } from './Charms.js';
 import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
+import { GRAPHICS_LABELS } from './Quality.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
 import { STREAK_GIFTS, TRINKETS, accountLevel, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
 import { viewHeight, viewWidth } from './Viewport.js';
@@ -796,6 +797,7 @@ ${ meta.runs > 0 ? '' :
         <p class="prompt">or press Space</p>
         <div class="title-footer">
           ${this.saveChip()}
+          <button type="button" data-action="cycle-graphics" title="Low runs smoothly on older phones">🖥 Graphics: ${GRAPHICS_LABELS[this.graphics ?? 'auto']}</button>
           ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
           <button type="button" data-action="changelog">📜 What's new · v${VERSION}</button>
         </div>
@@ -1188,7 +1190,7 @@ ${ meta.runs > 0 ? '' :
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, autoSpit, frogClass }) {
+  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, graphics, showFps, autoSpit, frogClass }) {
     const brews = build.length
       ? build
           .map(
@@ -1210,6 +1212,8 @@ ${ meta.runs > 0 ? '' :
           <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
           <button class="menu-button" data-action="toggle-calm">✨ Effects: ${calmFx ? 'calm' : 'full'}</button>
+          <button class="menu-button" data-action="cycle-graphics" title="Low runs smoothly on older phones: no bloom, shadows or antialiasing">🖥 Graphics: ${GRAPHICS_LABELS[graphics]}</button>
+          <button class="menu-button" data-action="toggle-fps">📈 FPS counter: ${showFps ? 'on' : 'off'}</button>
           ${autoSpit == null ? '' : `<button class="menu-button" data-action="toggle-autospit">💧 Spit: ${autoSpit ? 'auto' : 'hold LMB'}</button>`}
           ${this.fullscreenButton()}
           <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>

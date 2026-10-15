@@ -113,12 +113,14 @@ const BASE_BLOOM = 0.35;
 /** Post-processing pipeline. Effects ease toward their targets, so changes never pop. */
 export class PostFX {
   constructor(renderer, scene, camera) {
+    Object.assign(this, { renderer, scene, camera });
     const size = renderer.getSize(new THREE.Vector2());
     // Multisampled targets keep edges smooth (the canvas' own antialiasing doesn't apply to post-processing).
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.composer.addPass(new ShaderPass(SanitizeShader));
+    this.sanitize = new ShaderPass(SanitizeShader);
+    this.composer.addPass(this.sanitize);
     this.bloom = new UnrealBloomPass(size, BASE_BLOOM, 0.55, 0.93);
     this.composer.addPass(this.bloom);
     this.reality = new ShaderPass(RealityShader);
@@ -143,7 +145,29 @@ export class PostFX {
   }
 
   setTargets({ bloom = BASE_BLOOM, warp = 0, aberration = 0 }) {
-    Object.assign(this.target, { bloom, warp, aberration });
+    // Lite: no steady warp, so the screen can skip post-processing between flashes.
+    Object.assign(this.target, { bloom, warp: this.lite ? 0 : warp, aberration: this.lite ? 0 : aberration });
+  }
+
+  /**
+   * Graphics quality (see the Graphics section in main.js): `bloom` (and the clean-up pass it needs), `msaa`
+   * (multisampled render targets) and `lite`: render straight to the screen whenever no screen effect is running.
+   */
+  setQuality({ bloom = true, msaa = true, lite = false }) {
+    this.bloom.enabled = this.sanitize.enabled = bloom;
+    const samples = msaa ? 4 : 0;
+    for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (target.samples === samples) continue;
+      target.samples = samples;
+      target.dispose(); // reallocated with the new sample count on its next use
+    }
+    this.lite = lite;
+  }
+
+  /** No screen effect running and no bloom: the picture needs no post-processing. */
+  get idle() {
+    const { warp, aberration } = this.reality.uniforms;
+    return !this.bloom.enabled && this.flashAmount < 0.01 && this.shatterAmount < 0.01 && this.invertAmount < 0.01 && warp.value < 0.02 && aberration.value < 0.02;
   }
 
   /** A brief burst of extra bloom / warp / aberration that fades out. */
@@ -189,6 +213,9 @@ export class PostFX {
   }
 
   render(delta) {
-    this.composer.render(delta);
+    // `direct`: drawn without the composer (no vignette from the shader; main.js shows a CSS one instead).
+    this.direct = Boolean(this.lite) && this.idle;
+    if (this.direct) this.renderer.render(this.scene, this.camera);
+    else this.composer.render(delta);
   }
 }

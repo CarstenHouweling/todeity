@@ -37,6 +37,7 @@ import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
 import { applyRenderer } from './components/Graphics.js';
+import { GRAPHICS, GRAPHICS_LABELS, LOW_STEP, startStep, stepFeatures } from './components/Quality.js';
 import { cycleVow, clearVows, runVows, steepBonus, steepLevel } from './components/Steeping.js';
 import { viewHeight, viewWidth } from './components/Viewport.js';
 import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
@@ -332,8 +333,9 @@ let luck = 0;
 let endless = false;
 let autoPause = true;
 // autoSpit: on a computer Tode spits by himself whenever a bee is in range (aimed with the mouse), like on touch.
-const settings = { calmFx: false, autoSpit: true, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+const settings = { calmFx: false, autoSpit: true, graphics: 'auto', showFps: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
 hud.autoSpit = settings.autoSpit;
+hud.graphics = settings.graphics;
 
 let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
 let steep = 0; // their Steep level: more score and Golden Leaves
@@ -4090,9 +4092,8 @@ function setArena(next) {
   for (const [id, built] of builtArenas) built.group.visible = id === next.id;
   weather.setArena(garden ? null : next);
   applyRenderer(next.gfx, { renderer, exposure: next.exposure });
-  setEnemyGraphics(next.gfx);
-  player.setGraphics(next.gfx);
-  if (coop) for (const remote of coop.remotes.values()) remote.puppet.setGraphics(next.gfx);
+  applyCharacterGraphics();
+  applyArenaFx();
 }
 
 /** Every arena is 4 tiles wider than the one before (an odd count keeps a tile in the middle). */
@@ -4109,6 +4110,7 @@ function prepareArena(next) {
   setMapTiles(current);
   builtArenas.set(next.id, built);
   scene.add(built.group);
+  applyArenaFx();
   // compileAsync only looks at visible objects; it gathers them right away.
   renderer.compileAsync?.(built.group, camera, scene).catch(() => {});
   built.group.visible = next === arena;
@@ -6491,6 +6493,8 @@ function showPauseMenu() {
     keepsake,
     steep,
     calmFx: settings.calmFx,
+    graphics: settings.graphics,
+    showFps: settings.showFps,
     autoSpit: touch.enabled ? null : settings.autoSpit,
     build,
     ultimate: player.ultimate,
@@ -6626,6 +6630,21 @@ const MENU_ACTIONS = {
     settings.calmFx = !settings.calmFx;
     saveSettings();
     showPauseMenu();
+  },
+  'cycle-graphics': () => {
+    settings.graphics = GRAPHICS[(GRAPHICS.indexOf(settings.graphics) + 1) % GRAPHICS.length];
+    hud.graphics = settings.graphics;
+    saveSettings();
+    applyGraphicsSetting();
+    play('click');
+    refreshMenu();
+  },
+  'toggle-fps': () => {
+    settings.showFps = !settings.showFps;
+    fpsMeter.hidden = !settings.showFps;
+    fpsMeter.textContent = '…';
+    saveSettings();
+    refreshMenu();
   },
   'toggle-autospit': () => {
     settings.autoSpit = !settings.autoSpit;
@@ -6920,39 +6939,93 @@ function frame(realDelta, render = true) {
   });
   // Calm effects soften flashes, shakes and particles during play (cut-scenes keep the full show).
   postfx.calm = settings.calmFx && PLAYING.has(phase);
-  particles.density = postfx.calm ? 0.5 : 1;
+  particles.density = quality.features.particles * (postfx.calm ? 0.5 : 1);
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
-  if (render) postfx.render(realDelta);
+  if (render) {
+    postfx.render(realDelta);
+    if (cssVignette.hidden === postfx.direct) cssVignette.hidden = !postfx.direct;
+  }
   hud.update(delta, enemies);
   input.endFrame();
 }
 
-// --- Adaptive quality: lower the resolution on slow devices, raise it again when there's room ---
+// --- Graphics quality: Auto / High / Low (see Quality.js), and a frame-rate watch that lightens the load ----------
 const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
 // `ceiling` drops below a resolution that proved too slow, so quality settles instead of see-sawing
 // (every change reallocates the render targets, which shows as a hitch).
-const quality = { ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
+const quality = { step: 0, features: stepFeatures(0), ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
+const STEP_NAMES = ['full', 'no bloom', 'lite', 'no shadows', 'low'];
+
+const maxRatio = () => Math.min(MAX_PIXEL_RATIO, quality.features.maxRatio);
 
 function setPixelRatio(ratio) {
-  quality.ratio = THREE.MathUtils.clamp(ratio, 0.6, MAX_PIXEL_RATIO);
+  quality.ratio = THREE.MathUtils.clamp(ratio, quality.features.minRatio, maxRatio());
   renderer.setPixelRatio(quality.ratio);
   postfx.setPixelRatio(quality.ratio);
 }
 
+function setQualityStep(step) {
+  quality.step = step;
+  const features = (quality.features = stepFeatures(step));
+  postfx.setQuality(features);
+  sun.castShadow = features.shadows;
+  quality.ceiling = Math.min(quality.ceiling, maxRatio());
+  setPixelRatio(quality.ratio);
+  applyArenaFx();
+  applyCharacterGraphics();
+}
+
+/** The player's choice (or the device guess for Auto), from the top. */
+function applyGraphicsSetting() {
+  quality.ceiling = MAX_PIXEL_RATIO;
+  quality.goodWindows = 0;
+  setQualityStep(startStep(settings.graphics, renderer.getContext()));
+  setPixelRatio(maxRatio());
+}
+
+/** Low graphics: no floor shaders or floating motes in the arenas. */
+function applyArenaFx() {
+  for (const built of builtArenas.values()) {
+    built.group.traverse((object) => {
+      if (object.userData.arenaFx) object.visible = quality.features.arenaFx;
+    });
+  }
+}
+
+/** Low graphics: the frogs and bees keep the garden's plain materials in every arena. */
+function applyCharacterGraphics() {
+  const level = quality.features.plainCharacters ? 0 : arena.gfx;
+  setEnemyGraphics(level);
+  player.setGraphics(level);
+  if (coop) for (const remote of coop.remotes.values()) remote.puppet.setGraphics(level);
+}
+
+/** Lowers the resolution a notch, not below `floor`; false when it's already there. */
+function lowerRatio(floor) {
+  if (quality.ratio <= floor + 0.01) return false;
+  quality.ceiling = Math.max(floor, quality.ratio - 0.1);
+  setPixelRatio(Math.max(floor, quality.ratio - 0.2));
+  return true;
+}
+
+const stepTo = (step) => quality.step < step && (setQualityStep(step), true);
+// Auto: what goes first while the game is too slow. Resolution and effects take turns, so neither goes all at once.
+const AUTO_LADDER = [() => lowerRatio(1), () => stepTo(1), () => stepTo(2), () => lowerRatio(0.75), () => stepTo(3), () => lowerRatio(0.6), () => stepTo(LOW_STEP), () => lowerRatio(0.5)];
+
 function adaptQuality(delta) {
+  updateFpsMeter(delta);
   quality.time += delta;
   quality.frames++;
   if (quality.time < 2) return;
   const fps = quality.frames / quality.time;
   quality.time = quality.frames = 0;
   if (document.hidden) return;
-  if (fps < 45 && quality.ratio > 0.6) {
-    quality.ceiling = Math.max(0.6, quality.ratio - 0.1);
-    setPixelRatio(quality.ratio - 0.2);
+  if (fps < 45) {
     quality.goodWindows = 0;
-  } else if (fps < 30 && sun.castShadow) {
-    sun.castShadow = false; // last resort: no shadows
+    // Very slow: two steps at once, so a weak phone doesn't stutter for long.
+    if (settings.graphics === 'auto') for (let i = fps < 25 ? 2 : 1; i > 0; i--) AUTO_LADDER.some((step) => step());
+    else if (!lowerRatio(quality.features.minRatio) && fps < 30 && settings.graphics === 'high') sun.castShadow = false; // last resort
   } else if (fps > 57 && quality.ratio < quality.ceiling - 0.01 && ++quality.goodWindows >= 3) {
     setPixelRatio(Math.min(quality.ceiling, quality.ratio + 0.1));
     quality.goodWindows = 0;
@@ -6960,6 +7033,31 @@ function adaptQuality(delta) {
     quality.goodWindows = 0;
   }
 }
+
+// The optional FPS counter (pause menu), for players to put in their reports.
+const fpsMeter = document.createElement('div');
+fpsMeter.className = 'fps-meter';
+fpsMeter.hidden = !settings.showFps;
+document.body.append(fpsMeter);
+const fpsWindow = { time: 0, frames: 0 };
+
+function updateFpsMeter(delta) {
+  if (!settings.showFps) return;
+  fpsWindow.time += delta;
+  fpsWindow.frames++;
+  if (fpsWindow.time < 0.5) return;
+  const mode = settings.graphics === 'auto' ? `Auto: ${STEP_NAMES[quality.step]}` : GRAPHICS_LABELS[settings.graphics];
+  fpsMeter.textContent = `${Math.round(fpsWindow.frames / fpsWindow.time)} fps · ${quality.ratio.toFixed(2)}× · ${mode}`;
+  fpsWindow.time = fpsWindow.frames = 0;
+}
+
+// Low graphics draw straight to the screen between screen effects, without the shader's vignette: a CSS one instead.
+const cssVignette = document.createElement('div');
+cssVignette.className = 'css-vignette';
+cssVignette.hidden = true;
+renderer.domElement.after(cssVignette);
+
+applyGraphicsSetting();
 
 renderer.setAnimationLoop(() => {
   const delta = Math.min(clock.getDelta(), 0.1);
@@ -6999,6 +7097,9 @@ if (import.meta.env.DEV) {
   window.game = {
     meta, // progress (Golden Leaves, trinkets…): change it, then game.syncGarden()
     garden,
+    quality, // graphics: { step, features, ratio }; game.setQualityStep(0–4) to try a step
+    setQualityStep,
+    setPixelRatio,
     syncGarden: () => {
       garden.load(meta.decor);
       syncTrinkets();

@@ -311,8 +311,7 @@ Copies of one run on several boards share the id; deleting removes it from one b
   buttons sit in a row above the aim stick. Tode always spits by himself: where the aim stick points (`input.aiming`,
   `input.aimAxis`; spit's aim assist still applies), or at the nearest bee in range when it's let go. Skills always
   auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
-  and on the first real touch otherwise (touchscreen laptops). Quality adapts to the frame rate (pixel ratio
-  0.6–1.5, shadows off as a last resort).
+  and on the first real touch otherwise (touchscreen laptops). Graphics quality: see Graphics levels.
 - **Touch HUD:** the brew and charm rows (`.inventory`) are replaced by a one-line count under the hearts
   (`.inventory-summary`); charm pickups float up from Tode instead of toasts; at most 2 toasts, low on the left;
   weather and modifier lines show only their names; banners and callouts wrap. Narrow screens (`max-width: 600px`)
@@ -397,6 +396,18 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   each gets an additive shader layer over its stone: a drifting nebula, pulsing seams, twinkling stars and a rune
   ring (Tournament), magma under the floor, a turning summoning sigil and sparks (Underworld). GLSL note: `half`
   is a reserved word.
+- **Quality** (`components/Quality.js`, the Graphics section in main.js): the player picks 🖥 Auto / High / Low
+  (`settings.graphics`, pause menu and title pill). It applies a **step**: 0 everything, 1 no bloom (and no sanitize
+  pass), 2 no multisampling and **lite** (`PostFX.render` draws straight to the screen while no flash, shatter,
+  warp or aberration runs; lite drops the steady warp, and a CSS `.css-vignette` replaces the shader's), 3 no
+  shadows, 4 **Low**: also resolution 0.5–1×, 45% particles, plain character materials in every arena
+  (`applyCharacterGraphics`) and no arena floor shaders or motes (`userData.arenaFx`, `applyArenaFx`). Auto starts
+  at 4 when `looksWeak()` (≤2 GB memory, a phone with ≤4 cores, a tiny screen or a known weak GPU) and otherwise walks
+  down `AUTO_LADDER` (resolution and steps in turns, two at once below 25 fps) in 2 s windows under 45 fps; steps
+  never come back in a session. High only lowers the resolution (and shadows below 30 fps). The canvas itself has
+  no antialiasing: the composer's multisampled targets do it. Measured on a Mac at the same resolution in the
+  Tournament: 6.1 ms per frame at step 0, 2.0 ms at Low. 📈 `settings.showFps` shows fps, resolution and the step.
+  In the console: `game.quality`, `game.setQualityStep(n)`.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
   shader that caps point size and fades points near the camera.
@@ -460,6 +471,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
+| `components/Quality.js` | The Auto / High / Low setting: quality steps, `looksWeak()` device guess. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
 | `components/Weather.js` | Time of day per wave, weather (clear, Tea Rain, Gale, Thunderstorm) with gameplay modifiers, rain/leaves/fireflies. |

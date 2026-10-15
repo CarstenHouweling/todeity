@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.19.1',
+    date: '2026-10-15',
+    title: 'Smooth on every phone',
+    changes: [
+      '🖥 A Graphics setting (pause menu and title screen): Auto, High or Low. Low turns off bloom, shadows and smoothing, lowers the resolution, thins out particles and skips the fanciest floor effects: several times less work for older phones',
+      '⚙️ Auto starts on Low on phones that look weak, and otherwise lightens the load step by step while the game runs slowly: resolution and effects take turns, so the game stays playable',
+      '📈 An optional FPS counter in the pause menu',
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-10-15',
     title: 'Come back tomorrow',
