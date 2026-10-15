@@ -1,9 +1,25 @@
+/* Phones: the page never zooms (iPhone Safari ignores user-scalable=no, see blockBrowserZoom in Viewport.js), taps
+   don't flash a blue or grey box over the clickable menu, and a long press doesn't select text or open a menu.
+   Scrolling boxes allow touch-action: pan-y again. */
+html {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
   overflow: hidden;
   background: linear-gradient(#87ceeb, #d6f0ff);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* The canvas is pinned to the screen by CSS (the renderer only sets its resolution), so it can never make the page
@@ -1408,6 +1424,7 @@ canvas.game {
 }
 
 .invite-link b {
+  -webkit-user-select: all;
   user-select: all;
 }
 
@@ -2628,6 +2645,7 @@ body.touch .steep-badge {
   letter-spacing: 3px;
   color: #ffe680;
   text-shadow: 0 0 12px rgba(255, 180, 40, 0.6);
+  -webkit-user-select: all;
   user-select: all;
 }
 

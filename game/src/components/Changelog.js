@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.6',
+    date: '2026-10-15',
+    title: 'Steady hands',
+    changes: [
+      '📱 iPhone: tapping, double tapping or pinching with both thumbs no longer zooms the game in',
+      '✨ Android: tapping the title screen no longer flashes a blue box over it',
+    ],
+  },
+  {
     version: '0.24.5',
     date: '2026-10-15',
     title: 'Where the party is',

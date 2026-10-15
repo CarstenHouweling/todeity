@@ -402,7 +402,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Screen size:** everything is sized from the layout viewport (`viewWidth`/`viewHeight` in `Viewport.js`), never
   `window.innerWidth`: on phones that grows when the browser zooms out, and a canvas sized from it made the page wider
   than the screen and kept it zoomed out (menus cut off on the right). The canvas is pinned to the screen by CSS
-  (`position: fixed`, the renderer only sets its resolution) and the viewport can't be zoomed. Long menus and popups
+  (`position: fixed`, the renderer only sets its resolution) and the viewport can't be zoomed. iPhone Safari ignores
+  `user-scalable=no`, so `html` has `touch-action: none` and `blockBrowserZoom()` (`Viewport.js`) cancels Safari's
+  pinch (`gesture*` events) and the second tap of a quick double tap (clicking by hand when the finger didn't move;
+  text fields excluded). `-webkit-tap-highlight-color: transparent` stops the blue flash over the clickable title
+  menu on Android, and `-webkit-touch-callout: none` the long-press menu. Long menus and popups
   scroll, but their last `.menu-buttons` row (Back, Done, Close) is sticky at the bottom, so it's always on screen:
   the buttons float on their own (solid, with a shadow), with no bar behind them.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
