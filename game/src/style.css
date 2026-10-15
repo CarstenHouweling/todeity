@@ -719,6 +719,34 @@ canvas.game {
   opacity: 0.8;
 }
 
+/* Visit garden: how many public gardens have frogs in them right now (a pulsing green dot says it's live). */
+.menu-button small.live-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #2f9e44;
+  color: #fff;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.menu-button small.live-count::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c8ffb0;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
 /* Brew cards: blend colour strip and rarity frame */
 .card {
   border-color: var(--blend);

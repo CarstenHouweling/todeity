@@ -4282,7 +4282,7 @@ function updateGarden(delta) {
   garden.setVisible(phase === 'title');
   if (phase !== 'title') return;
   garden.update(delta);
-  // The Co-op button shows how many public rooms are open.
+  // The Co-op and Visit garden buttons show how many rooms are open and how many gardens have frogs in them.
   if ((titleRoomsTimer -= delta) <= 0) {
     titleRoomsTimer = 15;
     refreshRooms();
@@ -6260,9 +6260,11 @@ async function refreshRooms() {
   publicRooms = await fetchRooms();
   hud.setLobbyRooms(publicRooms);
   hud.setCoopRooms(publicRooms);
-  if (hud.menuName === 'lobby') {
+  // The lobby lists the gardens; the title's Visit garden button says how many have frogs in them right now.
+  if (hud.menuName === 'lobby' || hud.menuName === 'title-screen') {
     lobbyGardens = await fetchGardens();
     hud.setLobbyGardens(lobbyGardens);
+    hud.setLiveGardens(lobbyGardens);
   }
 }
 

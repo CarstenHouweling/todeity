@@ -549,6 +549,13 @@ export class Hud {
     if (label) label.textContent = coopLabel(rooms);
   }
 
+  /** The Visit garden button on the title screen: how many public gardens have frogs in them right now. */
+  setLiveGardens(gardens) {
+    this.liveGardens = gardens;
+    const label = this.menuName === 'title-screen' && this.menu.querySelector('[data-garden-count]');
+    if (label) label.outerHTML = gardenLabel(gardens);
+  }
+
   /** A gentle hint above the ability bar for new players. */
   showTip(text) {
     this.tip.innerHTML = `💡 ${text}`;
@@ -858,7 +865,7 @@ ${ meta.runs > 0 ? '' :
           <button class="menu-button" data-action="keepsakes">${currentKeepsake().icon} Keepsake</button>
           ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small></button>` : ''}
           <button class="menu-button" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small></button>
-          <button class="menu-button" data-action="garden-visit">👀 Visit garden</button>
+          <button class="menu-button" data-action="garden-visit">👀 Visit garden ${gardenLabel(this.liveGardens)}</button>
         </div>
         <p class="prompt">or press Space</p>
         <div class="title-footer">
@@ -1688,6 +1695,15 @@ export function formatTime(seconds) {
 }
 
 /** "3 open rooms" for the title's Co-op button (nothing without a server). */
+/** A green "live" badge with the number of public gardens that have frogs in them (empty when there are none). */
+function gardenLabel(gardens) {
+  const live = (gardens ?? []).filter((garden) => garden.frogs > 0);
+  if (!live.length) return '<small data-garden-count hidden></small>';
+  const frogs = live.reduce((sum, garden) => sum + garden.frogs, 0);
+  const title = `${live.length} garden${live.length > 1 ? 's' : ''} with ${frogs} frog${frogs > 1 ? 's' : ''} in ${live.length > 1 ? 'them' : 'it'} right now`;
+  return `<small class="live-count" data-garden-count title="${title}">${live.length}</small>`;
+}
+
 function coopLabel(rooms) {
   if (!rooms) return '';
   const open = rooms.rooms.length;

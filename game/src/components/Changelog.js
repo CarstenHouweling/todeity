@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.10',
+    date: '2026-10-15',
+    title: 'Someone is home',
+    changes: [
+      '🟢 The title screen\'s Visit garden button shows how many public gardens have frogs in them right now: hop in and say hi',
+    ],
+  },
+  {
     version: '0.24.9',
     date: '2026-10-15',
     title: 'The beam that melts',

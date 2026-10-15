@@ -349,7 +349,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `GET /api/gardens` lists only public ones, at most 30: those with frogs in them right now (fullest first), then
   the loveliest empty ones (`listGardens`; `loveliestGardens()` in saves.js is cached until a public garden's decor,
   name or visibility changes; also in the co-op lobby, and in the 👀 Visit popup, which the title
-  screen's 👀 Visit garden opens too: it shows at once and `hud.setVisitGardens` fills the list in). Garden achievements: `tower`, `openhouse`.
+  screen's 👀 Visit garden opens too: it shows at once and `hud.setVisitGardens` fills the list in). That button
+  carries a pulsing green badge with the number of public gardens that have frogs in them (`hud.setLiveGardens`,
+  `gardenLabel`; `refreshRooms` fetches the list with the Co-op rooms every 15 s on the title screen). Garden achievements: `tower`, `openhouse`.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
