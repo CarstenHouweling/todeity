@@ -4,10 +4,11 @@
 // Without a server (a static host, or the server is down) the game keeps its progress in this browser, as before.
 
 import { isPersisting, meta, saveMeta } from './Meta.js';
+import { claimGift, claimKettle, cleanDecor, withRewards } from './Rewards.js';
 
 const API = '/api/save';
 const CODE_KEY = 'tode-save-code';
-const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills'];
+const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills', 'streak', 'kettleAt', 'kettles', 'trinkets', 'decor'];
 
 const storage = (action, key, value) => {
   try {
@@ -36,6 +37,7 @@ function apply(data) {
   cloud.code = data.code;
   storage('set', CODE_KEY, data.code);
   for (const id of progress.achievements) pending.delete(id);
+  withRewards(progress);
   for (const field of FIELDS) meta[field] = structuredClone(progress[field]);
   meta.achievements.push(...pending.keys());
   for (const reward of pending.values()) meta.leaves += reward;
@@ -113,4 +115,38 @@ export async function reportBuy(id) {
   } catch {
     // Offline: the purchase stays local until the next sync.
   }
+}
+
+/**
+ * Claims the daily gift ('gift') or pours the kettle ('kettle'). The server pays it; without a server the local
+ * progress does. Resolves with { reward } or { error }.
+ */
+export async function claimReward(kind) {
+  if (cloud.status === 'online' && cloud.code && isPersisting()) {
+    try {
+      const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/claim`, { kind });
+      if (data.progress) apply(data);
+      return ok ? { reward: data.reward } : { error: data.error ?? "Couldn't claim that." };
+    } catch {
+      return { error: "Can't reach the server right now." };
+    }
+  }
+  if (cloud.status === 'connecting') return { error: 'Still connecting to your save…' };
+  const reward = (kind === 'gift' ? claimGift : claimKettle)(meta, Date.now());
+  if (typeof reward === 'string') return { error: reward };
+  saveMeta();
+  return { reward };
+}
+
+let decorTimer = null;
+
+/** Trinkets placed in the title garden: kept locally right away, sent to the server a moment later. */
+export function saveDecor(decor) {
+  meta.decor = cleanDecor(decor, meta);
+  saveMeta();
+  clearTimeout(decorTimer);
+  if (cloud.status !== 'online' || !cloud.code || !isPersisting()) return;
+  decorTimer = setTimeout(() => {
+    request(`/${encodeURIComponent(cloud.code)}/decor`, { decor: meta.decor }).catch(() => {});
+  }, 800);
 }

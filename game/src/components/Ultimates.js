@@ -308,13 +308,13 @@ class GreatTodeSummon {
     toad.add(model);
     const box = new THREE.Box3().setFromObject(model);
     this.height = box.max.z - box.min.z;
-    // The tongue: a pivot at the mouth, extended along +X.
+    // The mouth: at the front of the head. The tongue is a curved tube from there to its tip, rebuilt every frame.
+    this.mouthForward = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) * 0.42;
+    this.mouthHeight = this.height * 0.5;
     this.tongue = new THREE.Group();
-    const tongueGeometry = new THREE.CylinderGeometry(9, 14, 1, 14).rotateZ(-Math.PI / 2).translate(0.5, 0, 0);
-    this.tongueMesh = new THREE.Mesh(tongueGeometry, new THREE.MeshStandardMaterial({ color: '#ff7a9a', emissive: '#6a1020', roughness: 0.35 }));
+    this.tongueMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ color: '#ff7a9a', emissive: '#6a1020', roughness: 0.35 }));
     this.tongueTip = new THREE.Mesh(new THREE.SphereGeometry(22, 20, 14), this.tongueMesh.material);
     this.tongue.add(this.tongueMesh, this.tongueTip);
-    this.tongue.position.z = this.height * 0.35;
     this.tongue.visible = false;
     toad.add(this.tongue);
     toad.position.copy(this.center);
@@ -404,24 +404,32 @@ class GreatTodeSummon {
       this.toad.children[0].rotation.y = Math.atan2(Math.cos(best), -Math.sin(best));
       ctx.play('dash');
     }
-    // Out, across, back in.
-    const reach = Math.sin(Math.min(1, k * 1.4) * Math.PI * 0.5) * (k > 0.8 ? (1 - k) / 0.2 : 1);
-    const angle = this.sweepCenter + this.sweepSide * (k * 2 - 1) * 0.9;
+    // Shoots out of the mouth, whips across the crowd, snaps back in.
+    const reach = Math.sin(Math.min(1, k * 2.2) * Math.PI * 0.5) * (k > 0.78 ? Math.max(0, (1 - k) / 0.22) : 1);
+    const whip = THREE.MathUtils.smoothstep(k, 0.15, 0.8);
+    const angle = this.sweepCenter + this.sweepSide * (whip * 2 - 1) * 0.6;
     const length = SUMMON_TONGUE_LENGTH * reach;
-    this.tongue.visible = true;
-    this.tongue.rotation.z = angle;
-    this.tongueMesh.scale.set(Math.max(1, length), 1, 1);
-    this.tongueTip.position.x = length;
+    const facing = new THREE.Vector3(Math.cos(this.sweepCenter), Math.sin(this.sweepCenter), 0);
+    const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
+    const mouth = facing.clone().multiplyScalar(this.mouthForward).setZ(this.mouthHeight);
+    const tip = direction.clone().multiplyScalar(this.mouthForward + length).setZ(14 + 30 * (1 - reach));
+    // Arcs up out of the mouth, then down onto the bees; it bends against the swing, like a whip.
+    const bend = new THREE.Vector3(-direction.y, direction.x, 0).multiplyScalar(-this.sweepSide * length * 0.18);
+    const control = mouth.clone().lerp(tip, 0.45).add(bend).setZ(this.mouthHeight + 40 + length * 0.12);
+    this.tongue.visible = length > 4;
+    this.tongueMesh.geometry.dispose();
+    this.tongueMesh.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(mouth, control, tip), 24, 11, 10, false);
+    this.tongueTip.position.copy(tip);
+    this.tongueTip.scale.setScalar(0.4 + 0.6 * reach);
 
     // Bees near the tongue get slapped once per sweep.
-    const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0);
     const swing = new THREE.Vector3(-direction.y, direction.x, 0).multiplyScalar(this.sweepSide);
     const damage = Math.round(SUMMON_TONGUE_DAMAGE * ctx.player.stats.ultimatePower);
     for (const enemy of ctx.aliveEnemies()) {
       if (this.hits.has(enemy)) continue;
       const offset = enemy.position.clone().sub(center).setZ(0);
       const along = offset.dot(direction);
-      if (along < 0 || along > length + 20) continue;
+      if (along < this.mouthForward * 0.5 || along > this.mouthForward + length + 20) continue;
       const across = Math.abs(offset.x * direction.y - offset.y * direction.x);
       if (across > 30 + enemy.radius) continue;
       this.hits.add(enemy);

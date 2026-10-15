@@ -109,5 +109,6 @@ export class Leaves {
 }
 
 /** Tea leaves needed to go from `level` to the next one. */
-// About one level per wave: 8 leaves for the first, then steeper.
-export const leavesForLevel = (level) => Math.round(8 + level * 5 + level * level * 0.6);
+// About one level per wave, but the first three come quickly so a run gets its first skills early.
+const FIRST_LEVELS = [3, 7, 12];
+export const leavesForLevel = (level) => FIRST_LEVELS[level] ?? Math.round(8 + level * 5 + level * level * 0.6);

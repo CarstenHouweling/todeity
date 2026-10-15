@@ -15,6 +15,8 @@ import { CHARM_RARITIES } from './Charms.js';
 import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
+import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
+import { STREAK_GIFTS, TRINKETS, accountLevel, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
 import { viewHeight, viewWidth } from './Viewport.js';
 
 const ABILITIES = [
@@ -750,9 +752,10 @@ export class Hud {
       <div class="panel">
         <h1>Todeity</h1>
         <p class="subtitle">Rise of the Tea God</p>
-        <p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
-        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>
-${
+        ${meta.runs > 0 ? this.profile(best) : ''}
+        ${meta.runs > 0 ? '' : `<p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
+        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>`}
+${ meta.runs > 0 ? '' :
           document.body.classList.contains('touch')
             ? `<div class="controls">
           <span><b>Left stick</b> move</span>
@@ -772,14 +775,15 @@ ${
           <span><b>Esc</b> pause</span>
         </div>`
         }
-        ${best ? `<p class="best">Best score: ${best}${meta.victories ? ` · 👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : ''}</p>` : ''}
+        ${best && !meta.runs ? `<p class="best">Best score: ${best}</p>` : ''}
+        ${this.rewardRow()}
         <!-- Most important first: start, then ways to play, then preparing a run, then small extras. -->
         <div class="menu-buttons title-start">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
         </div>
         <button class="class-chip" data-action="classes">${this.classFace(chosenClass())}<span><small>Playing as</small><b>${chosenClass().name}</b></span><em>Change ▸</em></button>
         <div class="menu-buttons title-play">
-          <button class="menu-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${classOfTheDay(todayKey()).name}</small></button>
+          <button class="menu-button daily-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${dailyTwists(todayKey()).title}</small></button>
           <button class="menu-button" data-action="coop">👥 Co-op</button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
         </div>
@@ -787,6 +791,7 @@ ${
           <button class="menu-button" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small></button>
           <button class="menu-button" data-action="keepsakes">${currentKeepsake().icon} Keepsake</button>
           ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small></button>` : ''}
+          <button class="menu-button" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small></button>
         </div>
         <p class="prompt">or press Space</p>
         <div class="title-footer">
@@ -827,6 +832,123 @@ ${
           (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text} (+${a.reward} 🍃)">${a.icon}</span>`
         ).join('')}</div>
         <div class="menu-buttons">${this.saveChip()}<button class="menu-button" data-action="title">Back</button></div>
+      </div>`
+    );
+  }
+
+  /** Who's playing: account level, rank, and what they've done so far (title screen, after the first run). */
+  profile(best) {
+    const { level, rank, progress } = accountLevel(meta);
+    const achieved = ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length;
+    const stats = [
+      `🎮 ${meta.runs} run${meta.runs === 1 ? '' : 's'}`,
+      `🌊 best wave ${meta.bestWave}`,
+      best ? `⭐ ${best.toLocaleString()}` : '',
+      `🏆 ${achieved}/${ACHIEVEMENTS.length}`,
+      meta.victories ? `👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : '',
+      meta.streak?.count > 1 ? `🔥 ${meta.streak.count}-day streak` : '',
+    ].filter(Boolean);
+    return `<div class="profile">
+      <span class="profile-level"><b>${level}</b><small>LV</small></span>
+      <span class="profile-info"><b>${rank}</b><span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>
+      <small>${stats.join(' · ')}</small></span>
+    </div>`;
+  }
+
+  /** The daily gift and the kettle: they glow when they're ready, otherwise they count down. */
+  rewardRow() {
+    const now = Date.now();
+    const gift = giftStatus(meta, now);
+    const kettle = kettleStatus(meta, now);
+    return `<div class="reward-row">
+      <button type="button" class="reward-chip ${gift.ready ? 'ready' : ''}" data-action="claim-gift" data-reward="gift">🎁 <span>${gift.ready ? `Daily gift · day ${gift.day}` : `Next gift <time>${clock(gift.nextIn)}</time>`}</span></button>
+      <button type="button" class="reward-chip ${kettle.ready ? 'ready' : ''}" data-action="claim-kettle" data-reward="kettle">🫖 <span>${kettle.ready ? 'The kettle is ready!' : `Kettle brewing <time>${clock(kettle.nextIn)}</time>`}</span></button>
+    </div>`;
+  }
+
+  /** Keeps the reward countdowns on the title screen ticking; redraws a chip when it becomes ready. */
+  updateRewardTimers() {
+    if (this.menuName !== 'title-screen') return false;
+    const now = Date.now();
+    const states = { gift: giftStatus(meta, now), kettle: kettleStatus(meta, now) };
+    for (const chip of this.menu.querySelectorAll('[data-reward]')) {
+      const state = states[chip.dataset.reward];
+      if (state.ready !== chip.classList.contains('ready')) return true; // the caller redraws the title
+      const time = chip.querySelector('time');
+      if (time) setText(time, clock(state.nextIn));
+    }
+    return false;
+  }
+
+  /** What the gift or the kettle gave. */
+  showReward(kind, { reward, error }) {
+    if (error) {
+      this.showModal('reward', `<h2>${kind === 'gift' ? '🎁' : '🫖'} Not yet</h2><p class="sub">${escapeHtml(error)}</p><div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">OK</button></div>`);
+      return;
+    }
+    const trinket = reward.trinket && trinketById(reward.trinket);
+    const calendar =
+      kind === 'gift'
+        ? `<div class="streak">${STREAK_GIFTS.map(
+            (gift, i) => `<span class="streak-day ${i + 1 < reward.day ? 'past' : i + 1 === reward.day ? 'today' : ''}"><small>Day ${i + 1}</small>${gift.trinket ? '🎀' : '🍃'}<b>${gift.leaves}</b></span>`
+          ).join('')}</div><p class="sub">🔥 ${reward.streak}-day streak. Come back tomorrow to keep it going!</p>`
+        : '<p class="sub">The kettle brews again in a few hours.</p>';
+    this.showModal(
+      'reward',
+      `<h2>${kind === 'gift' ? `🎁 Day ${reward.day} gift!` : '🫖 The kettle whistles!'}</h2>
+      <div class="reward-prize"><span class="reward-leaves">+${reward.leaves} 🍃</span>${
+        trinket ? `<span class="reward-trinket"><em>${trinket.icon}</em><b>New trinket: ${trinket.name}</b><small>It's waiting in your garden</small></span>` : ''
+      }</div>
+      ${calendar}
+      <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Lovely!</button>${trinket ? '<button class="menu-button" data-action="garden">🏡 See it</button>' : ''}</div>`
+    );
+  }
+
+  /** "My garden": the tray of trinkets to place around Tode. `held`: the one following the pointer. */
+  showGarden(held = null) {
+    const owned = new Set(ownedTrinkets(meta));
+    const placed = new Set((meta.decor ?? []).map((item) => item.id));
+    const items = TRINKETS.map((t) => {
+      const has = owned.has(t.id);
+      const state = !has ? 'locked' : t.id === held ? 'held' : placed.has(t.id) ? 'placed' : '';
+      return `<button type="button" class="trinket ${state}" ${has ? `data-action="hold-trinket" data-id="${t.id}"` : ''} title="${t.name}: ${has ? (placed.has(t.id) ? 'in your garden (click to move it)' : 'click, then click the lawn') : t.how}">
+        <span>${has ? t.icon : '❔'}</span><small>${has ? t.name : t.how}</small></button>`;
+    }).join('');
+    this.showMenu(
+      'garden-mode',
+      `<div class="garden-tray">
+        <h2>🏡 Tode's garden <small>${owned.size}/${TRINKETS.length} trinkets</small></h2>
+        <p class="sub">${held ? `Click the lawn to set down the ${trinketById(held).name}. <b>↻</b> turns it.` : 'Pick a trinket, then click the lawn. Click a placed one to move it.'}</p>
+        <div class="trinkets">${items}</div>
+        <div class="menu-buttons">
+          ${held ? '<button class="menu-button" data-action="turn-trinket">↻ Turn</button><button class="menu-button" data-action="putaway-trinket">📦 Put away</button>' : ''}
+          <button class="menu-button primary" data-action="garden-done">✓ Done</button>
+        </div>
+      </div>`
+    );
+  }
+
+  /** Today's Daily Brew: the frog of the day and the day's twists, with a button to start. */
+  showDaily(day) {
+    const frog = classOfTheDay(todayKey());
+    const row = (twist, kind) =>
+      `<div class="twist twist-${kind}"><span class="twist-icon">${twist.icon}</span><span><b>${twist.name}</b><small>${twist.text}</small></span>${
+        kind === 'trial' ? `<em>×${twist.reward}</em>` : twist.leaves ? `<em>🍃×${twist.leaves}</em>` : ''
+      }</div>`;
+    const leaves = Math.round(day.leaves * 100) / 100;
+    this.showModal(
+      'daily',
+      `<h2>📅 Daily Brew · ${day.title}</h2>
+      <p class="sub">The same waves, weather and offers for everyone today. Played by ${frog.icon} <b>${frog.name}</b>.</p>
+      <h3>⚔️ Today's trial${day.trials.length > 1 ? 's' : ''}</h3>
+      ${day.trials.map((id) => row(TRIALS[id], 'trial')).join('')}
+      <h3>🎁 Today's boon${day.boons.length > 1 ? 's' : ''}</h3>
+      ${day.boons.map((id) => row(BOONS[id], 'boon')).join('')}
+      <p class="daily-reward">Score ×${Math.round(day.score * 100) / 100} · Golden Leaves ×${leaves}</p>
+      <p class="sub">New twists every day at midnight (UTC). Saturdays are Feast Days, Sundays Trial Days.</p>
+      <div class="menu-buttons">
+        <button class="menu-button primary" data-action="daily-go">▶ Brew it</button>
+        <button class="menu-button" data-action="close-modal">Not today</button>
       </div>`
     );
   }
@@ -961,14 +1083,14 @@ ${
     );
   }
 
-  card({ action, index, brew, rarity, level, text, kind: kindOverride }) {
+  card({ action, index, brew, rarity, level, text, kind: kindOverride, hint }) {
     const blends = brew.blends ?? (brew.blend ? [brew.blend] : []);
     const colors = blends.map((id) => BLENDS[id].color);
     const first = colors[0] ?? '#ffc93c';
     const second = colors[1] ?? first;
     const kind = kindOverride ?? brew.kind ?? 'ultimate';
     const tag =
-      { duo: 'Duo', legendary: 'Legendary', ultimate: 'Ultimate', skill: 'Skill' }[kind] ?? RARITIES[rarity].name;
+      { duo: 'Duo', legendary: 'Legendary', ultimate: 'Ultimate', skill: 'Skill', fusion: 'Fusion' }[kind] ?? RARITIES[rarity].name;
     const rarityClass = kind === 'brew' ? `rarity-${RARITIES[rarity].id}` : `kind-${kind}`;
     const label = brew.blends
       ? blends.map(blendLabel).join(' × ')
@@ -976,7 +1098,9 @@ ${
         ? blendLabel(brew.blend)
         : kind === 'skill'
           ? '🌀 Skill'
-          : '✨ Ultimate';
+          : kind === 'fusion'
+            ? '🔗 Skill Fusion'
+            : '✨ Ultimate';
     return `
       <button class="card ${rarityClass}" data-action="${action}" data-index="${index}" style="--blend:${first};--blend2:${second}">
         <span class="card-key">${index + 1}</span>
@@ -984,9 +1108,9 @@ ${
         <span class="card-icon">${brew.icon}</span>
         <span class="card-name">${brew.name}</span>
         <span class="card-tags"><span class="tag tag-rarity">${tag}</span>${
-          level ? `<span class="tag">${level === 1 ? 'New' : `Level ${level}`}</span>` : ''
+          level && kind !== 'fusion' ? `<span class="tag">${level === 1 ? 'New' : `Level ${level}`}</span>` : ''
         }</span>
-        <span class="card-description">${text}</span>
+        <span class="card-description">${text}</span>${hint ? `<span class="card-hint">${hint}</span>` : ''}
       </button>`;
   }
 
@@ -1050,11 +1174,13 @@ ${
   /** `level`: shown as a level-up (the skill pick that every level brings). */
   showSkills(offers, level = 0) {
     const cards = offers
-      .map(({ skill, level }, index) =>
-        this.card({ action: 'skill', index, brew: skill, level, text: skill.text(level), kind: 'skill' })
+      .map(({ skill, level, fusion, hint }, index) =>
+        this.card({ action: 'skill', index, brew: skill, level, text: skill.text(level), kind: fusion ? 'fusion' : 'skill', hint })
       )
       .join('');
-    const how = 'Skills cast themselves when the moment is right';
+    const how = offers.some((offer) => offer.fusion)
+      ? '✨ Two of your skills are strong enough to fuse!'
+      : 'Skills cast themselves when the moment is right';
     this.showMenu(
       'powerups skills',
       `<h2>${level ? `Level ${level}! ` : ''}Learn a skill</h2>${this.dialogue(kettleDialogue('skill'))}<p class="sub">${how}</p><div class="cards">${cards}</div>`
@@ -1251,6 +1377,16 @@ const isTouch = () => document.body.classList.contains('touch');
 export function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** 3:05:09 or 12:34 for a countdown in ms. */
+function clock(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
 function escapeHtml(text) {

@@ -79,7 +79,7 @@ export const BASE_STATS = {
   dashKnockback: 1, // how hard the hop-dash shoves bees
   skillCooldown: 1, // multiplies skill cooldowns
   spitHoming: 0, // spit steers toward bees (the Mage's bolts)
-  spitStyle: null, // how the spit looks: null (Tode's), 'pellet', 'dart', 'bolt' or 'star'
+  spitStyle: null, // how the spit looks: null (Tode's), 'pellet', 'dart', 'bolt', 'fireball', 'potion' (lobbed), 'axe' or 'star'
   bombElements: false, // every tea bomb gets a random element (the Alchemist)
   companions: 0, // little pond toads at Tode's side (the Summoner)
   dashDecoy: false, // the hop-dash vanishes in smoke and leaves a decoy (the Ninja)

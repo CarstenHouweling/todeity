@@ -8,6 +8,8 @@
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
+//   WS   /ws?presence=1   who is online (see presence.js)
+//   /admin, /api/admin/…  the owner's admin page and API, only when ADMIN_TOKEN is set (see admin.js)
 //
 // Scores are kept in a JSON file in DATA_DIR (default ./data; on Azure App Service use /home/data,
 // which survives restarts and deploys).
@@ -18,7 +20,10 @@ import { existsSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { handleSave, loadSaves } from './saves.js';
+import { randomBytes } from 'node:crypto';
+import { handleSave, loadSaves, saveCount } from './saves.js';
+import { acceptPresence, presenceStats } from './presence.js';
+import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +35,7 @@ const KEEP = 100; // entries kept per board
 const POST_INTERVAL = 10_000; // ms between submissions per IP
 const MAX_BODY = 4_096; // bytes
 const CLASS_IDS = CLASSES.map((c) => c.id);
+const STARTED_AT = Date.now();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -49,12 +55,25 @@ const MIME = {
 let boards = { all: [], daily: {}, depth: [], speed: [] };
 let saving = Promise.resolve();
 
+// Every entry has a short random `id` (the admin API deletes by it). Copies of one run on several boards share it.
+const newId = () => randomBytes(5).toString('hex');
+
 async function loadScores() {
   try {
     boards = { all: [], daily: {}, depth: [], speed: [], ...JSON.parse(await readFile(SCORES_FILE, 'utf8')) };
   } catch {
     boards = { all: [], daily: {}, depth: [], speed: [] };
   }
+  // Scores from before entries had ids get one now.
+  let added = 0;
+  for (const list of [boards.all, boards.depth, boards.speed, ...Object.values(boards.daily)]) {
+    for (const entry of list) {
+      if (entry.id) continue;
+      entry.id = newId();
+      added++;
+    }
+  }
+  if (added) await saveScores();
 }
 
 function saveScores() {
@@ -108,9 +127,11 @@ function parseEntry(body) {
     steep: clampInt(body.steep, 0, 40), // Steeping vows taken (they multiply the score)
     cls: CLASS_IDS.includes(body.cls) ? body.cls : 'tode', // the frog that played (src/components/Classes.js)
     at: Date.now(),
+    id: newId(),
   };
   // A loose sanity check: scores grow with time and kills, not out of nowhere.
-  const plausible = entry.score <= (2_000 + entry.kills * 200 + entry.wave * 2_000) * (1 + 0.12 * entry.steep);
+  // The Daily Brew's trials multiply the score too (at most about ×2.6 on a Trial Day).
+  const plausible = entry.score <= (2_000 + entry.kills * 200 + entry.wave * 2_000) * (1 + 0.12 * entry.steep) * (body.daily ? 2.6 : 1);
   return plausible ? entry : null;
 }
 
@@ -118,7 +139,9 @@ function parseEntry(body) {
 
 const lastPost = new Map();
 
-const clientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+// Azure's front end may add the client's port ("1.2.3.4:5678"); strip it so limits per IP hold.
+const stripPort = (ip) => (/^(\d+\.\d+\.\d+\.\d+):\d+$/.exec(ip) ?? /^\[([^\]]+)\](?::\d+)?$/.exec(ip))?.[1] ?? ip;
+const clientIp = (req) => stripPort(req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '');
 
 function send(res, status, body, headers = {}) {
   const json = typeof body !== 'string';
@@ -290,13 +313,21 @@ function handleSocketMessage(client, raw) {
   }
 }
 
+const RELAY_PER_IP = 16; // co-op sockets per IP
+const relayPerIp = new Map();
 const sockets = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
-sockets.on('connection', (ws) => {
+sockets.on('connection', (ws, req, ip) => {
   const client = { id: nextClientId++, ws, room: null };
+  relayPerIp.set(ip, (relayPerIp.get(ip) ?? 0) + 1);
   ws.isAlive = true;
   ws.on('pong', () => (ws.isAlive = true));
   ws.on('message', (raw) => handleSocketMessage(client, raw));
-  ws.on('close', () => leaveRoom(client));
+  ws.on('close', () => {
+    leaveRoom(client);
+    const left = (relayPerIp.get(ip) ?? 1) - 1;
+    if (left > 0) relayPerIp.set(ip, left);
+    else relayPerIp.delete(ip);
+  });
 });
 
 // Drop connections that stopped answering (closed laptops, lost Wi-Fi).
@@ -311,6 +342,24 @@ setInterval(() => {
 await loadScores();
 await loadSaves(DATA_DIR);
 
+// Extra fields for GET /api/admin/stats (admin.js adds the score counts).
+const adminStats = () => ({
+  startedAt: STARTED_AT,
+  uptime: Math.round((Date.now() - STARTED_AT) / 1000),
+  presence: presenceStats(),
+  coop: {
+    sockets: sockets.clients.size,
+    rooms: [...rooms.values()].map((room) => ({
+      code: room.code,
+      players: room.clients.size,
+      started: room.started,
+      host: room.clients.get(room.hostId)?.name ?? null,
+    })),
+  },
+  saves: saveCount(),
+  memoryMb: Math.round(process.memoryUsage().rss / 1048576),
+});
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
@@ -319,6 +368,10 @@ const server = createServer(async (req, res) => {
       return await handleSave(req, res, url, { send, ip: clientIp(req), readJson: async (r) => JSON.parse((await readBody(r)) || '{}') });
     }
     if (url.pathname === '/api/health') return send(res, 200, { ok: true });
+    if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) {
+      return await handleAdmin(req, res, url, { send, ip: clientIp(req), boards: () => boards, saveScores, stats: adminStats });
+    }
+    if (url.pathname === '/admin' || url.pathname === '/admin/') return await serveAdminPage(res, send);
     return await serveStatic(res, url.pathname);
   } catch (error) {
     console.error(error);
@@ -327,8 +380,15 @@ const server = createServer(async (req, res) => {
 });
 
 server.on('upgrade', (req, socket, head) => {
-  if (new URL(req.url, 'http://localhost').pathname !== '/ws') return socket.destroy();
-  sockets.handleUpgrade(req, socket, head, (ws) => sockets.emit('connection', ws, req));
+  const url = new URL(req.url, 'http://localhost');
+  if (url.pathname !== '/ws') return socket.destroy();
+  const ip = clientIp(req);
+  if (url.searchParams.has('presence')) return acceptPresence(req, socket, head, ip);
+  if ((relayPerIp.get(ip) ?? 0) >= RELAY_PER_IP) {
+    socket.on('error', () => {});
+    return socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+  }
+  sockets.handleUpgrade(req, socket, head, (ws) => sockets.emit('connection', ws, req, ip));
 });
 
-server.listen(PORT, () => console.log(`Todeity server on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Todeity server on http://localhost:${PORT}${adminEnabled() ? ' (admin on /admin)' : ''}`));

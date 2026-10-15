@@ -3,6 +3,22 @@
 
 export const CHANGELOG = [
   {
+    version: '0.19.0',
+    date: '2026-10-15',
+    title: 'Come back tomorrow',
+    changes: [
+      '🔗 Skill fusions! Train two matching skills to level 4 and they can fuse into one far stronger skill, freeing a slot: 13 fusions such as 🌠 Frostfire Meteors, 🌩️ Storm Crown, 🌀 Steam Cyclone and 🪨 Earthshaker',
+      '✨ 10 new skills: 🍯 Honey Trap, 🫧 Bubble Barrage, 🌸 Blossom Boomerang, 🧊 Ice Shards, ☀️ Sunbeam Sweep, 🍄 Spore Toadstool, 🌧️ Scalding Rain, 🐟 Koi Spirits, 🔔 Temple Gong and 🌱 Bramble Line (24 in all)',
+      '★ Mastered skills (level 5) cast twice, or cool down faster if they last a while. Skill cards show what they fuse with',
+      '📅 The Daily Brew has twists: every day a trial (harder, more score and Golden Leaves) and a boon. 13 trials and 12 boons; Saturdays are Feast Days, Sundays Trial Days',
+      '🎁 A daily gift with a 7-day streak, and 🫖 a tea kettle that brews a reward every 4 hours',
+      '🏡 Trinkets: earn 23 ornaments (bosses, milestones, gifts, the kettle) and place them in your garden on the title screen. Your level and stats show there too',
+      '🔥 The Starleaf Mage throws little fireballs, ⚗️ the Alchemist lobs potions that shatter where they land, 🥊 the Brawler hurls spinning axes',
+      '🐸 The Great Tode\'s tongue now lashes out of its mouth in an arc',
+      '⚡ The first waves get going faster (quicker spawns, early levels); Queen Buzzbelle and the Hornet Shogun hit harder and last longer; hives, shield wards and guardians get much tougher in later arenas, and circles take longer to hold',
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-10-14',
     title: 'Hands free',

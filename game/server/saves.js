@@ -5,6 +5,8 @@
 //   GET  /api/save/:code                 → { code, progress }
 //   POST /api/save/:code/run  { report } → { code, progress, leaves }    leaves for a finished run
 //   POST /api/save/:code/buy  { id }     → { code, progress }            a Pantry upgrade
+//   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
+//   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
 //
 // The browser only reports what happened in a run; the server works out the reward with the game's own rules
 // (Meta.js, Achievements.js, Steeping.js), checks that the run is plausible and that the playtime fits the time
@@ -15,6 +17,8 @@ import { join } from 'node:path';
 import { PANTRY, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
+import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
+import { claimGift, claimKettle, cleanDecor, withRewards } from '../src/components/Rewards.js';
 
 const FLAVOURS = [
   'MINT', 'CHAI', 'MATCHA', 'SENCHA', 'OOLONG', 'EARL', 'HONEY', 'LEMON', 'GINGER', 'PEACH', 'PLUM', 'ROSE',
@@ -44,6 +48,7 @@ export async function loadSaves(dataDir) {
   } catch {
     saves = {};
   }
+  for (const save of Object.values(saves)) withRewards(save.progress); // saves from before the rewards
 }
 
 function persist() {
@@ -54,9 +59,11 @@ function persist() {
   return writing;
 }
 
-const emptyProgress = () => ({
-  leaves: 0, levels: {}, achievements: [], runs: 0, bestWave: 0, bossKills: 0, victories: 0, maxTier: 0, eliteKills: 0,
-});
+const emptyProgress = () =>
+  withRewards({ leaves: 0, levels: {}, achievements: [], runs: 0, bestWave: 0, bossKills: 0, victories: 0, maxTier: 0, eliteKills: 0 });
+
+/** How many cloud saves exist (for the admin stats). */
+export const saveCount = () => Object.keys(saves).length;
 
 /** "mint frog 42", "Mint-Frog-42" and "MINTFROG42" are all the same save. */
 export const normalizeCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -141,6 +148,10 @@ function applyRun(save, body, now) {
     daily: Boolean(body.daily),
     coop: Boolean(body.coop),
   };
+  // The Daily Brew's twists pay more; only today's or yesterday's (a run can cross midnight) count.
+  const today = new Date(now).toISOString().slice(0, 10);
+  const dailyKey = String(body.dailyKey ?? '');
+  const twists = run.daily && (dailyKey === today || dailyKey === previousDay(today)) ? dailyTwists(dailyKey) : { score: 1, leaves: 1 };
   // Playtime can't exceed the real time since the previous report (or since the save was made).
   const since = (now - (save.lastRunAt ?? save.created)) / 1000;
   if (run.time > since + SLACK) return 'That run took longer than the time since your last one.';
@@ -150,7 +161,7 @@ function applyRun(save, body, now) {
   if (run.victory && run.wave < 21) return 'Victory comes at wave 21.';
   if (run.eliteKills > run.wave * 15) return 'Too many elites for that run.';
   const bonus = steepBonus(run.steep);
-  if (run.score > (2_000 + run.kills * 200 + run.wave * 2_000) * bonus) return 'That score looks a bit too good to be true.';
+  if (run.score > (2_000 + run.kills * 200 + run.wave * 2_000) * bonus * twists.score) return 'That score looks a bit too good to be true.';
   // The Golden Leaf keepsake unlocks with the Living Legend achievement.
   const claimed = [...new Set((Array.isArray(body.achievements) ? body.achievements : []).map(String))];
   const fresh = claimed.filter(
@@ -159,8 +170,9 @@ function applyRun(save, body, now) {
   const goldLeaf = run.goldLeaf && (progress.achievements.includes('legendary2') || fresh.includes('legendary2'));
 
   const leaves = Math.round(
-    leavesForRun({ score: run.score / bonus, wave: run.wave, bossKills: run.bossKills, victory: run.victory }) *
+    leavesForRun({ score: run.score / bonus / twists.score, wave: run.wave, bossKills: run.bossKills, victory: run.victory }) *
       bonus *
+      twists.leaves *
       (goldLeaf ? GOLDEN_LEAF : 1)
   );
   progress.leaves += leaves + fresh.reduce((sum, id) => sum + rewardFor(id), 0);
@@ -229,6 +241,23 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     save.updated = now;
     await persist();
     return send(res, 200, { ...view(save), leaves: result });
+  }
+  if (action === 'claim') {
+    const claim = { gift: claimGift, kettle: claimKettle }[body.kind];
+    if (!claim) return send(res, 400, { error: 'Unknown reward.', ...view(save) });
+    const reward = claim(save.progress, now);
+    if (typeof reward === 'string') return send(res, 400, { error: reward, ...view(save) });
+    save.updated = now;
+    await persist();
+    return send(res, 200, { ...view(save), reward });
+  }
+  if (action === 'decor') {
+    if (overLimit('decor', ip, 600)) return send(res, 429, { error: 'Slow down a little.' });
+    count('decor', ip);
+    save.progress.decor = cleanDecor(body.decor, save.progress);
+    save.updated = now;
+    await persist();
+    return send(res, 200, view(save));
   }
   if (action === 'buy') {
     const error = applyBuy(save, String(body.id));

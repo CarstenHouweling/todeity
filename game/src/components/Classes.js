@@ -26,17 +26,20 @@ export const CLASSES = [
     name: 'Bullfrog Brawler',
     title: 'The Wall',
     hearts: 8,
-    text: 'Spit is a five-pellet shotgun at short range. The hop-dash hits three times as hard and shoves bees away. Starts with Tongue Lash. Moves 15% slower.',
+    text: 'Hurls a pair of spinning axes: slower than spit, but each one hits three times as hard and cleaves through a bee. The hop-dash hits three times as hard and shoves bees away. Starts with Tongue Lash. Moves 15% slower.',
     apply: ({ stats, grant }) => {
       stats.maxHp = 8;
       stats.moveSpeed *= 0.85;
-      stats.spitCount = 5;
-      stats.spitSpread = 0.15;
-      stats.spitRange *= 0.55;
-      stats.spitCooldown *= 1.45;
+      stats.spitCount = 2;
+      stats.spitSpread = 0.2;
+      stats.spitDamage *= 3;
+      stats.spitRange *= 0.75;
+      stats.spitSpeed *= 0.85;
+      stats.spitCooldown *= 1.9;
+      stats.spitPierce += 1;
       stats.dashDamage *= 3;
       stats.dashKnockback = 2.2;
-      stats.spitStyle = 'pellet';
+      stats.spitStyle = 'axe';
       grant.skill('tongue');
     },
   },
@@ -64,13 +67,16 @@ export const CLASSES = [
     name: 'Toad Alchemist',
     title: 'The Brewer',
     hearts: 5,
-    text: 'Three tea bombs that recharge 30% faster and blast 20% wider, each with a random element: fire, frost or lightning. Starts with Sugar Mines. Spits 40% slower.',
+    text: 'Lobs potions in an arc over the swarm: each shatters where it lands and splashes every bee around for double damage. Three tea bombs that recharge 30% faster and blast 20% wider, each with a random element: fire, frost or lightning. Starts with Sugar Mines.',
     apply: ({ stats, grant }) => {
       stats.bombCharges = 3;
       stats.splashCooldown *= 0.7;
       stats.splashRadius *= 1.2;
-      stats.spitCooldown *= 1.4;
+      stats.spitCooldown *= 1.6;
+      stats.spitDamage *= 2;
+      stats.spitSpeed *= 0.62;
       stats.bombElements = true;
+      stats.spitStyle = 'potion';
       grant.skill('mines');
     },
   },
@@ -80,13 +86,14 @@ export const CLASSES = [
     name: 'Starleaf Mage',
     title: 'The Spark',
     hearts: 4,
-    text: 'Spit becomes homing magic bolts. Skills recharge 25% faster. Starts with Ball Lightning.',
+    text: 'Spit becomes small homing fireballs that set bees alight. Skills recharge 25% faster. Starts with Ball Lightning.',
     apply: ({ stats, grant }) => {
       stats.maxHp = 4;
       stats.spitHoming = 1;
       stats.spitRange *= 1.2;
+      stats.spitBurn += 1;
       stats.skillCooldown *= 0.75;
-      stats.spitStyle = 'bolt';
+      stats.spitStyle = 'fireball';
       grant.skill('orb');
     },
   },

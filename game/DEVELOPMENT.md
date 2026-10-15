@@ -53,6 +53,38 @@ az webapp config appsettings set --name todeity-<something-unique> --resource-gr
 Scores are stored as JSON (`scores.json`, top 100 all-time + 14 days of daily boards). The server rate-limits
 submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, so it is not cheat-proof.
 
+### Admin
+
+The owner's admin page lives at **`/admin`** (`server/admin.html`, served by `server/admin.js`; not part of the Vite
+build and not linked from the game). It only exists when the server has an `ADMIN_TOKEN` environment variable;
+without one, `/admin` and every `/api/admin/…` endpoint answer 404. Use a long random token:
+
+```bash
+ADMIN_TOKEN=$(openssl rand -hex 24) npm run server            # locally: http://localhost:8787/admin
+az webapp config appsettings set --name todeity --resource-group carsten --subscription "Carsten DVK" \
+  --settings ADMIN_TOKEN=<token>                               # Azure (restarts the app)
+```
+
+The page asks for the token (kept in `sessionStorage` only), refreshes the stats every 5 s and lists every board
+with per-entry delete, "all by this name" and clear-board buttons. The API sends `Authorization: Bearer <token>`
+(compared with `timingSafeEqual` on SHA-256 hashes, never logged); 10 failed attempts per IP in 10 minutes (or 100
+from everyone) give 429 until the window ends. Admin actions are logged without the token.
+
+- `GET /api/admin/stats`: online players (`presence.online`, `byState`, `peak` since start), co-op sockets and
+  rooms, uptime, memory, number of cloud saves and scores per board.
+- `GET /api/admin/boards`: every board (`all`, `depth`, `speed`, `daily/YYYY-MM-DD`) with its entries.
+- `DELETE /api/admin/boards/:board/entries/:id`, `DELETE /api/admin/boards/:board` (clear; `daily` alone clears
+  every day), `DELETE /api/admin/players/:name` (every entry with that name, any case, on all boards).
+
+Score entries have a short random `id` (assigned on insert; older entries get one when the server loads the file).
+Copies of one run on several boards share the id; deleting removes it from one board.
+
+**Presence.** Every open game keeps a tiny socket on `/ws?presence=1` (`components/Presence.js`, server side
+`server/presence.js`) that only reports a state word (`{ t: 'state', s: 'run' }`). These sockets live in their own
+`WebSocketServer`, never reach the co-op relay, and are capped (128-byte messages, about one per second, 8 per IP,
+5000 in total) and pinged every 20 s. Co-op sockets are capped at 16 per IP. main.js opens it at boot
+(`startPresence`) and `setPhase` reports title, run, daily, coop, paused or gameover.
+
 ## Gameplay summary
 
 - WASD move (camera-relative), mouse aims, Space/Shift/RMB hop-dash, E/middle mouse fires the ultimate, Esc/P
@@ -83,17 +115,27 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   lines) and Starburst. Timed ones run as `arenaEvents` entries (`later(delay, fn)` schedules a step). Bullets
   outside the arena only die when flying away from it, so events can start them outside.
 - **Experience:** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to Tode within his magnet range;
-  every level is a pick of 3 **skills**, new ones or upgrades (14 skills, up to 6 slots, level 5 each). Solo, the
+  every level is a pick of 3 **skills**, new ones or upgrades (24 skills, up to 6 slots, level 5 each). A mastered
+  skill (level 5) casts twice (`MASTERY_ECHO`), or cools down 30% faster if it lasts a while (`ECHOLESS`).
+  **Fusions** (`FUSIONS` in Skills.js, 13 of them): when both skills of a pair reach `FUSE_LEVEL` (4), a rainbow
+  fusion card takes the first offer; picking it replaces the two slots with one fused skill (levels 1–3, `vlevel`
+  maps a fusion level onto the old classes' levels). Fusions live in `SKILLS` too (`fusion: true`), so co-op replays
+  and the HUD treat them like any skill; `power()` counts a fusion as the two skills it came from. Offers carry a
+  `hint` (what a skill fuses with, or what its mastery does). The first three levels are cheap (`FIRST_LEVELS` in
+  Leaves.js) so a run gets its first skills in wave 1. Solo, the
   game pauses for the pick (`openLevelUp`, back to the fight afterwards, possibly via a mid-wave transformation);
   in co-op the picks wait until the wave is cleared (the bar shows `Lv 7 (+2)`). At most one skill pick between
   waves (`skillPickedThisBreak`); extra levels come up `LEVEL_UP_DELAY` seconds into the next wave, one at a time.
-  The curve (`leavesForLevel`) gives about one level per wave (bot: Lv 20 at wave 20). Every player
+  The curve (`leavesForLevel`) gives about one level per wave after the first three. Every player
   gathers their own leaves. **Critical hits** (5%) deal double damage with gold numbers.
 - **Side objectives** (`OBJECTIVES` in main.js): when Tode reaches an arena it gets one: smash 3 wild hives
   (garden) or golden hives (Sky Citadel), hives being `nest` structure enemies that keep letting out bees; or hold
   3 shrines (temple bells, reality rifts), circles that fill while a Tode stands in them and draw bees in. The
   arena's last wave doesn't clear until it's done (`gateOpen`): the way on is sealed. Arrows at the screen edge
-  point at objectives out of view.
+  point at objectives out of view. Tode's damage grows much faster than the bees' health, so hives, shield wards and
+  guardians get an extra health factor per arena (`STRUCTURE_SCALE`, on top of the wave's `hpScale`), arena circles
+  take longer to hold and draw more (and later tougher) bees (`ZONE_TIMES`), and so do a boss's circles of light
+  (`LIGHT_TIMES`).
 - **Bigger arenas:** every arena is 4 tiles wider than the one before (`arenaTiles`; `setMapTiles` on arrival).
   Builders lay out in garden-sized coordinates and `spread` stretches them; `fillProps` adds more props; bigger
   fields get extra spawn points along the edges.
@@ -122,9 +164,11 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked under Start run (`hud.showClasses`,
-  `meta.frogClass`): Tode, Bullfrog Brawler (8 hearts, 5-pellet shotgun spit, hard dash shove, Tongue Lash), Tree Frog
-  Sharpshooter (4 hearts, long piercing double-damage darts, crits), Toad Alchemist (3 elemental tea bombs, Sugar
-  Mines), Starleaf Mage (4 hearts, homing bolts, faster skills, Ball Lightning), Toad Summoner (pond toads at his side,
+  `meta.frogClass`): Tode, Bullfrog Brawler (8 hearts, two spinning throwing axes that hit ×3 and cleave, hard dash
+  shove, Tongue Lash), Tree Frog Sharpshooter (4 hearts, long piercing double-damage darts, crits), Toad Alchemist
+  (lobbed potions: `Projectile.lob` flies an arc under gravity, `LOB_TIME`, and `shatterPotion` splashes
+  `POTION_RADIUS` where it lands, aimed at the assisted bee via `lobRange`; 3 elemental tea bombs, Sugar Mines),
+  Starleaf Mage (4 hearts, small homing fireballs that burn, faster skills, Ball Lightning), Toad Summoner (pond toads at his side,
   `companions`; the Great Tode ultimate from the start, as his own Ancient Pond Toad) and Ninja Toad (throwing stars,
   2 dashes, `dashDecoy`: a log the bees chase; bosses ignore it). A class is `apply({ stats, player, grant })` on top
   of `BASE_STATS`, before the Pantry and the keepsake; its mechanics are stats in `BASE_STATS` ("Class mechanics")
@@ -151,7 +195,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Raid bosses** (`BOSS_SCRIPTS`, `MECHANICS` and the "Raid bosses" / "Boss stages" sections in main.js): every
   boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic. **Apart from its
   shield, a boss always takes damage**: the fight lasts through its health (`hp` in `BOSS_SCRIPTS` multiplies
-  ENEMY_TYPES: ×1.5 Queen, ×2 Shogun, ×4 Seraph, ×9 Empress, ×12 Bee-zebub), never through a lock that swallows
+  ENEMY_TYPES: ×2.2 Queen, ×2.8 Shogun, ×4 Seraph, ×9 Empress, ×12 Bee-zebub; the Queen and Shogun got a stage
+  more and faster attacks in v0.19 because they were too easy), never through a lock that swallows
   hits. (Until v0.15 a phase lock held the boss at each threshold and every stage lasted at least 13–15 s, with ⏳ on
   blocked hits; players hated not being able to do anything.) A stage starts the frame its threshold is crossed: a
   shield goes up even mid-attack or mid-stagger, and a mechanic that takes over the boss (a ritual, a blade storm)
@@ -190,7 +235,8 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
   inverted flash); losing costs a heart.
 - **Ultimates** (picked after wave 5, the gauge fills slowly): Steeping Beam (an enormous beam; Tode keeps moving
   at 45% speed and steering it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
-  toad that stomps, tongue-lashes the thickest crowds three times and body-slams).
+  toad that stomps, tongue-lashes the thickest crowds three times and body-slams; the tongue is a Bézier tube from
+  its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame).
 - **Achievements** (`components/Achievements.js`): 35, each with its own `reward` (3 to 60 Golden Leaves), shown
   in the Pantry. The server checks each against the run report (`earned()` in `server/saves.js`), so a new
   achievement needs a rule there too. Run bookkeeping for them lives in `feats` (main.js).
@@ -212,6 +258,20 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Co-op objectives:** a circle (arena objective or a boss's circles of light) only fills while every standing
   frog is in it (`circleHolders`). Shield wards and guardians are attuned to one player each (`attune`, labelled;
   `owner`; the host ignores other players' hits, and an owner who is down or gone frees it).
+- **Daily Brew twists** (`components/DailyTwists.js`, shared with the server): every UTC day rolls one trial
+  (`TRIALS`, harder, `reward` multiplies score and Golden Leaves) and one boon (`BOONS`); Sundays two trials,
+  Saturdays two boons. The 📅 button opens `hud.showDaily`; main.js reads them with `twist(id)` (stats in
+  `applyTwists`, waves in `startWave`/`beginWave`, plus `rollElite`, `healPlayer`, cursed tiles and boss health).
+  The run report sends `dailyKey`; the server only pays the bonus for today's or yesterday's key.
+- **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
+  trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
+  `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
+  23): milestones unlock by themselves from the progress (`unlock`), gift and kettle ones are stored in
+  `progress.trinkets`. They stand around Tode on the title screen (`TitleGarden.js`, models in `TrinketModels.js`,
+  placements in `progress.decor`, saved with `POST …/decor` via `saveDecor`); 🏡 My garden lifts the camera and shows a
+  tray to place, move (click), turn (↻/R) or put away trinkets. New ones place themselves (`syncTrinkets`,
+  `meta.trinketsSeen` is local). Returning players see a profile on the title (`accountLevel`: level, rank, runs,
+  best wave, achievements, streak) instead of the story and controls.
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
@@ -269,9 +329,9 @@ submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, 
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
-- **Title screen layout:** in order of importance: a big Start run; the ways to play (Daily Brew, Co-op,
-  Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping); then small pills (save code, fullscreen,
-  What's new with the version). Keep new entries in that order rather than adding full-size buttons.
+- **Title screen layout:** in order of importance: (after the first run) the profile and the reward chips; a big
+  Start run; the ways to play (Daily Brew, Co-op, Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping,
+  My garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
@@ -388,6 +448,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/CloudSave.js` | Cloud save client: save code, sync at start, run and Pantry reports. |
 | `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
+| `components/Presence.js` | `startPresence(state)` / `setPresence(state)`: the presence socket for the admin stats (see Admin). |
 | `components/TouchControls.js` | Twin sticks (move / aim) and buttons for touch devices; touch detection. |
 | `components/Fullscreen.js` | Fullscreen toggle with the prefixed Safari API. |
 | `components/ShareCard.js` | The end-of-run share image and text. |
@@ -413,11 +474,17 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/House.js`, `Camera.js`, `Renderer.js`, `Input.js`, `Particles.js`, `Projectile.js`, `collision.js` | As named. |
 | `dev/bot.js` | Dev-only autoplayer for balance testing. |
 | `components/Classes.js` | The frog classes: stats, starting kits, the chosen class and the class of the day. |
+| `components/DailyTwists.js` | The Daily Brew's trials and boons per day (no three.js: the server imports it). |
+| `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
+| `components/TrinketModels.js` | Procedural models of the 23 trinkets. |
+| `components/TitleGarden.js` | The trinkets on the title screen and the "My garden" placing mode (raycasts onto the lawn). |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
 | `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
 | `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the five frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |
 | `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
 | `../server/saves.js` | `/api/save` cloud saves (`saves.json` in `DATA_DIR`): codes, run rewards, Pantry purchases, rate limits. |
+| `../server/admin.js`, `../server/admin.html` | The owner's `/admin` page and `/api/admin/…` API (only with `ADMIN_TOKEN`; see Admin). |
+| `../server/presence.js` | Presence sockets (`/ws?presence=1`): online count by state, peak, limits, pings. |
 | `style.css` | All UI styling. |
 
 ## Conventions and gotchas
@@ -478,6 +545,7 @@ game.tactic('surround')   // start a hive manoeuvre now: 'surround', 'crossfire'
 game.squad()              // spawn a random squad
 game.autoPause = false    // stop auto-pausing on window blur (needed for background test tabs)
 game.persist = false      // don't save progress or the best score this session (use it before bot runs)
+game.meta.trinkets.push('duck'); game.syncGarden()  // test trinkets and rewards with changed progress
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
 ```
 

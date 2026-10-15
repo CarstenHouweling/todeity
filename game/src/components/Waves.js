@@ -21,11 +21,12 @@ export function waveConfig(wave) {
     boss: endless
       ? ENDLESS_BOSSES[Math.floor(wave / BOSS_EVERY) % ENDLESS_BOSSES.length]
       : wave >= HELL_WAVE ? 'beezebub' : wave >= FINAL_WAVE ? 'empress' : wave === 15 ? 'seraph' : wave === 10 ? 'shogun' : 'queen',
-    count: isBoss ? 4 + wave : Math.min(160, Math.round(6 + wave * 3 + late * late * 0.3 + endless * 4)),
+    // The first waves get a few extra bees, spawning quickly, so the run gets going right away.
+    count: isBoss ? 4 + wave : Math.min(160, Math.round(6 + wave * 3 + Math.max(0, 4 - wave) * 2 + late * late * 0.3 + endless * 4)),
     // Bees toughen up faster later on, to keep pace with a powered-up Tode; in endless mode 10% more every wave.
     hpScale: (1 + 0.2 * (wave - 1) + 0.024 * (wave - 1) ** 2) * 1.1 ** endless,
     speedScale: Math.min(1.45 + endless * 0.02, 1 + 0.035 * (wave - 1)),
-    spawnInterval: Math.max(0.16, 1.5 - wave * 0.09 - endless * 0.01),
+    spawnInterval: Math.max(0.16, Math.min(0.6, 1.5 - wave * 0.09 - endless * 0.01)),
     // From the Tournament on, bees hit for an extra heart (and another every 10 endless waves).
     contactBonus: (wave >= 16 ? 1 : 0) + Math.floor(endless / 10),
     weights: {

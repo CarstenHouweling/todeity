@@ -3,6 +3,8 @@
  * Golden Leaves to spend in Tode's Pantry, and Tode reflects on each defeat.
  */
 
+import { withRewards } from './Rewards.js';
+
 const STORAGE_KEY = 'tode-meta';
 
 // Costs climb steeply: the first level of something is a run or two away, maxing the whole Pantry (~6,000)
@@ -44,7 +46,7 @@ function load() {
   }
 }
 
-export const meta = load();
+export const meta = withRewards(load());
 
 // Dev: test runs (the bot) can switch saving off so they don't touch the real progress.
 let persist = true;

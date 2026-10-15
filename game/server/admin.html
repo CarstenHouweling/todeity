@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Todeity Admin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='18' r='12' fill='%237ed957'/%3E%3Ccircle cx='10' cy='9' r='5' fill='%237ed957'/%3E%3Ccircle cx='22' cy='9' r='5' fill='%237ed957'/%3E%3Ccircle cx='10' cy='9' r='2' fill='%23111'/%3E%3Ccircle cx='22' cy='9' r='2' fill='%23111'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1512; --panel: #18211c; --panel-2: #1f2a24; --line: #2c3a32; --text: #e8f0ea; --muted: #93a69a;
+    --accent: #7ed957; --accent-ink: #0f1512; --danger: #ff6b6b; --danger-bg: #3a1c1c; --warn: #ffd23f;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f3f6f2; --panel: #ffffff; --panel-2: #f0f4ef; --line: #d9e2da; --text: #17211b; --muted: #5f7266;
+      --accent: #3f9d2a; --accent-ink: #ffffff; --danger: #c62828; --danger-bg: #fdeaea; --warn: #9a6b00;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+  }
+  main { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; white-space: nowrap; }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  button, input, select {
+    font: inherit; color: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2);
+    padding: 8px 12px; min-height: 38px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--danger); }
+  button.danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+  button.icon { min-height: 32px; padding: 4px 10px; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  #login { max-width: 420px; margin: 12vh auto 0; }
+  #login form { display: flex; gap: 8px; margin-top: 12px; }
+  #login input { flex: 1; min-width: 0; }
+  .error { color: var(--danger); min-height: 1.45em; margin: 8px 0 0; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .value.big { color: var(--accent); }
+  .tile .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .toolbar select { flex: 1 1 220px; min-width: 0; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; background: var(--panel-2); }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+  td.name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  td.actions { text-align: right; }
+  td.actions button { margin-left: 4px; }
+  .empty { padding: 18px; text-align: center; color: var(--muted); }
+  #status { font-size: 13px; color: var(--muted); }
+  #toast {
+    position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.3); max-width: calc(100vw - 32px); opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  #toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 640px) {
+    body { font-size: 14px; }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tile .value { font-size: 22px; }
+    .opt { display: none; }
+    #status { order: 3; width: 100%; }
+    th, td { padding: 7px 8px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="panel hidden">
+    <h1 style="font-size:20px;margin:0">🐸 Todeity Admin</h1>
+    <p class="muted small" style="margin:6px 0 0">Enter the admin token (the server's ADMIN_TOKEN). It stays in this tab only.</p>
+    <form id="login-form" autocomplete="off">
+      <input id="token" type="password" placeholder="Admin token" aria-label="Admin token" autocomplete="current-password" required>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+    <p id="login-error" class="error" role="alert"></p>
+  </section>
+
+  <section id="app" class="hidden">
+    <header>
+      <h1>🐸 Todeity Admin</h1>
+      <span id="status">Loading…</span>
+      <button id="logout" type="button">Sign out</button>
+    </header>
+
+    <div class="tiles" id="tiles"></div>
+    <div class="chips" id="states"></div>
+
+    <h2>Co-op rooms</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Code</th><th>Host</th><th class="num">Players</th><th>State</th></tr></thead>
+      <tbody id="rooms"></tbody>
+    </table></div>
+
+    <h2>Leaderboards</h2>
+    <div class="toolbar">
+      <select id="board" aria-label="Board"></select>
+      <button id="reload" type="button">Reload</button>
+      <button id="clear" type="button" class="danger">Clear board</button>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr>
+        <th class="num">#</th><th>Name</th><th class="num">Score</th><th class="num">Wave</th>
+        <th class="opt">Frog</th><th class="num opt">Steep</th><th class="num opt">Kills</th><th class="num">Clear</th>
+        <th class="opt">When</th><th></th>
+      </tr></thead>
+      <tbody id="entries"></tbody>
+    </table></div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  const KEY = 'todeity-admin-token';
+  const $ = (id) => document.getElementById(id);
+  let token = '';
+  let boards = [];
+  let statsTimer = null;
+
+  try { token = sessionStorage.getItem(KEY) || ''; } catch {}
+
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === 'class') node.className = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else node[key] = value;
+    }
+    for (const child of children) node.append(child);
+    return node;
+  }
+
+  let toastTimer = null;
+  function toast(text) {
+    $('toast').textContent = text;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2600);
+  }
+
+  class AuthError extends Error {}
+
+  async function api(path, method = 'GET') {
+    const response = await fetch(`/api/admin/${path}`, { method, headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 401) throw new AuthError('Wrong token.');
+    if (response.status === 429) throw new AuthError(body.error || 'Too many failed attempts. Try again later.');
+    if (response.status === 404 && path === 'stats') throw new AuthError('Admin is disabled on this server (no ADMIN_TOKEN).');
+    if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`);
+    return body;
+  }
+
+  function showLogin(message = '') {
+    clearInterval(statsTimer);
+    statsTimer = null;
+    $('app').classList.add('hidden');
+    $('login').classList.remove('hidden');
+    $('login-error').textContent = message;
+    $('token').focus();
+  }
+
+  function handle(error) {
+    if (error instanceof AuthError) {
+      token = '';
+      try { sessionStorage.removeItem(KEY); } catch {}
+      showLogin(error.message);
+    } else {
+      toast(error.message || 'Something went wrong.');
+    }
+  }
+
+  // --- Stats ---
+  const fmtUptime = (s) => {
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+  };
+  const fmtTime = (ms) => ms ? new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '–';
+  const fmtClear = (s) => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : '–';
+
+  function tile(label, value, sub = '', big = false) {
+    return el('div', { class: 'tile' },
+      el('div', { class: 'label', textContent: label }),
+      el('div', { class: `value${big ? ' big' : ''}`, textContent: String(value) }),
+      el('div', { class: 'sub', textContent: sub }));
+  }
+
+  async function loadStats() {
+    const s = await api('stats');
+    const dailyCount = Object.values(s.scores.daily).reduce((a, b) => a + b, 0);
+    const today = new Date().toISOString().slice(0, 10);
+    $('tiles').replaceChildren(
+      tile('Online now', s.presence.online, `${s.presence.addresses} addresses`, true),
+      tile('Peak online', s.presence.peak, s.presence.peakAt ? fmtTime(s.presence.peakAt) : 'since start'),
+      tile('Co-op sockets', s.coop.sockets, `${s.coop.rooms.length} room${s.coop.rooms.length === 1 ? '' : 's'}`),
+      tile('Cloud saves', s.saves),
+      tile('Scores', s.scores.all, `depth ${s.scores.depth} · speed ${s.scores.speed}`),
+      tile('Daily scores', s.scores.daily[today] ?? 0, `today · ${dailyCount} in ${Object.keys(s.scores.daily).length} days`),
+      tile('Uptime', fmtUptime(s.uptime), `since ${fmtTime(s.startedAt)}`),
+      tile('Memory', `${s.memoryMb} MB`, 'resident'),
+    );
+    const states = Object.entries(s.presence.byState).sort((a, b) => b[1] - a[1]);
+    $('states').replaceChildren(...(states.length
+      ? states.map(([state, n]) => el('span', { class: 'chip' }, `${state} `, el('b', { textContent: n })))
+      : [el('span', { class: 'chip muted', textContent: 'Nobody online' })]));
+    $('rooms').replaceChildren(...(s.coop.rooms.length
+      ? s.coop.rooms.map((r) => el('tr', {},
+          el('td', { textContent: r.code }), el('td', { class: 'name', textContent: r.host ?? '–' }),
+          el('td', { class: 'num', textContent: `${r.players}/4` }), el('td', { textContent: r.started ? 'In a run' : 'Lobby' })))
+      : [el('tr', {}, el('td', { class: 'empty', colSpan: 4, textContent: 'No open rooms.' }))]));
+    $('status').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
+
+  // --- Boards ---
+  function currentBoard() {
+    return boards.find((b) => b.key === $('board').value) ?? boards[0];
+  }
+
+  async function loadBoards() {
+    const keep = $('board').value;
+    boards = (await api('boards')).boards;
+    $('board').replaceChildren(...boards.map((b) => el('option', { value: b.key, textContent: `${b.title} (${b.entries.length})` })));
+    if (boards.some((b) => b.key === keep)) $('board').value = keep;
+    renderBoard();
+  }
+
+  function renderBoard() {
+    const board = currentBoard();
+    if (!board) return;
+    $('entries').replaceChildren(...(board.entries.length
+      ? board.entries.map((e, i) => el('tr', {},
+          el('td', { class: 'num', textContent: i + 1 }),
+          el('td', { class: 'name', textContent: e.name, title: e.name }),
+          el('td', { class: 'num', textContent: Number(e.score).toLocaleString() }),
+          el('td', { class: 'num', textContent: e.level ? `${e.wave} · L${e.level}` : e.wave }),
+          el('td', { class: 'opt', textContent: e.cls ?? '–' }),
+          el('td', { class: 'num opt', textContent: e.steep ?? 0 }),
+          el('td', { class: 'num opt', textContent: (e.kills ?? 0).toLocaleString() }),
+          el('td', { class: 'num', textContent: fmtClear(e.clear) }),
+          el('td', { class: 'opt', textContent: fmtTime(e.at) }),
+          el('td', { class: 'actions' },
+            el('button', { type: 'button', class: 'icon danger', textContent: 'Delete', title: 'Delete this entry', onclick: () => removeEntry(board, e) }),
+            el('button', { type: 'button', class: 'icon danger opt', textContent: 'All by name', title: `Delete every entry by ${e.name} on all boards`, onclick: () => removePlayer(e.name) }))))
+      : [el('tr', {}, el('td', { class: 'empty', colSpan: 10, textContent: 'This board is empty.' }))]));
+    $('clear').disabled = board.entries.length === 0;
+  }
+
+  async function act(fn) {
+    try {
+      await fn();
+      await Promise.all([loadBoards(), loadStats()]);
+    } catch (error) {
+      handle(error);
+    }
+  }
+
+  const path = (key) => key.split('/').map(encodeURIComponent).join('/');
+
+  function removeEntry(board, entry) {
+    if (!confirm(`Delete ${entry.name} (${Number(entry.score).toLocaleString()}) from ${board.title}?`)) return;
+    act(async () => {
+      await api(`boards/${path(board.key)}/entries/${encodeURIComponent(entry.id)}`, 'DELETE');
+      toast(`Deleted ${entry.name} from ${board.title}.`);
+    });
+  }
+
+  function removePlayer(name) {
+    if (!confirm(`Delete every entry by "${name}" on all boards?`)) return;
+    act(async () => {
+      const result = await api(`players/${encodeURIComponent(name)}`, 'DELETE');
+      toast(`Deleted ${result.total} entr${result.total === 1 ? 'y' : 'ies'} by ${name}.`);
+    });
+  }
+
+  $('clear').addEventListener('click', () => {
+    const board = currentBoard();
+    if (!board || !confirm(`Clear ${board.title}? This removes all ${board.entries.length} entries.`)) return;
+    act(async () => {
+      const result = await api(`boards/${path(board.key)}`, 'DELETE');
+      toast(`Cleared ${board.title} (${result.removed} entries).`);
+    });
+  });
+  $('board').addEventListener('change', renderBoard);
+  $('reload').addEventListener('click', () => loadBoards().catch(handle));
+
+  // --- Session ---
+  async function start() {
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    await loadStats();
+    await loadBoards();
+    clearInterval(statsTimer);
+    statsTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') loadStats().catch(handle);
+    }, 5000);
+  }
+
+  $('login-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    token = $('token').value.trim();
+    if (!token) return;
+    $('login-error').textContent = '';
+    start().then(() => {
+      try { sessionStorage.setItem(KEY, token); } catch {}
+      $('token').value = '';
+    }).catch(handle);
+  });
+
+  $('logout').addEventListener('click', () => {
+    token = '';
+    try { sessionStorage.removeItem(KEY); } catch {}
+    showLogin();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && token && statsTimer) loadStats().catch(handle);
+  });
+
+  if (token) start().catch(handle);
+  else showLogin();
+})();
+</script>
+</body>
+</html>

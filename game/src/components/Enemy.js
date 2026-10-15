@@ -37,7 +37,7 @@ export const ENEMY_TYPES = {
     tint: '#ffc43d',
     knockback: 0.08,
     boss: true,
-    attackDelayScale: 0.85,
+    attackDelayScale: 0.75,
   },
   // The final boss on the last wave: bigger, faster and meaner than the Queen.
   empress: {
@@ -70,7 +70,7 @@ export const ENEMY_TYPES = {
     tint: '#b8322a',
     knockback: 0.05,
     boss: true,
-    attackDelayScale: 0.85,
+    attackDelayScale: 0.72,
   },
   // The Sky Citadel's boss: rings of light and feathered volleys.
   seraph: {

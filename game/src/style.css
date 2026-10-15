@@ -2686,3 +2686,280 @@ body.touch .steep-badge {
   background: rgba(255, 255, 255, 0.15);
   font-weight: 700;
 }
+
+/* Skill fusions (v0.19) and card hints */
+.card-hint {
+  display: block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(31, 26, 16, 0.08);
+  color: #5a3d8a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kind-fusion {
+  border: 3px solid transparent;
+  background: linear-gradient(#fff8ff, #f0e2ff) padding-box, linear-gradient(135deg, #ff6a00, #ffd36b, #3fd0c0, #9b4dff, #ff6a00) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: card-in 0.35s ease-out backwards, fusion-glow 1.4s ease-in-out infinite alternate, fusion-border 3s linear infinite;
+}
+
+.kind-fusion .card-blend {
+  background: linear-gradient(90deg, #ff6a00, #ffd36b, #3fd0c0, #9b4dff);
+  color: #1f1a10;
+}
+
+.kind-fusion .tag-rarity {
+  background: linear-gradient(90deg, #9b4dff, #3fd0c0);
+}
+
+.kind-fusion .card-icon {
+  filter: drop-shadow(0 0 8px rgba(155, 77, 255, 0.9));
+}
+
+@keyframes fusion-glow {
+  from { box-shadow: 0 8px 0 #6f2fc0, 0 0 16px rgba(155, 77, 255, 0.6); }
+  to { box-shadow: 0 8px 0 #6f2fc0, 0 0 44px rgba(255, 170, 60, 1); }
+}
+
+@keyframes fusion-border {
+  to { background-position: 0 0, 300% 0; }
+}
+
+/* Daily Brew twists (v0.19) */
+.twist {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid #d9a441;
+}
+
+.twist-trial { border-color: #ff7a5a; background: rgba(255, 90, 60, 0.16); }
+.twist-boon { border-color: #7ed957; background: rgba(126, 217, 87, 0.14); }
+
+.twist-icon { font-size: 30px; }
+
+.twist span:nth-child(2) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.twist small { opacity: 0.8; }
+
+.twist em {
+  font-style: normal;
+  font-weight: 800;
+  color: #ffb09a;
+}
+
+.twist-boon em { color: #c8f77a; }
+
+.daily-reward {
+  margin: 12px 0 4px;
+  font-weight: 800;
+  font-size: 18px;
+  color: #ffe680;
+}
+
+/* Title: profile, rewards and the garden (v0.19) */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px auto 12px;
+  padding: 8px 14px;
+  max-width: 520px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.28);
+  text-align: left;
+}
+
+.profile-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff2a0, #ffb000 60%, #b37a00);
+  color: #3b2a14;
+  box-shadow: 0 0 14px rgba(255, 190, 40, 0.7);
+  line-height: 1;
+}
+
+.profile-level b { font-size: 22px; }
+.profile-level small { font-size: 10px; font-weight: 800; }
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-info b { font-size: 17px; color: #ffe680; }
+.profile-info small { font-size: 13px; opacity: 0.85; }
+
+.profile-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.profile-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7ed957, #ffe680);
+}
+
+.reward-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+
+.reward-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.reward-chip time { font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+.reward-chip.ready {
+  border-color: #ffd36b;
+  background: linear-gradient(#ffcf4a, #f0a020);
+  color: #3b2a14;
+  font-weight: 800;
+  animation: reward-ready 1s ease-in-out infinite alternate;
+}
+
+@keyframes reward-ready {
+  from { box-shadow: 0 0 6px rgba(255, 200, 60, 0.6); transform: scale(1); }
+  to { box-shadow: 0 0 22px rgba(255, 220, 90, 1); transform: scale(1.05); }
+}
+
+.reward-prize {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  margin: 12px 0;
+}
+
+.reward-leaves {
+  font-size: 40px;
+  font-weight: 900;
+  color: #c8f77a;
+  text-shadow: 0 0 14px rgba(126, 217, 87, 0.8);
+  animation: card-in 0.5s ease-out backwards;
+}
+
+.reward-trinket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: card-in 0.6s 0.3s ease-out backwards;
+}
+
+.reward-trinket em {
+  font-style: normal;
+  font-size: 56px;
+  filter: drop-shadow(0 0 12px rgba(255, 200, 60, 0.9));
+}
+
+.streak {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.streak-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 16px;
+}
+
+.streak-day small { font-size: 10px; opacity: 0.7; }
+.streak-day b { font-size: 12px; }
+.streak-day.past { opacity: 0.45; }
+.streak-day.today { color: #3b2a14; background: linear-gradient(#ffcf4a, #f0a020); box-shadow: 0 0 12px rgba(255, 190, 40, 0.8); }
+
+.menu.garden-mode {
+  justify-content: flex-end;
+  background: none;
+  pointer-events: none;
+  cursor: default;
+}
+
+.garden-tray {
+  pointer-events: auto;
+  width: min(900px, 100%);
+  max-height: 46dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(10, 30, 15, 0.82);
+}
+
+.garden-tray h2 { margin: 0 0 4px; font-size: 22px; }
+.garden-tray h2 small { font-size: 14px; opacity: 0.75; }
+.garden-tray .sub { margin: 0 0 8px; }
+
+.trinkets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+
+.trinket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.trinket span { font-size: 28px; }
+.trinket small { font-size: 11px; line-height: 1.15; }
+.trinket.placed { border-color: #7ed957; }
+.trinket.held { border-color: #ffd36b; background: rgba(255, 211, 107, 0.3); }
+.trinket.locked { opacity: 0.45; cursor: default; }
+.trinket.locked small { font-size: 10px; }
+
+.garden-tray .menu-buttons { position: static; margin-top: 8px; }
