@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.9',
+    date: '2026-10-15',
+    title: 'The beam that melts',
+    changes: [
+      '☄️ The Steeping Beam melts bosses: held on one it burns away a fifth of its health every second (about 40% for a whole beam), at any wave',
+      '🐝 It keeps up with the swarm too: its damage to bees grows with how tough the wave is, and it hits across its whole visible width',
+      '✨ A wider beam that no longer washes the screen out white, with molten tea spraying off a boss where it hits',
+    ],
+  },
+  {
     version: '0.24.8',
     date: '2026-10-15',
     title: 'Charms with manners',

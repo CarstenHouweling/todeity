@@ -12,7 +12,7 @@ export const ULTIMATES = {
     id: 'beam',
     name: 'Steeping Beam',
     icon: '☄️',
-    text: 'Gather your power, then unleash a colossal beam of boiling tea. Keep moving and sweep it across the swarm.',
+    text: 'Gather your power, then unleash a colossal beam of boiling tea. Sweep it across the swarm, or hold it on a boss and watch it melt.',
   },
   storm: {
     id: 'storm',
@@ -55,8 +55,12 @@ const BEAM_CHARGE = 0.75; // seconds of gathering power
 const BEAM_FIRE = 2.6; // seconds of firing
 const BEAM_LENGTH = 1100;
 const BEAM_TURN_RATE = 4.5; // radians per second it can follow the aim
-const BEAM_DPS = 30;
-const BEAM_WIDTH = 1.6; // the beam is enormous
+const BEAM_DPS = 30; // against bees, times the wave's toughness (`waveScale`), so it cuts through any wave
+// Against a boss: this share of its health per second, whatever the build or wave (×Ultimate Power). Held on a
+// moving boss that's ~38% of it (~50% if every tick lands); flat damage took 11% of the Queen and less after her.
+const BEAM_BOSS_SHARE = 0.2;
+const BEAM_WIDTH = 2; // the beam is enormous
+const BEAM_REACH = 24; // half-width that hits, per unit of BEAM_WIDTH (the gold layer and most of the orange glow)
 
 class SteepingBeam {
   constructor(ctx) {
@@ -70,16 +74,17 @@ class SteepingBeam {
     const cylinder = new THREE.CylinderGeometry(1, 1, 1, 20, 1, true);
     cylinder.rotateZ(-Math.PI / 2);
     cylinder.translate(0.5, 0, 0);
+    // Additive layers stack: kept dim enough that the beam (and the boss in it) stays readable instead of a white-out.
     this.layers = [
-      { mesh: new THREE.Mesh(cylinder, additive('#ffffff', 1)), width: 7 },
-      { mesh: new THREE.Mesh(cylinder.clone(), additive('#ffd36b', 0.75)), width: 16 },
-      { mesh: new THREE.Mesh(cylinder.clone(), additive('#ff8a2a', 0.28)), width: 30 },
+      { mesh: new THREE.Mesh(cylinder, additive('#fff6dc', 0.8)), width: 6 },
+      { mesh: new THREE.Mesh(cylinder.clone(), additive('#ffc23a', 0.45)), width: 15 },
+      { mesh: new THREE.Mesh(cylinder.clone(), additive('#ff7a1a', 0.16)), width: 28 },
     ];
     for (const { mesh } of this.layers) {
       mesh.visible = false;
       this.group.add(mesh);
     }
-    this.orb = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), additive('#fff3c4', 0.9));
+    this.orb = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), additive('#fff3c4', 0.6));
     this.group.add(this.orb);
     ctx.scene.add(markEffect(this.group));
 
@@ -127,21 +132,30 @@ class SteepingBeam {
     const swell = t < 0.15 ? t / 0.15 : t > BEAM_FIRE - 0.3 ? Math.max(0, (BEAM_FIRE - t) / 0.3) : 1;
     const width = swell * (1 + 0.08 * Math.sin(this.age * 45));
     for (const { mesh, width: base } of this.layers) mesh.scale.set(BEAM_LENGTH, base * width * BEAM_WIDTH, base * width * BEAM_WIDTH);
-    this.orb.scale.setScalar(18 * width * BEAM_WIDTH);
+    this.orb.scale.setScalar(11 * width * BEAM_WIDTH);
     ctx.shake(4);
-    ctx.postfx.pulse({ bloom: 1.3, aberration: 0.5 });
+    ctx.postfx.pulse({ bloom: 0.45, aberration: 0.35 });
 
     this.tick -= delta;
     if (this.tick <= 0) {
       this.tick = 0.1;
-      const reach = 16 * width * BEAM_WIDTH;
+      const reach = BEAM_REACH * width * BEAM_WIDTH;
+      const power = player.stats.ultimatePower;
       for (const enemy of ctx.aliveEnemies()) {
         const offset = enemy.position.clone().sub(origin).setZ(0);
         const along = offset.dot(this.direction);
         if (along < 0 || along > BEAM_LENGTH) continue;
         const across = offset.addScaledVector(this.direction, -along);
         if (across.length() > reach + enemy.radius) continue;
-        ctx.damageEnemy(enemy, Math.round(BEAM_DPS * 0.1 * player.stats.ultimatePower), across.normalize(), 80, 'ultimate');
+        if (enemy.type.boss) {
+          // The boss melts: a share of its health, with molten tea spraying off where the beam hits.
+          ctx.damageEnemy(enemy, Math.round(enemy.maxHp * BEAM_BOSS_SHARE * 0.1 * power), null, 0, 'ultimate', { raw: true, steady: true });
+          const hit = origin.clone().addScaledVector(this.direction, Math.max(0, along - enemy.radius * 0.6)).setZ(0);
+          ctx.particles.burst(hit, { count: 14, colors: [...GOLD, '#ff8a2a'], speed: 220, up: 160, size: 2.4, height: enemy.height * 0.5, life: 0.5, glow: true });
+          ctx.shake(7);
+        } else {
+          ctx.damageEnemy(enemy, Math.round(BEAM_DPS * 0.1 * power * ctx.waveScale()), across.normalize(), 80, 'ultimate', { steady: true });
+        }
       }
     }
     const spot = origin.clone().addScaledVector(this.direction, Math.random() * 600).setZ(0);

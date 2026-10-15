@@ -462,6 +462,7 @@ const ctx = {
   shake: (amount) => (shake = Math.max(shake, amount)),
   aliveEnemies: () => targetable(), // skills, ultimates and effects never waste themselves on a shielded boss
   damageEnemy: (...args) => damageEnemy(...args),
+  waveScale: () => config?.hpScale ?? 1, // how much tougher this wave's bees are (ultimates keep pace with it)
   hurtPlayer: (amount) => hurtPlayer(amount),
   lightningHit,
   fireSpit: (origin, direction, damage) => fireSpit(origin, direction, damage, { helper: true }),
@@ -794,8 +795,12 @@ function removeEnemy(enemy) {
 
 const DAMAGE_STYLES = { burn: 'burn', lightning: 'zap', ultimate: 'big', frost: 'frost' };
 
-/** Every source of damage goes through here, so brews, the ultimate gauge and kills stay in sync. */
-function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit') {
+/**
+ * Every source of damage goes through here, so brews, the ultimate gauge and kills stay in sync. `raw`: the amount
+ * is final (a share of a boss's health), so Tode's damage multipliers don't apply; `steady`: a stream of hits (the
+ * Steeping Beam) that shouldn't hit-stop on every tick.
+ */
+function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit', { raw = false, steady = false } = {}) {
   if (enemy.dying) return;
   // A shielded boss shrugs everything off (now and then a 🛡 shows where the hits land).
   if (enemy.shielded) {
@@ -817,7 +822,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   }
   // A teammate's hit forwarded to the host is already final; local hits get Tode's multipliers.
   const fromTeammate = source === 'net';
-  let damage = fromTeammate ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
+  let damage = fromTeammate || raw ? amount : amount * player.stats.damageMultiplier * (1 + TIER_DAMAGE_BONUS * ascension.tier);
   if (!fromTeammate && enemy.ai.staggerLeft > 0) damage *= WARD.staggerBonus;
   if (!fromTeammate && player.stats.lightningFreeze && enemy.isFrozen) damage *= 2;
   const crit = !fromTeammate && source !== 'burn' && source !== 'ultimate' && Math.random() < player.stats.critChance;
@@ -831,7 +836,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
   if (source !== 'burn' && !fromTeammate) play('hit');
-  if (damage >= HIT_STOP_DAMAGE && !fromTeammate) hitStop(0.045);
+  if (damage >= HIT_STOP_DAMAGE && !fromTeammate && !steady) hitStop(0.045);
   hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
   // The gauge fills per bee's worth of health, not per raw damage: late-game hits are huge, bees too.
   if (source !== 'ultimate' && !fromTeammate) addGauge((landed * GAUGE_PER_DAMAGE) / (config?.hpScale ?? 1));

@@ -269,7 +269,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
   inverted flash); losing costs a heart.
 - **Ultimates** (picked after wave 5, the gauge fills slowly): Steeping Beam (an enormous beam; Tode keeps moving
-  at 45% speed and steering it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
+  at 45% speed and steering it; since v0.24.9 a boss in it loses `BEAM_BOSS_SHARE` (20%) of its max health per second
+  as `raw` damage that ignores Tode's multipliers, and bees take `BEAM_DPS` × the wave's `hpScale` via
+  `ctx.waveScale()`: flat damage took only 11% of the Queen and less of each later boss; measured now ~30–45% of the
+  Shogun per beam, shields still block it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams; the tongue is a Bézier tube from
   its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame).
 - **Achievements** (`components/Achievements.js`): 39, each with its own `reward` (3 to 60 Golden Leaves), shown
@@ -624,7 +627,8 @@ server proxies `/ws` and `/api`).
 - The camera is a child of the player group at offset `(300, -300, 300)`. WASD is camera-relative:
   screen-right = `(1, 1, 0)`, screen-up = `(-1, 1, 0)`.
 - **Every damage source goes through `damageEnemy()`** in `main.js`, so kills, score, the ultimate gauge, Hailstorm's
-  double damage and the damage multiplier stay consistent. Lightning should also call `lightningHit()`.
+  double damage and the damage multiplier stay consistent. Its options: `raw` (the amount is final, no multipliers)
+  and `steady` (a stream of hits that shouldn't hit-stop each tick). Lightning should also call `lightningHit()`.
 - Effects may spawn other effects during `update()`; `Effects.update` handles that, so keep using `effects.addEffect`.
   Each effect updates in its own try/catch: an exception used to drop every effect still in flight from the list
   undisposed, and they stayed frozen in the scene into the garden (v0.24.7). Objects an effect adds to the scene
@@ -715,7 +719,7 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 ## Ideas / roadmap
 
 - Readability seen while making the trailer: the Sky Citadel at golden hour plus a high ascension form washes out
-  to near white, and the Steeping Beam whites out the garden for ~2.5 s. Tode himself is hard to spot inside the
+  to near white (the Steeping Beam's white-out was toned down in v0.24.9). Tode himself is hard to spot inside the
   God of Tea aura.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
