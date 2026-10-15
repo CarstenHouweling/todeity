@@ -39,7 +39,7 @@ import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
 import { applyRenderer } from './components/Graphics.js';
 import { GRAPHICS, GRAPHICS_LABELS, LOW_STEP, startStep, stepFeatures } from './components/Quality.js';
-import { cycleVow, clearVows, runVows, steepBonus, steepLevel } from './components/Steeping.js';
+import { GENTLE, cycleVow, clearVows, gentleRun, runVows, steepBonus, steepLevel } from './components/Steeping.js';
 import { blockBrowserZoom, viewHeight, viewWidth } from './components/Viewport.js';
 import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
 import { chooseClass, chosenClass, classById, classOfTheDay } from './components/Classes.js';
@@ -345,6 +345,7 @@ hud.graphics = settings.graphics;
 
 let vows = {}; // this run's Steeping vows: { id: rank } (see Steeping.js)
 let steep = 0; // their Steep level: more score and Golden Leaves
+let gentle = false; // a Gentle Brew run (Steeping.js): more hearts, slower stingers, half the score
 const vow = (id) => vows[id] ?? 0;
 let keepsake = null; // what Tode carries this run (see Keepsakes.js)
 let runClass = chosenClass(); // the frog playing this run (see Classes.js)
@@ -445,7 +446,7 @@ function safeStorage(op, key, value) {
 
 function updateScore() {
   // In co-op the host keeps the team's score.
-  score = isGuest() ? coopScore : (timeAlive * SCORE_PER_SECOND + points) * steepBonus(steep) * (twistDay?.score ?? 1);
+  score = isGuest() ? coopScore : (timeAlive * SCORE_PER_SECOND + points) * steepBonus(steep) * (twistDay?.score ?? 1) * (gentle ? GENTLE.score : 1);
   hud.setScore(Math.floor(score), Math.max(bestScore, Math.floor(score)), timeAlive);
 }
 
@@ -1220,7 +1221,7 @@ function fireStinger(enemy, direction, speed, quiet = false) {
 
 /** Every player simulates the bullets themselves and only checks hits on their own Tode. */
 function launchStinger(origin, direction, speed, quiet = false, range = STINGER.range * 1.6) {
-  speed *= 1 + 0.15 * vow('stingers');
+  speed *= (1 + 0.15 * vow('stingers')) * (gentle ? GENTLE.bullets : 1);
   bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range, color: arena.bullet ?? '#c070ff' });
   if (!quiet) play('sting');
 }
@@ -5319,13 +5320,94 @@ function spawnSquad() {
   }
 }
 
+// --- The first volley: wave 2 teaches dodging ------------------------------------------------------------
+// Waves 1–3 pose no threat by themselves (Tode clears them standing still), so a new player could play two minutes
+// without meeting the bullet hell. Early in wave 2 one stinger bee marks its lanes in red, holds still and fires a
+// slow fan at Tode; getting out of the lanes (or hop-dashing through) is cheered and pays tea leaves and points.
+const VOLLEY = { at: 3, warn: 1.5, count: 7, spread: 0.9, speed: 150, distance: 250, watch: 2.4, leaves: 6, points: 250 };
+let volley = null; // { time, bee, origin, lanes, speed, warnLeft, flying, hp }
+
+function startFirstVolley() {
+  volley = coop ? null : { time: 0 };
+}
+
+function endFirstVolley() {
+  if (!volley) return;
+  for (const lane of volley.lanes ?? []) removeTelegraph(lane.mesh);
+  if (volley.bee && volley.speed !== undefined) {
+    volley.bee.speed = volley.speed;
+    volley.bee.setShield(false);
+  }
+  volley = null;
+}
+
+function updateFirstVolley(delta) {
+  if (!volley) return;
+  if (phase !== 'fighting') return endFirstVolley(); // the wave ended (the bee is shielded until then, so rarely)
+  volley.time += delta;
+  if (!volley.bee) {
+    if (volley.time < VOLLEY.at) return;
+    const angle = Math.random() * Math.PI * 2;
+    const origin = clampToArena(player.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(VOLLEY.distance)), 60);
+    volley.bee = spawnEnemy('stinger', origin, { elite: null });
+    if (!volley.bee) return endFirstVolley();
+    volley.origin = origin.setZ(0);
+    // It holds still and holds its own fire until the volley is out, and stays shielded until the dodge is judged:
+    // otherwise Tode's auto-spit shoots it down first, or the wave ends (and a brew pick pauses) mid-volley.
+    volley.speed = volley.bee.speed;
+    volley.bee.speed = 0;
+    volley.bee.attackTimer = 99;
+    volley.bee.setShield(true);
+    const aim = Math.atan2(player.position.y - origin.y, player.position.x - origin.x);
+    volley.lanes = Array.from({ length: VOLLEY.count }, (_, i) => {
+      const angleOf = aim + (i / (VOLLEY.count - 1) - 0.5) * VOLLEY.spread;
+      const direction = new THREE.Vector3(Math.cos(angleOf), Math.sin(angleOf), 0);
+      return { direction, mesh: addTelegraph(origin, direction, VOLLEY.distance * 1.8, 14) };
+    });
+    volley.warnLeft = VOLLEY.warn;
+    hud.showCallout(touch.enabled ? '⚠ Stingers! Step out of the red lanes, or tap 💨 to hop through' : '⚠ Stingers! Step out of the red lanes, or hop-dash through (Space)');
+    play('beamCharge');
+    return;
+  }
+  if (volley.flying === undefined) {
+    volley.warnLeft -= delta;
+    volley.bee.glowColor.set(0xd18cff);
+    volley.bee.glow = 1 - Math.max(0, volley.warnLeft) / VOLLEY.warn;
+    for (const lane of volley.lanes) lane.mesh.material.opacity = 0.45 + 0.35 * Math.abs(Math.sin(volley.time * 9));
+    if (volley.warnLeft > 0) return;
+    for (const lane of volley.lanes) launchStinger(volley.origin, lane.direction, VOLLEY.speed, true);
+    play('sting');
+    for (const lane of volley.lanes) removeTelegraph(lane.mesh);
+    volley.lanes = [];
+    volley.bee.speed = volley.speed;
+    volley.bee.attackTimer = VOLLEY.watch + 1.5;
+    volley.flying = 0;
+    volley.hp = player.hp;
+    return;
+  }
+  volley.flying += delta;
+  if (player.hp < volley.hp) {
+    hud.showCallout('Ouch! Watch for the red lanes 🐝');
+    endFirstVolley();
+  } else if (volley.flying >= VOLLEY.watch) {
+    hud.showCallout('🦘 Nimble! Not a scratch');
+    leaves.drop(player.position, VOLLEY.leaves, 3);
+    points += VOLLEY.points;
+    play('pick');
+    endFirstVolley();
+  }
+}
+
 function updateWave(delta) {
   phaseTimer -= delta;
 
   if (phase === 'intro' && phaseTimer <= 0) {
     setPhase('fighting');
     if (wave === 1) tip('move');
-    if (wave === 2) tip('dash');
+    if (wave === 2) {
+      tip('dash');
+      startFirstVolley();
+    }
     if (config.isBoss && !isGuest()) {
       const boss = spawnEnemy(config.boss, farthestCorner(), { elite: null });
       if (boss) startBossIntro(boss);
@@ -6523,6 +6605,7 @@ function clearWorld() {
   clearBossMechanics();
   clearObjective();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
+  volley = null; // its lanes go with the telegraphs below
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
   for (const ring of [...fireRings]) removeFireRing(ring);
   for (const bomb of bombs.splice(0)) bomb.mesh.removeFromParent();
@@ -6577,7 +6660,13 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   // Steeping: the vows taken for this run (never in the Daily Brew or co-op).
   vows = runVows({ daily, coop: coopRun, shared: sharedVows });
   steep = steepLevel(vows);
-  hud.setSteep(steep);
+  gentle = gentleRun({ daily, coop: coopRun });
+  hud.setSteep(steep, gentle);
+  // The title's run preparation buttons glow ✨ New after the first run, until the next one starts.
+  if (meta.runs > 0 && !meta.seenUnlocks) {
+    meta.seenUnlocks = true;
+    saveMeta();
+  }
 
   // The class first (see Classes.js): the Pantry and the keepsake build on it.
   const { stats } = player;
@@ -6601,6 +6690,10 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   stats.magnet *= 1 + 0.25 * pantry('magnet');
   stats.dashCooldown *= 1 - 0.1 * pantry('spring');
   stats.revives += pantry('revive');
+  if (gentle) {
+    stats.maxHp += GENTLE.hearts;
+    stats.revives += GENTLE.revives;
+  }
   stats.critChance += 0.02 * pantry('crit');
   stats.leafValue *= 1 + 0.1 * pantry('study');
   stats.splashDamage = Math.round(stats.splashDamage * (1 + 0.15 * pantry('kettle')));
@@ -6789,6 +6882,7 @@ function endRun({ victory = false } = {}) {
     victory,
     daily: isDaily(),
     steep,
+    gentle,
     cls: runClass.id,
     // Co-op: the team (the host submits it to the board for its size).
     coop: coop?.size ?? 0,
@@ -6796,7 +6890,9 @@ function endRun({ victory = false } = {}) {
     host: !coop || coop.host,
   };
   lastBuild = runBuild();
-  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild });
+  // An early death outside the Daily Brew and co-op offers Gentle Brew (players who never got past the second arena).
+  const offerGentle = !gentle && !coop && !isDaily() && !victory && wave < 10 && meta.bestWave < 10;
+  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild, offerGentle });
 }
 
 function gameOver() {
@@ -7198,6 +7294,7 @@ const MENU_ACTIONS = {
   'coop-room': () => (net.inRoom ? showRoom() : showLobby()),
   vow: ({ id }) => {
     cycleVow(id);
+    meta.gentle = false; // taking a vow means the bees can bring it on (Gentle Brew ignores vows)
     play(steepLevel() ? 'charge' : 'click');
     hud.showSteeping();
   },
@@ -7301,6 +7398,18 @@ const MENU_ACTIONS = {
     setPhase('cleared', 0);
   },
   retire: () => endRun({ victory: true }),
+  'toggle-gentle': () => {
+    meta.gentle = !meta.gentle;
+    saveMeta();
+    play('click');
+    hud.showTitle(bestScore);
+  },
+  'gentle-on': () => {
+    meta.gentle = true;
+    saveMeta();
+    play('pick');
+    hud.gentleTaken();
+  },
 };
 
 hud.onSpeak = (voice, text, delay) => babble(voice, text, delay);
@@ -7372,6 +7481,7 @@ function updateGame(delta) {
   if (phase === 'fighting') fightTime += delta;
   procBudget = PROC_BUDGET;
   updateWave(delta);
+  updateFirstVolley(delta);
   updateHazards(delta);
   updateArenaEvents(delta);
   updateObjective(delta);

@@ -425,6 +425,19 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
+- **First impressions (v0.25):** a new player's title shows only Start run, the class and the ways to play (Daily
+  Brew, Co-op, Leaderboard) plus Visit garden; the reward chips and the run preparation buttons
+  (`hud.prepareButtons`: Pantry, Keepsake, Steeping, My garden) appear after the first run, glowing ✨ New until the
+  next run starts (`meta.seenUnlocks`, true for players who had more than one run before). The game-over screen hides
+  the run's HUD (`body.run-ended`, set by `showMenu`) and moves toasts to the bottom-left corner. **The first
+  volley** (`startFirstVolley`/`updateFirstVolley`, `VOLLEY`): Tode clears waves 1–4 standing still, so early in wave
+  2 (solo) a shielded stinger bee marks 7 lanes with telegraphs for 1.5 s and fires a slow fan at Tode; it stays
+  shielded (so the wave can't end and auto-spit can't kill it) until the dodge is judged: a hit says "Ouch", no hit
+  for 2.4 s says "Nimble!" and drops tea leaves and points. **Gentle Brew** (`GENTLE` in Steeping.js, `meta.gentle`):
+  +3 hearts, one extra life, stingers ×0.8 (`launchStinger`), score ×0.5; solo outside the Daily Brew only, vows
+  don't apply (taking a vow switches it off). The game-over screen offers it after a death before wave 10 by a player
+  whose best is below wave 10 (`offerGentle`); the title footer toggles it (`toggle-gentle`). Scores carry `gentle`
+  (🌿 on the boards).
 - **Title screen layout:** in order of importance: (after the first run) the profile and the reward chips; a big
   Start run; the ways to play (Daily Brew, Co-op, Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping,
   My garden, Visit garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.

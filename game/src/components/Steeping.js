@@ -20,6 +20,15 @@ export const VOWS = [
 
 meta.vows ??= {};
 
+/**
+ * Gentle Brew: the other way round. Offered after an early death, so players new to bullet hells get to see the
+ * later arenas and Tode's god forms. Solo runs outside the Daily Brew only; the score counts half and the
+ * leaderboards mark it 🌿.
+ */
+export const GENTLE = { hearts: 3, revives: 1, bullets: 0.8, score: 0.5 };
+export const GENTLE_TEXT = `+${GENTLE.hearts} hearts, one extra life, slower stingers. Score ×${GENTLE.score}.`;
+export const gentleRun = ({ daily, coop }) => !daily && !coop && Boolean(meta.gentle);
+
 export const vowRank = (id) => meta.vows[id] ?? 0;
 
 /** The Steep level of the vows currently taken. */
@@ -51,6 +60,7 @@ export function clearVows() {
  */
 export function runVows({ daily, coop, shared = null }) {
   if (daily) return {};
+  if (!coop && meta.gentle) return {}; // Gentle Brew and vows don't mix
   if (coop) return { ...(shared ?? {}) };
   return { ...meta.vows };
 }

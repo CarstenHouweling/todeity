@@ -56,6 +56,9 @@ function load() {
 }
 
 export const meta = withRewards(load());
+// The title reveals its run preparation buttons after the first run (Hud.prepareButtons); players from before
+// that already know them.
+meta.seenUnlocks ??= meta.runs > 1;
 
 // Dev: test runs (the bot) can switch saving off so they don't touch the real progress.
 let persist = true;

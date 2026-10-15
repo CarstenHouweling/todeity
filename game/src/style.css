@@ -719,6 +719,44 @@ canvas.game {
   opacity: 0.8;
 }
 
+/* Game over: the Gentle Brew offer after an early death. */
+.gentle-offer {
+  margin: 6px auto;
+  max-width: 520px;
+  padding: 8px 12px;
+  border: 1px solid rgba(140, 220, 120, 0.6);
+  border-radius: 12px;
+  background: rgba(40, 90, 40, 0.55);
+}
+
+.gentle-offer p {
+  margin: 0 0 6px;
+}
+
+.gentle-offer p:last-child {
+  margin-bottom: 0;
+}
+
+/* Title buttons that appear after the first run glow until the next run starts. */
+.menu-button.fresh {
+  position: relative;
+  border-color: #ffd76a;
+  box-shadow: 0 0 0 2px rgba(255, 215, 106, 0.35), 0 0 18px rgba(255, 215, 106, 0.35);
+}
+
+.menu-button .new-tag {
+  position: absolute;
+  top: -9px;
+  right: -6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ffd76a;
+  color: #3b2a14;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 /* Visit garden: how many public gardens have frogs in them right now (a pulsing green dot says it's live). */
 .menu-button small.live-count {
   display: inline-flex;
@@ -1732,6 +1770,19 @@ body.touch .owned {
 }
 
 /* Achievements */
+/* The game-over screen: the run's HUD hides, and toasts (achievements unlocked at the end) move to a corner so they
+   don't cover the run's stats. */
+body.run-ended .hud > * {
+  visibility: hidden;
+}
+
+body.run-ended .toasts {
+  top: auto;
+  bottom: calc(16px + var(--safe-bottom));
+  left: calc(16px + var(--safe-left));
+  transform: none;
+}
+
 .toasts {
   position: fixed;
   top: calc(110px + var(--safe-top));

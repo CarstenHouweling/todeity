@@ -120,6 +120,7 @@ function parseEntry(body) {
     victory: Boolean(body.victory),
     clear: clampInt(body.clear, 0, 86_400), // seconds to beat Bee-zebub (0: not beaten)
     steep: clampInt(body.steep, 0, 40), // Steeping vows taken (they multiply the score)
+    gentle: Boolean(body.gentle) || undefined, // a Gentle Brew run (half the score; marked 🌿 on the boards)
     cls: CLASS_IDS.includes(body.cls) ? body.cls : 'tode', // the frog that played (src/components/Classes.js)
     at: Date.now(),
     id: newId(),

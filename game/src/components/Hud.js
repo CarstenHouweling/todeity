@@ -10,7 +10,7 @@ import { cloud } from './CloudSave.js';
 import { CHANGELOG, VERSION } from './Changelog.js';
 import { canFullscreen, isFullscreen, needsHomeScreen } from './Fullscreen.js';
 import { KEEPSAKES, currentKeepsake, isKeepsakeUnlocked, unlockHint } from './Keepsakes.js';
-import { STEEP_MAX, VOWS, steepBonus, steepLevel, vowRank } from './Steeping.js';
+import { GENTLE_TEXT, STEEP_MAX, VOWS, steepBonus, steepLevel, vowRank } from './Steeping.js';
 import { CHARM_RARITIES } from './Charms.js';
 import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
@@ -404,9 +404,9 @@ export class Hud {
   }
 
   /** The run's Steep level next to the score (hidden at 0). */
-  setSteep(steep) {
-    this.steep.hidden = !steep;
-    this.steep.textContent = `🔥 Steep ${steep}`;
+  setSteep(steep, gentle = false) {
+    this.steep.hidden = !steep && !gentle;
+    this.steep.textContent = gentle ? '🌿 Gentle Brew' : `🔥 Steep ${steep}`;
   }
 
   showBanner(title, subtitle = '', duration = 1.6, className = '') {
@@ -716,6 +716,8 @@ export class Hud {
     this.menu.innerHTML = html;
     this.menu.hidden = false;
     this.menuClickAction = clickAction;
+    // The game-over screen stands alone: the run's HUD (wave line, boss bar, ability bar, tips) hides behind it.
+    document.body.classList.toggle('run-ended', this.menuName === 'game-over');
   }
 
   hideMenu() {
@@ -725,6 +727,7 @@ export class Hud {
     this.menu.hidden = true;
     this.menu.innerHTML = '';
     this.menuClickAction = null;
+    document.body.classList.remove('run-ended');
   }
 
   get menuOpen() {
@@ -849,7 +852,7 @@ ${ meta.runs > 0 ? '' :
         </div>`
         }
         ${best && !meta.runs ? `<p class="best">Best score: ${best}</p>` : ''}
-        ${this.rewardRow()}
+        ${meta.runs > 0 ? this.rewardRow() : ''}
         <!-- Most important first: start, then ways to play, then preparing a run, then small extras. -->
         <div class="menu-buttons title-start">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
@@ -861,16 +864,14 @@ ${ meta.runs > 0 ? '' :
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
         </div>
         <div class="menu-buttons title-prepare">
-          <button class="menu-button" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small></button>
-          <button class="menu-button" data-action="keepsakes">${currentKeepsake().icon} Keepsake</button>
-          ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small></button>` : ''}
-          <button class="menu-button" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small></button>
+          ${this.prepareButtons()}
           <button class="menu-button" data-action="garden-visit">👀 Visit garden ${gardenLabel(this.liveGardens)}</button>
         </div>
         <p class="prompt">or press Space</p>
         <div class="title-footer">
           ${this.tagChip()}
           ${this.saveChip()}
+          ${meta.runs > 0 || meta.gentle ? `<button type="button" data-action="toggle-gentle" title="${GENTLE_TEXT}">🌿 Gentle Brew: ${meta.gentle ? 'on' : 'off'}</button>` : ''}
           <button type="button" data-action="cycle-graphics" title="Low runs smoothly on older phones">🖥 Graphics: ${GRAPHICS_LABELS[this.graphics ?? 'auto']}</button>
           ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
           ${this.newVersion ? `<button type="button" class="update-pill" data-action="reload" title="The game was updated while you played">✨ v${escapeHtml(this.newVersion)} is out · reload</button>` : ''}
@@ -934,6 +935,21 @@ ${ meta.runs > 0 ? '' :
   }
 
   /** The daily gift and the kettle: they glow when they're ready, otherwise they count down. */
+  /**
+   * The run preparation buttons. A new player sees none of them (just Start run and the ways to play); after the
+   * first run they all appear at once, marked ✨ New until the next run starts (`meta.seenUnlocks`).
+   */
+  prepareButtons() {
+    if (!meta.runs) return '';
+    const fresh = meta.seenUnlocks ? '' : ' fresh';
+    const isNew = meta.seenUnlocks ? '' : '<em class="new-tag">✨ New</em>';
+    return `
+      <button class="menu-button${fresh}" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small>${isNew}</button>
+      <button class="menu-button${fresh}" data-action="keepsakes">${currentKeepsake().icon} Keepsake${isNew}</button>
+      <button class="menu-button${fresh}" data-action="steeping">🔥 Steeping <small>${meta.gentle ? 'off · 🌿 Gentle' : steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small>${isNew}</button>
+      <button class="menu-button${fresh}" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small>${isNew}</button>`;
+  }
+
   rewardRow() {
     const now = Date.now();
     const gift = giftStatus(meta, now);
@@ -1549,7 +1565,7 @@ ${ meta.runs > 0 ? '' :
         (entry, i) => `
         <tr class="${i + 1 === highlight ? 'me' : ''}">
           <td>${i + 1}</td>
-          <td class="name">${entry.cls ? `<span title="${classById(entry.cls).name}">${classById(entry.cls).icon}</span> ` : ''}${entry.victory ? '👑 ' : ''}${who(entry)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
+          <td class="name">${entry.cls ? `<span title="${classById(entry.cls).name}">${classById(entry.cls).icon}</span> ` : ''}${entry.victory ? '👑 ' : ''}${who(entry)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}${entry.gentle ? ' <small title="Gentle Brew">🌿</small>' : ''}</td>
           ${columns.map(([, value], c) => `<td class="${c === 2 ? 'form-cell' : ''}">${value(entry)}</td>`).join('')}
         </tr>`
       )
@@ -1578,7 +1594,7 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, coop = 0, host = true, team = null }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, coop = 0, host = true, team = null }) {
     const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
@@ -1592,12 +1608,17 @@ ${ meta.runs > 0 ? '' :
       `game-over ${victory ? 'victory' : ''}`,
       `
       <h1>${victory ? 'Victory!' : 'Game Over'}</h1>
-      <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}${steep ? ` <small>🔥 Steep ${steep}</small>` : ''}</p>
+      <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}${steep ? ` <small>🔥 Steep ${steep}</small>` : ''}${gentle ? ' <small>🌿 Gentle</small>' : ''}</p>
       <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated · ${formatTime(time)}</p>
       ${clear ? `<p class="stats">⏱ Bee-zebub banished in <b>${formatTime(clear)}</b></p>` : ''}
       ${gathered}
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
       <p class="line">“${line}”</p>
+      ${
+        offerGentle
+          ? `<div class="gentle-offer"><p>🌿 <b>Too spicy?</b> Try Gentle Brew: ${GENTLE_TEXT}</p><button class="menu-button" type="button" data-action="gentle-on">🌿 Gentle for my next run</button></div>`
+          : ''
+      }
       ${
         coop >= 2 && !host
           ? `<p class="sub submit-score">👥 Your host submits the team's score to the ${coop}-frog co-op board.</p>`
@@ -1615,6 +1636,12 @@ ${ meta.runs > 0 ? '' :
       </div>
       <p class="prompt">or press Space</p>`
     );
+  }
+
+  /** Gentle Brew was switched on from the game-over screen. */
+  gentleTaken() {
+    const offer = this.menu.querySelector('.gentle-offer');
+    if (offer) offer.innerHTML = '<p>🌿 <b>Gentle Brew is on.</b> Press ↻ Play again. (Turn it off on the title screen.)</p>';
   }
 
   /** Shows the result of a score submission and the board on the game-over screen. */

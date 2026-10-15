@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.25.0',
+    date: '2026-10-15',
+    title: 'A warmer welcome',
+    changes: [
+      '🌿 Gentle Brew: after an early fall the game offers +3 hearts, an extra life and slower stingers (score ×0.5, marked 🌿 on the boards). Toggle it on the title screen',
+      '⚠ Wave 2 brings your first volley: a stinger marks its lanes in red. Step aside or hop-dash through for a "Nimble!" bonus',
+      '✨ A calmer first title screen: the Pantry, Keepsakes, Steeping and your garden appear after your first run',
+      '🏁 The game-over screen stands alone: no wave line, boss bar or ability bar showing through, and achievements pop up in the corner',
+    ],
+  },
+  {
     version: '0.24.10',
     date: '2026-10-15',
     title: 'Someone is home',
