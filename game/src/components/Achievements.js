@@ -48,6 +48,11 @@ export const ACHIEVEMENTS = [
   { id: 'coop', icon: '👥', name: 'Pond Party', text: 'Defeat a boss in co-op.', reward: 15 },
   { id: 'daily', icon: '📅', name: 'Daily Brewer', text: 'Reach wave 10 in a Daily Brew.', reward: 15 },
   { id: 'photo', icon: '📸', name: 'Say Cheese', text: 'Take a photo.', reward: 3 },
+  // Gardens (v0.24)
+  { id: 'tower', icon: '🗼', name: 'Frog Tower', text: 'Be part of a tower of three frogs in a garden.', reward: 10 },
+  { id: 'party', icon: '🎉', name: 'Garden Party', text: 'Set off on a co-op run from a garden party.', reward: 12 },
+  { id: 'openhouse', icon: '🏡', name: 'Open House', text: 'Have three visitors in your garden at once.', reward: 15 },
+  { id: 'coop4', icon: '🐸', name: 'Full Pond', text: 'Defeat a boss in a co-op run of four frogs.', reward: 20 },
 ];
 
 export const rewardFor = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.reward ?? 0;

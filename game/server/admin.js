@@ -72,10 +72,10 @@ export async function serveAdminPage(res, send) {
 // --- API -----------------------------------------------------------------------------
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const BOARD_TITLES = { all: 'All-time score', depth: 'Deepest runs', speed: 'Fastest clears' };
+const BOARD_TITLES = { all: 'All-time score', depth: 'Deepest runs', speed: 'Fastest clears', coop2: 'Co-op: 2 frogs', coop3: 'Co-op: 3 frogs', coop4: 'Co-op: 4 frogs' };
 
 function listBoards(boards) {
-  const list = Object.entries(BOARD_TITLES).map(([key, title]) => ({ key, title, entries: boards[key] }));
+  const list = Object.entries(BOARD_TITLES).map(([key, title]) => ({ key, title, entries: boards[key] ?? [] }));
   for (const date of Object.keys(boards.daily).sort().reverse()) {
     list.push({ key: `daily/${date}`, title: `Daily Brew ${date}`, entries: boards.daily[date] });
   }
@@ -123,7 +123,7 @@ export async function handleAdmin(req, res, url, ctx) {
     const daily = Object.fromEntries(Object.keys(boards.daily).sort().map((date) => [date, boards.daily[date].length]));
     return send(res, 200, {
       ...ctx.stats(),
-      scores: { all: boards.all.length, depth: boards.depth.length, speed: boards.speed.length, daily },
+      scores: { all: boards.all.length, depth: boards.depth.length, speed: boards.speed.length, coop2: boards.coop2?.length ?? 0, coop3: boards.coop3?.length ?? 0, coop4: boards.coop4?.length ?? 0, daily },
     });
   }
 
@@ -170,7 +170,8 @@ export async function handleAdmin(req, res, url, ctx) {
     const removed = {};
     for (const { key, entries } of listBoards(boards)) {
       const before = entries.length;
-      for (let i = entries.length - 1; i >= 0; i--) if (sameName(entries[i].name, name)) entries.splice(i, 1);
+      // Co-op teams count too: a team with that frog in it goes.
+      for (let i = entries.length - 1; i >= 0; i--) if (sameName(entries[i].name, name) || entries[i].team?.some((member) => sameName(member, name))) entries.splice(i, 1);
       if (entries.length < before) removed[key] = before - entries.length;
     }
     const total = Object.values(removed).reduce((sum, n) => sum + n, 0);

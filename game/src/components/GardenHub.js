@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Player } from './Player.js';
+import { emoteById } from './Emotes.js';
 
 /**
  * Gardens as a meeting place. In a garden (your own or someone else's) Tode hops around slowly, jumps with Space
@@ -28,6 +29,12 @@ const SEND_EVERY = 1 / 12;
 const COUNTDOWN = 4;
 const PARTY_MAX = 3; // plus the inviter: four frogs, like a co-op room
 const SMOOTHING = 12;
+const STEP_UP = 7; // a ledge this low is stepped onto
+const BOUNCE = { trampoline: 720, mushrooms: 480 }; // trinkets that throw frogs back up (vertical speed)
+const CANNON = { speed: 330, up: 520 };
+const BALL = { radius: 9, gravity: 700, restitution: 0.6, friction: 1.6, kick: 260, lift: 170 };
+const EMOTE_TIME = 2.6;
+const BOOP = { reach: 34, push: 280, hop: 230 };
 
 /** Another player's frog in the garden. */
 class GardenFrog {
@@ -50,6 +57,9 @@ class GardenFrog {
     this.circle = inviteCircle(color);
     scene.add(this.puppet.group, this.circle);
     this.label = hud.attachWorldLabel('', color);
+    this.bubble = hud.attachWorldLabel('', color);
+    this.bubble.classList.add('emote-bubble');
+    this.emote = null;
     this.puppet.group.visible = false;
   }
 
@@ -95,6 +105,7 @@ class GardenFrog {
     this.circle.geometry.dispose();
     this.circle.material.dispose();
     this.label.remove();
+    this.bubble.remove();
   }
 }
 
@@ -166,6 +177,9 @@ export class GardenHub {
     this.player.rig.inPlace = true;
     this.topHeight = this.measureTop();
     this.myLabel = this.hud.attachWorldLabel('', '#ffd36b');
+    this.myBubble = this.hud.attachWorldLabel('', '#ffd36b');
+    this.myBubble.classList.add('emote-bubble');
+    this.myEmote = null;
     if (!code) return;
     try {
       await this.net.connect();
@@ -183,6 +197,8 @@ export class GardenHub {
     this.frogs.clear();
     this.myLabel?.remove();
     this.myLabel = null;
+    this.myBubble?.remove();
+    this.myBubble = null;
     this.myCircle.visible = false;
     Object.assign(this, { active: false, code: null, online: false, myId: null, inviting: false, ready: false, party: [], countdown: null });
     this.player.group.position.set(0, 0, 0);
@@ -244,6 +260,24 @@ export class GardenHub {
       this.hooks.onDecor?.(data.decor); // the owner is redecorating
     } else if (data.k === 'wave') {
       this.frogs.get(from)?.puppet.rig.play('victory', { once: true });
+    } else if (data.k === 'emote') {
+      const frog = this.frogs.get(from);
+      const emote = emoteById(data.id);
+      if (frog && emote) frog.emote = this.startEmote(emote, frog.puppet, frog.position, frog.z);
+    } else if (data.k === 'ball') {
+      // Somebody kicked the ball: everybody takes over where it is and where it flies.
+      const item = this.world?.items?.().find((i) => i.id === 'ball');
+      if (item && data.p && data.v) item.ball = { p: new THREE.Vector3(...data.p), v: new THREE.Vector3(...data.v), spin: item.ball?.spin ?? 0 };
+    } else if (data.k === 'boop' && data.to === this.myId) {
+      // Booped: a little shove and a hop.
+      this.velocity.set(data.d[0] * BOOP.push, data.d[1] * BOOP.push, 0);
+      this.vz = BOOP.hop;
+      this.flying = true;
+      this.player.rig.play('dash', { once: true });
+      this.play?.('pop');
+    } else if (data.k === 'fired') {
+      this.particles?.burst(new THREE.Vector3(data.x, data.y, 26), { count: 20, colors: ['#ffffff', '#e8f4ff'], speed: 110, up: 70, size: 3, height: 0, life: 0.7 });
+      this.play?.('boom');
     }
   }
 
@@ -322,6 +356,128 @@ export class GardenHub {
     if (this.own) this.send('gevent', { k: 'decor', decor });
   }
 
+  // --- Emotes, the ball and boops ------------------------------------------------------------------------
+
+  /** Plays one of my emotes (if unlocked: the caller checks) and shows it to everybody. */
+  playEmote(id) {
+    const emote = emoteById(id);
+    if (!emote || !this.active) return;
+    const pos = this.player.group.position;
+    this.myEmote = this.startEmote(emote, this.player, pos, this.z);
+    this.send('gevent', { k: 'emote', id });
+    // On the Little Stage an emote gets confetti too.
+    if (this.onItem?.id === 'stage') this.particles?.burst(new THREE.Vector3(pos.x, pos.y, this.z), { count: 40, colors: ['#ff9ec7', '#7ed957', '#5fb8ff', '#ffd23f'], speed: 120, up: 200, size: 2, height: 30, life: 1.4 });
+  }
+
+  startEmote(emote, frog, position, z) {
+    if (emote.move) frog.rig.play(emote.move, { once: true });
+    if (emote.burst) this.particles?.burst(new THREE.Vector3(position.x, position.y, z), { count: 30, colors: emote.burst, speed: 110, up: 160, size: 2, height: 20, glow: true, life: 1 });
+    return { emote, t: 0 };
+  }
+
+  /** Runs an emote on a frog (mine or a puppet): its spin, hops, bubble and particles. */
+  updateEmote(state, frog, position, z, delta, bubble) {
+    if (!state?.emote) {
+      if (bubble?.innerHTML) bubble.innerHTML = '';
+      if (bubble) this.hud.updateWorldLabel(bubble, position, 0, false);
+      return;
+    }
+    state.t += delta;
+    const { emote } = state;
+    const k = state.t / EMOTE_TIME;
+    if (emote.spin) frog.model.rotation.y = Math.atan2(frog.facing.x, -frog.facing.y) + Math.min(1, k * 1.4) * emote.spin * Math.PI * 2;
+    if (emote.hops && k < 0.85) {
+      frog.model.position.z += Math.abs(Math.sin((k / 0.85) * Math.PI * emote.hops)) * 9;
+      frog.rig.setLocomotion(1);
+    }
+    if (emote.burst && Math.floor(state.t * 4) !== Math.floor((state.t - delta) * 4) && state.t < 1.2) {
+      this.particles?.burst(new THREE.Vector3(position.x, position.y, z), { count: 6, colors: emote.burst, speed: 60, up: 120, size: 1.6, height: 28, glow: true, life: 0.8 });
+    }
+    if (bubble) {
+      const html = emote.bubble ? `<span>${emote.bubble}</span>` : '';
+      if (bubble.innerHTML !== html) bubble.innerHTML = html;
+      this.hud.updateWorldLabel(bubble, new THREE.Vector3(position.x, position.y, 0), z + 62 + Math.sin(state.t * 4) * 2, Boolean(emote.bubble));
+    }
+    if (k >= 1) {
+      state.emote = null;
+      frog.applyFacing();
+    }
+  }
+
+  /** Boop the nearest frog in reach: it gets a little shove and a hop (on its own screen). */
+  boop() {
+    if (!this.active) return false;
+    const pos = this.player.group.position;
+    let target = null;
+    let best = BOOP.reach;
+    for (const frog of this.frogs.values()) {
+      const d = Math.hypot(frog.position.x - pos.x, frog.position.y - pos.y);
+      if (frog.seen && d < best && Math.abs(frog.z - this.z) < 24) [target, best] = [frog, d];
+    }
+    this.player.rig.play('attack', { once: true });
+    if (!target) return false;
+    const dx = (target.position.x - pos.x) / (best || 1);
+    const dy = (target.position.y - pos.y) / (best || 1);
+    this.send('gevent', { k: 'boop', to: target.id, d: [Math.round(dx * 100) / 100, Math.round(dy * 100) / 100] });
+    target.puppet.rig.play('dash', { once: true });
+    this.particles?.burst(new THREE.Vector3(target.position.x, target.position.y, target.z), { count: 10, colors: ['#ffffff', '#ffd36b'], speed: 90, up: 80, size: 1.8, height: 16, glow: true, life: 0.4 });
+    this.play?.('pop');
+    return true;
+  }
+
+  /** The Tea Ball: rolls, bounces off the house and the fence, and anyone who hops into it kicks it. */
+  updateBall(delta, me) {
+    const item = this.world?.items?.().find((i) => i.id === 'ball' && !i.fresh);
+    if (!item) return;
+    const ball = (item.ball ??= { p: new THREE.Vector3(item.x, item.y, 0), v: new THREE.Vector3(), spin: 0 });
+    const dx = ball.p.x - me.x;
+    const dy = ball.p.y - me.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < BALL.radius + FROG_RADIUS && Math.abs(ball.p.z - this.z) < 22 && this.time - (this.kickedAt ?? -9) > 0.25) {
+      this.kickedAt = this.time;
+      const angle = distance > 0.1 ? Math.atan2(dy, dx) : Math.atan2(this.player.facing.y, this.player.facing.x);
+      const speed = BALL.kick + Math.hypot(this.velocity.x, this.velocity.y) * 0.8;
+      ball.v.set(Math.cos(angle) * speed, Math.sin(angle) * speed, BALL.lift + (this.vz > 0 ? 140 : 0));
+      ball.p.z = Math.max(ball.p.z, 1);
+      this.play?.('pop');
+      const round = (v) => [Math.round(v.x), Math.round(v.y), Math.round(v.z)];
+      this.send('gevent', { k: 'ball', p: round(ball.p), v: round(ball.v) });
+    }
+    const height = (x, y) => this.world.heightAt(x, y).h;
+    ball.v.z -= BALL.gravity * delta;
+    const nx = ball.p.x + ball.v.x * delta;
+    const ny = ball.p.y + ball.v.y * delta;
+    if (height(nx, ny) > ball.p.z + 6) {
+      ball.v.x *= -0.6; // off the wall
+      ball.v.y *= -0.6;
+    } else {
+      ball.p.x = nx;
+      ball.p.y = ny;
+    }
+    ball.p.z += ball.v.z * delta;
+    const floor = height(ball.p.x, ball.p.y);
+    if (ball.p.z <= floor) {
+      ball.p.z = floor;
+      ball.v.z = ball.v.z < -40 ? -ball.v.z * BALL.restitution : 0;
+      const slow = Math.exp(-BALL.friction * delta);
+      ball.v.x *= slow;
+      ball.v.y *= slow;
+    }
+    const r = Math.hypot(ball.p.x, ball.p.y);
+    if (r > WALK_LIMIT) {
+      const nxr = ball.p.x / r;
+      const nyr = ball.p.y / r;
+      const along = ball.v.x * nxr + ball.v.y * nyr;
+      if (along > 0) {
+        ball.v.x -= 2 * along * nxr * 0.8;
+        ball.v.y -= 2 * along * nyr * 0.8;
+      }
+      ball.p.x = nxr * WALK_LIMIT;
+      ball.p.y = nyr * WALK_LIMIT;
+    }
+    ball.spin += (Math.hypot(ball.v.x, ball.v.y) * delta) / BALL.radius;
+  }
+
   // --- Every frame -------------------------------------------------------------------------------------
 
   /** `move`: the wanted direction on the ground (unit or zero); `jump`: Space was pressed. */
@@ -338,12 +494,23 @@ export class GardenHub {
       pos.y += carrier.position.y - carrier.last.y;
     }
 
-    // Walking: a gentle hop.
-    const wanted = walking ? move : new THREE.Vector3();
-    this.velocity.lerp(wanted.clone().multiplyScalar(WALK_SPEED), 1 - Math.exp(-ACCELERATION * delta));
-    const step = this.velocity.clone().multiplyScalar(delta);
-    pos.x += step.x;
-    pos.y += step.y;
+    // Walking: a gentle hop. Fired from the cannon or booped, the flight keeps its speed until the landing.
+    const wanted = walking && !this.flying ? move : new THREE.Vector3();
+    if (!this.flying) this.velocity.lerp(wanted.clone().multiplyScalar(WALK_SPEED), 1 - Math.exp(-ACCELERATION * delta));
+    const before = { x: pos.x, y: pos.y };
+    pos.x += this.velocity.x * delta;
+    pos.y += this.velocity.y * delta;
+    // Walls: the house and tall trinkets stop you unless you're up high enough to step onto them.
+    const terrain = (x, y) => this.world?.heightAt(x, y) ?? { h: 0, item: null };
+    if (terrain(pos.x, pos.y).h > this.z + STEP_UP) {
+      if (terrain(pos.x, before.y).h <= this.z + STEP_UP) pos.y = before.y;
+      else if (terrain(before.x, pos.y).h <= this.z + STEP_UP) pos.x = before.x;
+      else {
+        pos.x = before.x;
+        pos.y = before.y;
+      }
+      if (this.flying) this.velocity.multiplyScalar(-0.3); // bonk
+    }
     // Frogs on the same level bump each other.
     for (const frog of this.frogs.values()) {
       if (!frog.seen || Math.abs(frog.z - this.z) > this.topHeight * 0.7) continue;
@@ -358,8 +525,9 @@ export class GardenHub {
     const fromMiddle = Math.hypot(pos.x, pos.y);
     if (fromMiddle > WALK_LIMIT) pos.multiplyScalar(WALK_LIMIT / fromMiddle).setZ(pos.z);
 
-    // Jumping and landing: the ground is the lawn or the head of the highest frog under you.
-    let ground = 0;
+    // Jumping and landing: the ground is the lawn, the roof or a trinket under you, or the head of a frog.
+    const under = terrain(pos.x, pos.y);
+    let ground = under.h;
     let groundFrog = null;
     for (const frog of this.frogs.values()) {
       if (!frog.seen) continue;
@@ -377,19 +545,48 @@ export class GardenHub {
     }
     this.vz -= GRAVITY * delta;
     this.z += this.vz * delta;
-    // Land on the lawn, or on a head only when coming down onto it (jumping up through a frog is fine).
+    // Land on the ground, or on a head only when coming down onto it (jumping up through a frog is fine).
     if (this.z <= ground && (this.vz <= 0 || !groundFrog)) {
-      if (this.vz < -150) {
+      const falling = this.vz;
+      if (falling < -150) {
         this.particles?.burst(new THREE.Vector3(pos.x, pos.y, ground), { count: 6, colors: ['#d9c9a0', '#c4b48a'], speed: 45, up: 20, size: 1.6, height: 1 });
         if (groundFrog) this.play?.('pop');
       }
       this.z = ground;
       this.vz = 0;
+      this.flying = false;
       this.standingOn = groundFrog;
+      // Bouncy things throw you back up.
+      const bounce = !groundFrog && under.item && BOUNCE[under.item.id];
+      if (bounce && (falling < -60 || jump)) {
+        this.vz = bounce * (jump ? 1.15 : 1);
+        this.world?.spring?.(under.item);
+        this.play?.('dash');
+        player.rig.play('hop', { once: true });
+      }
     } else if (this.z > ground + 1) {
       this.standingOn = null;
     }
     pos.z = this.z;
+    this.onItem = this.z <= ground + 0.5 && !groundFrog ? under.item : null;
+
+    // The teapot cannon: hop into it and it fires you across the garden, the way its spout points.
+    const cannon = this.world?.items?.().find((item) => item.id === 'launcher' && !item.fresh && Math.hypot(item.x - pos.x, item.y - pos.y) < 16);
+    if (cannon && this.z < 30 && this.time - (this.firedAt ?? -9) > 1.2 && walking) {
+      this.firedAt = this.time;
+      this.velocity.set(Math.cos(cannon.r), Math.sin(cannon.r), 0).multiplyScalar(CANNON.speed);
+      this.vz = CANNON.up;
+      this.z = Math.max(this.z, 26);
+      this.flying = true;
+      pos.x = cannon.x + Math.cos(cannon.r) * 20;
+      pos.y = cannon.y + Math.sin(cannon.r) * 20;
+      this.play?.('boom');
+      this.particles?.burst(new THREE.Vector3(pos.x, pos.y, 26), { count: 24, colors: ['#ffffff', '#e8f4ff', '#bfe8ff'], speed: 120, up: 80, size: 3, height: 0, life: 0.7 });
+      player.rig.play('flip', { once: true });
+      this.send('gevent', { k: 'fired', x: Math.round(pos.x), y: Math.round(pos.y) });
+    }
+
+    this.updateBall(delta, pos);
 
     // The little running hops, and facing where we go.
     const speed = Math.hypot(this.velocity.x, this.velocity.y);
@@ -407,6 +604,7 @@ export class GardenHub {
     player.adornments.position.z = this.hop;
     player.rig.inPlace = true;
     player.rig.setLocomotion(this.hop / HOP_HEIGHT);
+    this.updateEmote(this.myEmote, player, pos, this.z, delta, this.myBubble);
 
     // Parties. An inviting Tode waves now and then while he stands still.
     if (this.inviting && speed < 8 && (this.waveIn = (this.waveIn ?? 3) - delta) <= 0) {
@@ -431,6 +629,7 @@ export class GardenHub {
       const leader = !frog.state.i && [...this.frogs.values(), null].find((other) => other?.state.i && other.state.p?.includes(frog.id));
       const inMyParty = this.inviting && this.party.includes(frog.id);
       frog.update(delta, this.time, inMyParty || leader ? (frog.state.r ? '✋ ready' : '…') : '');
+      this.updateEmote(frog.emote, frog.puppet, frog.position, frog.z, delta, frog.bubble);
     }
 
     // My own circle and label.
@@ -442,6 +641,12 @@ export class GardenHub {
       this.hud.setWorldLabel(this.myLabel, status ? `<b>${status}</b>` : '');
       this.hud.updateWorldLabel(this.myLabel, new THREE.Vector3(pos.x, pos.y, 0), this.z + 46, Boolean(status));
     }
+
+    // Achievements: a tower of three frogs (you on top of one that stands on another, or one on you while you stand
+    // on one), and three visitors in your own garden.
+    const onMe = [...this.frogs.values()].some((frog) => frog.seen && frog.z > this.z + this.topHeight - 4 && Math.hypot(frog.position.x - pos.x, frog.position.y - pos.y) < STAND_RADIUS + 4);
+    if ((carrier && carrier.z > this.topHeight - 4) || (this.standingOn && onMe)) this.hooks.onAchieve?.('tower');
+    if (this.own && this.frogs.size >= 3) this.hooks.onAchieve?.('openhouse');
 
     // The HUD redraws when anything it shows changes: my party, its readiness, the countdown, who's here.
     const leader = this.leader;

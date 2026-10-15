@@ -3,7 +3,7 @@ import { meta, saveMeta } from './Meta.js';
 /**
  * Steeping: vows the player takes on before a run to make it harder, for a bigger score and more Golden Leaves.
  * Every rank of a vow adds its `heat` to the Steep level. Solo runs only (not the Daily Brew or co-op), so those
- * leaderboards stay fair.
+ * leaderboards stay fair. In co-op the host's vows count for everyone.
  */
 export const VOWS = [
   { id: 'swarm', icon: '🐝', name: 'Thick Swarm', heat: 1, ranks: 3, text: (r) => `${20 * r}% more bees in every wave` },
@@ -45,7 +45,12 @@ export function clearVows() {
   saveMeta();
 }
 
-/** The vows in force for a run: { id: rank } (none for the Daily Brew and co-op). */
-export function runVows({ daily, coop }) {
-  return daily || coop ? {} : { ...meta.vows };
+/**
+ * The vows in force for a run: { id: rank }. None for the Daily Brew; in co-op the host's vows (`shared`, sent with
+ * the start message), so the whole room plays the same Steep.
+ */
+export function runVows({ daily, coop, shared = null }) {
+  if (daily) return {};
+  if (coop) return { ...(shared ?? {}) };
+  return { ...meta.vows };
 }

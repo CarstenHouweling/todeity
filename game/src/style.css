@@ -3308,3 +3308,57 @@ body.touch .steep-badge {
   font-size: 12px;
   opacity: 0.75;
 }
+
+.coop-tabs {
+  align-items: center;
+  margin-top: 6px;
+}
+
+.coop-tabs span {
+  font-weight: 800;
+  margin-right: 4px;
+}
+
+/* Garden emotes (v0.24) */
+.emote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 28dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.emote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.emote span { font-size: 22px; }
+.emote small { font-size: 10px; line-height: 1.1; }
+.emote.locked { opacity: 0.4; cursor: default; }
+
+.world-label.emote-bubble {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 22px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.world-label.emote-bubble:empty {
+  display: none;
+}
+
+.menu.garden-walk .garden-flash {
+  margin-top: 8px;
+}

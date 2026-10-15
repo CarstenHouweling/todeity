@@ -63,6 +63,37 @@ export const KEEPSAKES = [
     id: 'teapot', icon: '🫖', name: "Grandma's Teapot", unlock: 'beezebub', text: 'Start the run Awakened.',
     apply: ({ grant }) => grant.awaken(),
   },
+  // v0.24
+  {
+    id: 'bandana', icon: '🎀', name: 'Silk Bandana', unlock: 'coop', text: 'Move 15% faster.',
+    apply: ({ stats }) => (stats.moveSpeed *= 1.15),
+  },
+  {
+    id: 'lilypad', icon: '🪷', name: 'Spare Lily Pad', unlock: 'whisker', text: 'Once per run, rise again with 2 hearts (on top of the Pantry\'s).',
+    apply: ({ stats }) => (stats.revives += 1),
+  },
+  {
+    id: 'scroll', icon: '📜', name: 'Old Scroll', unlock: 'skills6', text: 'Start the run with a random skill at level 2.',
+    apply: ({ grant }) => grant.skill(2),
+  },
+  {
+    id: 'thermos', icon: '🧋', name: 'Hot Thermos', unlock: 'daily', text: 'One more tea bomb, and bombs recharge 25% faster.',
+    apply: ({ stats }) => {
+      stats.bombCharges += 1;
+      stats.splashCooldown *= 0.75;
+    },
+  },
+  {
+    id: 'compass', icon: '🧭', name: 'Garden Compass', unlock: 'tower', text: 'Tea leaves fly to you from 50% farther and are worth 15% more.',
+    apply: ({ stats }) => {
+      stats.magnet *= 1.5;
+      stats.leafValue *= 1.15;
+    },
+  },
+  {
+    id: 'bell', icon: '🔔', name: 'Party Bell', unlock: 'party', text: 'In co-op, +10% damage for every other frog in the run.',
+    apply: ({ grant }) => grant.teamDamage(0.1),
+  },
 ];
 
 export const isKeepsakeUnlocked = (keepsake) => !keepsake.unlock || isUnlocked(keepsake.unlock);

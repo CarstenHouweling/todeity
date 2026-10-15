@@ -7,7 +7,7 @@
 //   POST /api/save/:code/buy  { id }     → { code, progress }            a Pantry upgrade
 //   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
-//   POST /api/save/:code/garden { name } → { garden }                    this save's public garden code
+//   POST /api/save/:code/garden { public? } → { garden, public }        this save's garden code (and make it public)
 //   POST /api/save/:code/profile { name, color } → { code, progress, profile }   the player tag (name, #tag, colour)
 //   GET  /api/garden/:garden             → { name, decor, level, … }     look at someone's garden
 //
@@ -20,7 +20,7 @@
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PANTRY, leavesForRun } from '../src/components/Meta.js';
+import { PANTRY, harvestBonus, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
@@ -145,6 +145,8 @@ function earned(id, run, progress) {
     case 'steep12': return run.steep >= 12 && beat(20, 4);
     case 'shrines': return run.wave >= 6;
     case 'coop': return run.coop && run.bossKills >= 1;
+    case 'coop4': return run.coop && run.coopSize >= 4 && run.bossKills >= 1;
+    case 'party': return run.coop;
     case 'daily': return run.daily && run.wave >= 10;
     case 'photo': return true;
     default: return run.wave >= 2; // combo50, duo, legendary, skills3, whisker, bitter
@@ -167,6 +169,7 @@ function applyRun(save, body, now) {
     goldLeaf: Boolean(body.goldLeaf),
     daily: Boolean(body.daily),
     coop: Boolean(body.coop),
+    coopSize: int(body.coopSize, 0, 4),
   };
   // The Daily Brew's twists pay more; only today's or yesterday's (a run can cross midnight) count.
   const today = new Date(now).toISOString().slice(0, 10);
@@ -193,6 +196,7 @@ function applyRun(save, body, now) {
     leavesForRun({ score: run.score / bonus / twists.score, wave: run.wave, bossKills: run.bossKills, victory: run.victory }) *
       bonus *
       twists.leaves *
+      harvestBonus(progress.levels) *
       (goldLeaf ? GOLDEN_LEAF : 1)
   );
   progress.leaves += leaves + fresh.reduce((sum, id) => sum + rewardFor(id), 0);
@@ -295,9 +299,10 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     save.garden ??= { code: newGardenCode(), name: null };
     gardens.set(save.garden.code, normalizeCode(save.code));
     save.garden.name = save.profile.name ?? publicName(body.name, null);
+    if (typeof body.public === 'boolean') save.garden.public = body.public; // listed for everyone, or code only
     save.updated = now;
     await persist();
-    return send(res, 200, { garden: save.garden.code });
+    return send(res, 200, { garden: save.garden.code, public: Boolean(save.garden.public) });
   }
   if (action === 'buy') {
     const error = applyBuy(save, String(body.id));
@@ -339,7 +344,15 @@ export async function handleGarden(req, res, url, { send, ip }) {
     rank,
     trinkets: ownedTrinkets(progress).length,
     beauty: gardenBeauty(progress.decor ?? []),
+    public: Boolean(save.garden.public),
   });
+}
+
+/** Public gardens: [{ garden, name, beauty, updated }] (GET /api/gardens adds who's in them). */
+export function publicGardens() {
+  return Object.values(saves)
+    .filter((save) => save.garden?.public)
+    .map((save) => ({ garden: save.garden.code, name: save.profile?.name ?? save.garden.name ?? 'A frog', beauty: gardenBeauty(save.progress.decor ?? []), updated: save.updated ?? 0 }));
 }
 
 /** A garden's public name, or undefined when there's no garden with that code (garden rooms check it). */

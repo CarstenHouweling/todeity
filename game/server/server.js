@@ -24,7 +24,7 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { randomBytes } from 'node:crypto';
-import { gardenName, handleGarden, handleSave, loadSaves, saveCount } from './saves.js';
+import { gardenName, handleGarden, handleSave, loadSaves, publicGardens, saveCount } from './saves.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
@@ -56,7 +56,10 @@ const MIME = {
 
 // --- Score storage ---------------------------------------------------------------
 
-let boards = { all: [], daily: {}, depth: [], speed: [] };
+// Co-op runs have boards of their own per team size (coop2, coop3, coop4): the host submits the team's score.
+const COOP_BOARDS = ['coop2', 'coop3', 'coop4'];
+const emptyBoards = () => ({ all: [], daily: {}, depth: [], speed: [], coop2: [], coop3: [], coop4: [] });
+let boards = emptyBoards();
 let saving = Promise.resolve();
 
 // Every entry has a short random `id` (the admin API deletes by it). Copies of one run on several boards share it.
@@ -64,13 +67,13 @@ const newId = () => randomBytes(5).toString('hex');
 
 async function loadScores() {
   try {
-    boards = { all: [], daily: {}, depth: [], speed: [], ...JSON.parse(await readFile(SCORES_FILE, 'utf8')) };
+    boards = { ...emptyBoards(), ...JSON.parse(await readFile(SCORES_FILE, 'utf8')) };
   } catch {
-    boards = { all: [], daily: {}, depth: [], speed: [] };
+    boards = emptyBoards();
   }
   // Scores from before entries had ids get one now.
   let added = 0;
-  for (const list of [boards.all, boards.depth, boards.speed, ...Object.values(boards.daily)]) {
+  for (const list of [boards.all, boards.depth, boards.speed, ...COOP_BOARDS.map((key) => boards[key]), ...Object.values(boards.daily)]) {
     for (const entry of list) {
       if (entry.id) continue;
       entry.id = newId();
@@ -130,7 +133,7 @@ function parseEntry(body) {
   };
   // A loose sanity check: scores grow with time and kills, not out of nowhere.
   // The Daily Brew's trials multiply the score too (at most about ×2.6 on a Trial Day).
-  const plausible = entry.score <= (2_000 + entry.kills * 200 + entry.wave * 2_000) * (1 + 0.12 * entry.steep) * (body.daily ? 2.6 : 1);
+  const plausible = entry.score <= (2_000 + entry.kills * 200 + entry.wave * 2_000) * (1 + 0.12 * entry.steep) * (body.daily ? 2.6 : 1) * Math.max(1, clampInt(body.coop, 1, 4));
   return plausible ? entry : null;
 }
 
@@ -171,7 +174,7 @@ function readBody(req) {
 async function handleScores(req, res, url) {
   if (req.method === 'GET') {
     const limit = clampInt(url.searchParams.get('limit') ?? 10, 1, KEEP);
-    const name = ['daily', 'depth', 'speed'].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'all';
+    const name = ['daily', 'depth', 'speed', ...COOP_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'all';
     const date = url.searchParams.get('date') || today();
     const board = name === 'daily' ? boards.daily[date] ?? [] : boards[name];
     return send(res, 200, { board: name, date, scores: board.slice(0, limit) });
@@ -190,6 +193,14 @@ async function handleScores(req, res, url) {
     }
     const entry = parseEntry(body);
     if (!entry) return send(res, 400, { error: 'That score looks a bit too good to be true.' });
+    // A co-op team's score goes on its own board only.
+    const size = clampInt(body.coop, 0, 4);
+    if (size >= 2) {
+      entry.team = (Array.isArray(body.team) ? body.team : []).slice(0, size).map((name) => cleanName(name));
+      const coopRank = insert(boards[`coop${size}`], entry);
+      await saveScores();
+      return send(res, 201, { coopRank });
+    }
 
     const rank = insert(boards.all, entry);
     const depthRank = insert(boards.depth, { ...entry }, ORDERS.depth);
@@ -417,12 +428,16 @@ function gardenRelay(client, type, data) {
   for (const other of room.clients.values()) if (other !== client && other.ws.readyState === 1) other.ws.send(out);
 }
 
-/** GET /api/gardens: the liveliest gardens right now. */
+/**
+ * GET /api/gardens: the public gardens (their owners chose to list them), liveliest first, then the loveliest.
+ * Private gardens are only visited with their code, never listed.
+ */
 function listGardens(res) {
-  const list = [...gardenRooms.values()]
-    .map((room) => ({ garden: room.code, name: gardenName(room.code) ?? 'A frog', frogs: room.clients.size, max: GARDEN_MAX }))
-    .sort((a, b) => b.frogs - a.frogs)
-    .slice(0, 30);
+  const list = publicGardens()
+    .map((garden) => ({ ...garden, frogs: gardenRooms.get(garden.garden)?.clients.size ?? 0, max: GARDEN_MAX }))
+    .sort((a, b) => b.frogs - a.frogs || b.beauty - a.beauty || b.updated - a.updated)
+    .slice(0, 30)
+    .map(({ updated, ...garden }) => garden);
   send(res, 200, { gardens: list });
 }
 

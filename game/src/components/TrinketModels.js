@@ -329,6 +329,66 @@ const BUILDERS = {
       foot.scale.set(2.6 + Math.sin(t * 3) * 0.15, 0.7, 1);
     };
   },
+  trampoline: (g) => {
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      g.add(cyl(1.2, 1.2, 8, mat('#3a3a3a', { metal: 0.6 }), [Math.cos(a) * 17, 4, Math.sin(a) * 17], 5));
+    }
+    g.add(torus(19, 2, mat('#5fb8ff', { rough: 0.4 }), [0, 8.5, 0], [Math.PI / 2, 0, 0]));
+    const pad = cyl(18, 18, 1.2, mat('#4caf3a', { emissive: '#1f5a10', intensity: 0.3 }), [0, 8.5, 0], 20);
+    g.add(pad);
+    const flower = ball(2.5, mat('#ff9ec7', { emissive: '#a0284a', intensity: 0.4 }), [6, 9.5, 4], 0);
+    g.add(flower);
+    // A bounce (TitleGarden sets `bounce` when a frog lands on it) makes the pad dip and spring back.
+    g.userData.anim = (t) => {
+      const dip = g.userData.springAt ? Math.max(0, 1 - (t - g.userData.springAt) * 3) : 0;
+      pad.position.y = 8.5 - Math.sin(dip * Math.PI * 3) * 2.5 * dip;
+      flower.position.y = pad.position.y + 1;
+    };
+  },
+  ball: (g) => {
+    const steel = mat('#d8dde6', { metal: 0.9, rough: 0.25 });
+    g.add(ball(8, mat('#c98a2b', { rough: 0.6 }), [0, 8, 0], 1)); // the tea leaves inside
+    for (let i = 0; i < 4; i++) g.add(torus(8.6, 0.6, steel, [0, 8, 0], [0, (i / 4) * Math.PI, 0]));
+    g.add(torus(8.6, 0.6, steel, [0, 8, 0], [Math.PI / 2, 0, 0]));
+    g.add(torus(1.6, 0.4, steel, [0, 17, 0], [0, 0, 0]));
+  },
+  launcher: (g) => {
+    g.add(box(30, 6, 22, WOOD(), [0, 3, 0]));
+    for (const z of [-12, 12]) for (const x of [-10, 10]) g.add(cyl(4, 4, 2, mat('#3a2a1a'), [x, 4, z], 10, [Math.PI / 2, 0, 0]));
+    const pot = mat('#7fb8d6', { rough: 0.35, metal: 0.2 });
+    const body = ball(11, pot, [-2, 16, 0]);
+    body.scale.set(1.1, 0.9, 1);
+    g.add(body);
+    // The spout points along +X (the way frogs are fired) and up.
+    g.add(cyl(3.5, 6, 20, pot, [12, 22, 0], 10, [0, 0, -1.05]));
+    g.add(torus(4, 1, GOLD(), [20.5, 26.5, 0], [0, Math.PI / 2, 0.52]));
+    g.add(cyl(4, 6, 4, pot, [-2, 26, 0], 10));
+    g.add(ball(1.8, GOLD(), [-2, 29, 0], 0));
+    const puff = ball(3, mat('#ffffff', { opacity: 0.7 }), [22, 28, 0], 0);
+    g.add(puff);
+    g.userData.anim = (t) => {
+      const k = (t * 0.6) % 1;
+      puff.position.set(22 + k * 6, 28 + k * 12, 0);
+      puff.scale.setScalar(0.5 + k);
+    };
+  },
+  stage: (g) => {
+    g.add(cyl(30, 32, 8, WOOD(), [0, 4, 0], 16));
+    g.add(cyl(29, 29, 0.6, mat('#b8322a', { rough: 0.8 }), [0, 8.3, 0], 16));
+    for (const side of [-1, 1]) {
+      g.add(cyl(1, 1, 34, mat('#3a3a3a', { metal: 0.6 }), [side * 26, 17, -14], 5));
+      const lamp = cone(4, 6, mat('#2a2a2a', { metal: 0.5 }), [side * 24, 33, -12], 8, [0.6, 0, side * 0.5]);
+      g.add(lamp);
+      g.add(ball(2, mat('#fff2a0', { emissive: '#ffd36b', intensity: 1.5 }), [side * 23, 31, -10], 0));
+    }
+    const stars = [0, 1, 2].map((i) => ball(1.2, mat('#fff27a', { emissive: '#ffd36b', intensity: 1.4 }), [0, 0, 0], 0));
+    g.add(...stars);
+    g.userData.anim = (t) => stars.forEach((star, i) => {
+      const a = t * 0.9 + (i / 3) * Math.PI * 2;
+      star.position.set(Math.cos(a) * 24, 14 + Math.sin(t * 2 + i) * 3, Math.sin(a) * 24);
+    });
+  },
   scarebee: (g) => {
     g.add(cyl(1, 1, 34, WOOD(), [0, 17, 0], 5));
     g.add(box(22, 1.5, 1.5, WOOD(), [0, 24, 0]));
@@ -361,6 +421,7 @@ export function buildTrinket(id) {
   group.add(body);
   group.userData.trinket = id;
   group.userData.animate = inner.userData.anim ?? null;
+  group.userData.inner = inner;
   // Trinkets that shine light a pool of the lawn around them at night.
   if (GLOWS[id]) {
     const glow = new THREE.Mesh(

@@ -11,7 +11,7 @@ import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TIL
 import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
-import { BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
+import { ALL_BREWS, BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
 import { babble, hush, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
@@ -21,10 +21,10 @@ import { Effects } from './components/Effects.js';
 import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ultimates.js';
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
-import { boss as bossMemory, buy, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
+import { boss as bossMemory, buy, harvestBonus, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
 import { SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
-import { unlock } from './components/Achievements.js';
+import { ACHIEVEMENTS, unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
 import { fetchRooms, Net } from './components/Net.js';
@@ -32,7 +32,7 @@ import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile, setGardenPublic } from './components/CloudSave.js';
 import { randomName } from './components/PlayerTag.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
@@ -51,6 +51,8 @@ import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
 import { ownedTrinkets } from './components/Rewards.js';
 import { TitleGarden } from './components/TitleGarden.js';
 import { GardenHub } from './components/GardenHub.js';
+import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
+import { EMOTES, emoteUnlocked } from './components/Emotes.js';
 import { setPresence, startPresence } from './components/Presence.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
@@ -415,6 +417,8 @@ function achieve(id) {
   const achievement = unlock(id);
   if (!achievement) return;
   hud.showAchievement(achievement, keepsakeFor(id));
+  // In a garden the HUD is hidden: say it over the garden bar.
+  if (decorating) hud.gardenFlash(`${achievement.icon} ${achievement.name}! +${achievement.reward} 🍃${keepsakeFor(id) ? ` · new keepsake ${keepsakeFor(id).icon}` : ''}`);
   play('legendary');
 }
 
@@ -805,6 +809,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
     if (clock.elapsedTime - (enemy.lastShieldPing ?? 0) > 0.4) {
       enemy.lastShieldPing = clock.elapsedTime;
       hud.damageNumber(enemy.position, '🔒', enemy.height + 4, 'frost');
+      lockedHint(enemy);
     }
     return;
   }
@@ -899,6 +904,7 @@ function bossDefeated(name, score, kind) {
   if (steep >= 5 && kind === 'shogun') achieve('steep5');
   if (steep >= 12 && kind === 'empress') achieve('steep12');
   if (coop) achieve('coop');
+  if (coop?.size >= 4) achieve('coop4');
   bossKills++;
   hud.setBoss(null);
   shake = BOSS_DEATH_SHAKE;
@@ -1493,7 +1499,26 @@ function attune(enemy, owner) {
   const mine = owner === net.id;
   const info = mine ? null : coop?.remotes.get(owner);
   const color = mine ? net.players.find((p) => p.id === net.id)?.color ?? '#7fd8ff' : info?.color ?? '#7fd8ff';
-  hud.setEnemyLabel(enemy, mine ? '🛡 YOURS' : `🛡 ${info?.name ?? 'Teammate'}'s`, color);
+  hud.setEnemyLabel(enemy, mine ? '⬇ YOURS: smash it!' : `🔒 ${info?.name ?? 'Teammate'}'s`, color);
+  // A ring in the owner's colour on the ground; your own get a pillar of light too, visible across the arena.
+  const ring = new THREE.Mesh(new THREE.RingGeometry(enemy.radius + 10, enemy.radius + 18, 40), additive(color, mine ? 0.85 : 0.35));
+  ring.position.z = 0.8;
+  ring.userData.attune = true;
+  enemy.group.add(ring);
+  if (mine) {
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 260, 16, 1, true).rotateX(Math.PI / 2).translate(0, 0, 130), additive(color, 0.3));
+    pillar.userData.attune = true;
+    enemy.group.add(pillar);
+  }
+}
+
+/** Co-op: a hit on a teammate's ward or guardian says so, once in a while, in words. */
+let lockedHintAt = -9;
+function lockedHint(enemy) {
+  if (clock.elapsedTime - lockedHintAt < 3) return;
+  lockedHintAt = clock.elapsedTime;
+  const name = coop?.remotes.get(enemy.owner)?.name ?? 'a teammate';
+  hud.showCallout(`🔒 That one is ${name}'s! Smash the one with YOUR pillar of light`);
 }
 
 /** A ward's owner who is down or gone can't break it, so then anyone may. */
@@ -1522,7 +1547,8 @@ function beginRaid(boss, task, spots) {
   postfx.flash(SHIELD_COLOR, 0.4);
   shake = Math.max(shake, 12);
   effects.ring(boss.position, { radius: 280, color: SHIELD_COLOR, duration: 0.8, thickness: 0.2 });
-  const job = { wards: `Smash the ${spots.length} shield wards!`, lights: `Hold the ${spots.length} circles of light!`, guardians: `Defeat the ${spots.length} Hive Guardians!` }[task];
+  const each = coop && task !== 'lights' ? ' Each frog has their own: find YOUR pillar of light!' : '';
+  const job = { wards: `Smash the ${spots.length} shield wards!${each}`, lights: `Hold the ${spots.length} circles of light!`, guardians: `Defeat the ${spots.length} Hive Guardians!${each}` }[task];
   hud.showBanner(`🛡 ${boss.type.name} is shielded!`, job, 2.6);
 }
 
@@ -1606,7 +1632,10 @@ function raidTargets() {
   if (!raid) return urgent;
   const task = raid.task === 'lights'
     ? raid.zones.filter((zone) => !zone.done).map((zone) => zone.position)
-    : enemies.filter((enemy) => (raid.task === 'guardians' ? enemy.kind === 'guardian' : enemy.type.ward) && !enemy.dying).map((enemy) => enemy.position);
+    : enemies
+        .filter((enemy) => (raid.task === 'guardians' ? enemy.kind === 'guardian' : enemy.type.ward) && !enemy.dying)
+        .filter((enemy) => !enemy.owner || enemy.owner === net.id || ownerAway(enemy.owner)) // arrows only to yours
+        .map((enemy) => enemy.position);
   return [...urgent, ...task];
 }
 
@@ -3956,12 +3985,34 @@ const hub = new GardenHub(
     onGo: (code) => joinParty(code),
     onSetOff: (party) => setOffWithParty(party),
     onDecor: (decor) => !garden.editing && garden.load(decor),
+    onAchieve: (id) => achieve(id),
     onFull: () => {
       closeGarden();
       hud.showGardenVisitForm('That garden is full right now. Try another one!');
     },
   }
 );
+// What frogs stand on in a garden: the house (sampled once) and the trinkets (GardenPhysics.js).
+let houseField = null;
+hub.world = {
+  heightAt(x, y) {
+    let best = { h: houseField?.at(x, y) ?? 0, item: null };
+    for (const item of garden.items) {
+      if (item.id === 'ball' || item.fresh || item === garden.held) continue;
+      if (Math.abs(item.x - x) > 60 || Math.abs(item.y - y) > 60) continue;
+      const h = trinketHeightAt(item, x, y);
+      if (h > best.h) best = { h, item };
+    }
+    return best;
+  },
+  items: () => garden.items,
+  spring: (item) => garden.spring(item),
+};
+let showEmotes = false;
+
+/** My emotes: the free ones and those my achievements unlocked, in order (keys 1–9 play the first nine). */
+const myEmotes = () => EMOTES.filter((emote) => emoteUnlocked(emote, meta.achievements));
+
 let gardenVisit = null; // the garden we're in: { code, own, owner }
 let ownGardenCode = null;
 let settingOff = false;
@@ -3984,6 +4035,8 @@ const walkInfo = () => {
     ready: hub.ready,
     night: Boolean(meta.gardenNight),
     touch: touch.enabled,
+    public: Boolean(cloud.gardenPublic),
+    emotes: showEmotes ? EMOTES.map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta.achievements), hint: ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name })) : null,
   };
 };
 
@@ -3994,6 +4047,7 @@ function refreshGardenWalk() {
 /** Into a garden as a hopping frog: `code` (null offline), `own`, `owner` (the name on a visited garden). */
 function enterGarden({ code, own, owner = null }) {
   hud.hideModal();
+  houseField ??= houses[0] ? heightField(houses[0].house, { cell: 4 }) : null;
   decorating = true;
   gardenVisit = { code, own, owner };
   settingOff = false;
@@ -4145,6 +4199,11 @@ function gardenKeys(delta) {
     if (input.wasPressed('KeyF')) MENU_ACTIONS['garden-invite']();
     if (input.wasPressed('KeyR')) MENU_ACTIONS['garden-ready']();
     if (input.wasPressed('KeyN')) MENU_ACTIONS['garden-night']();
+    if (input.wasPressed('KeyB')) hub.boop();
+    // 1–9: emotes.
+    ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'].forEach((key, i) => {
+      if (input.wasPressed(key) && myEmotes()[i]) hub.playEmote(myEmotes()[i].id);
+    });
     return;
   }
   hub.update(delta, moveWanted.set(0, 0, 0), false, false); // editing: others keep moving, Tode stands still
@@ -4178,7 +4237,30 @@ async function claim(kind) {
   hud.showReward(kind, result);
 }
 
+/** What this player is doing, for the admin page's "who's online" (Presence.js). */
+let presenceTimer = 0;
+function presenceNow() {
+  const base = { n: playerName() || null, g: meta.profile?.tag ?? null, c: (PLAYING.has(phase) || phase === 'gameover' ? runClass : chosenClass())?.id };
+  if (decorating) {
+    const where = gardenVisit?.own ? 'own garden' : `${gardenVisit?.owner ?? 'someone'}'s garden`;
+    const extra = [hub.count > 1 && `${hub.count} frogs`, garden.editing && 'decorating', hub.inviting && `inviting (${hub.party.length + 1}/4)`, hub.leader && `in ${hub.leader.name}'s party`];
+    return { s: gardenVisit?.own ? 'garden' : 'visit', d: [where, ...extra].filter(Boolean).join(' · '), ...base };
+  }
+  if (phase === 'title' || phase === 'loading') {
+    if (hud.menuName === 'lobby') return { s: 'lobby', d: net.inRoom ? `room ${net.code} (${net.players.length}/4${net.isPublic ? ', public' : ''})` : 'co-op lobby', ...base };
+    return { s: 'title', d: hud.menuName && hud.menuName !== 'title-screen' ? hud.menuName : '', ...base };
+  }
+  if (phase === 'gameover') return { s: 'gameover', d: `${coop ? `co-op ×${coop.size} · ` : ''}wave ${wave} · ${Math.floor(score).toLocaleString()} pts`, ...base };
+  if (phase === 'story' || phase === 'ending') return { s: phase, d: '', ...base };
+  const d = [coop && `co-op ×${coop.size}${coop.host ? ' (host)' : ''}`, isDaily() && 'Daily Brew', `wave ${wave}`, arena.name, `Lv ${playerLevel}`, steep && `Steep ${steep}`, player.downed && 'down'];
+  return { s: phase === 'paused' ? 'paused' : coop ? 'coop' : isDaily() ? 'daily' : 'run', d: d.filter(Boolean).join(' · '), ...base };
+}
+
 function updateGarden(delta) {
+  if ((presenceTimer -= delta) <= 0) {
+    presenceTimer = 1;
+    setPresence(presenceNow());
+  }
   garden.setVisible(phase === 'title');
   if (phase !== 'title') return;
   garden.update(delta);
@@ -4486,8 +4568,6 @@ function setPhase(next, duration = 0) {
   phase = next;
   phaseTimer = duration;
   updateMusic();
-  // What this player is doing, for the online count on the admin page.
-  setPresence(PLAYING.has(next) || next === 'skill' || next === 'choosing' || next === 'ultimate' ? (coop ? 'coop' : isDaily() ? 'daily' : 'run') : ['title', 'gameover', 'paused'].includes(next) ? next : 'other');
 }
 
 /**
@@ -5980,7 +6060,12 @@ function handleNet(from, message) {
       if (remote) SKILLS[message.id]?.cast(remoteCtx(remote, vec(message.t)), vec(message.t), message.lv);
       break;
     case 'start':
-      startCoopRun(message.players);
+      startCoopRun(message.players, message.vows ?? {});
+      break;
+    case 'steep':
+      // The host's Steep, shown in the room before the run.
+      roomSteep = message.s ?? 0;
+      if (!coop && hud.menuName === 'lobby' && net.inRoom) showRoom();
       break;
     case 'wave':
       if (isGuest()) {
@@ -6111,14 +6196,17 @@ function needName(next) {
 }
 
 function showLobby() {
-  hud.showLobby({ view: 'start', name: playerName(), error: lobbyError, rooms: publicRooms });
+  hud.showLobby({ view: 'start', name: playerName(), error: lobbyError, rooms: publicRooms, gardens: lobbyGardens });
   lobbyError = null;
   pollRooms();
 }
 
+let roomSteep = 0; // guests: the host's Steep for the coming run
+
 function showRoom() {
   const players = net.players.map((p) => ({ ...p, isHost: p.id === net.hostId }));
-  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost, invite: inviteLink(), isPublic: net.isPublic });
+  if (net.isHost) net.relay('all', [{ k: 'steep', s: steepLevel() }]);
+  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost, invite: inviteLink(), isPublic: net.isPublic, steep: net.isHost ? steepLevel() : roomSteep });
 }
 
 // The public rooms list: refreshed every few seconds while the lobby is open, and now and then on the title screen
@@ -6127,10 +6215,16 @@ let publicRooms = null;
 let roomsPoll = null;
 let titleRoomsTimer = 0;
 
+let lobbyGardens = null;
+
 async function refreshRooms() {
   publicRooms = await fetchRooms();
   hud.setLobbyRooms(publicRooms);
   hud.setCoopRooms(publicRooms);
+  if (hud.menuName === 'lobby') {
+    lobbyGardens = await fetchGardens();
+    hud.setLobbyGardens(lobbyGardens);
+  }
 }
 
 function pollRooms() {
@@ -6201,11 +6295,13 @@ function hostStartCoop() {
   if (!net.isHost) return;
   net.start();
   const players = net.players.map(({ id, name, color }) => ({ id, name, color }));
-  net.relay('all', [{ k: 'start', players }]);
-  startCoopRun(players);
+  // The host's Steeping vows count for the whole room.
+  const shared = { ...meta.vows };
+  net.relay('all', [{ k: 'start', players, vows: shared }]);
+  startCoopRun(players, shared);
 }
 
-function startCoopRun(players) {
+function startCoopRun(players, sharedVows = {}) {
   leaveCoop({ keepConnection: true });
   coop = { host: net.isHost, remotes: new Map(), ready: new Set(), size: players.length };
   for (const info of players) {
@@ -6215,7 +6311,7 @@ function startCoopRun(players) {
     remote.load();
   }
   buildWorld(COOP_TILES[Math.min(players.length, 4) - 1]);
-  startRun({ coop: true });
+  startRun({ coop: true, vows: sharedVows });
 }
 
 function dropMissingTeammates() {
@@ -6371,7 +6467,8 @@ function clearWorld() {
   hud.clearWorldLabels();
 }
 
-function startRun({ daily = false, coop: coopRun = false } = {}) {
+function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = null } = {}) {
+  if (coopRun && settingOff) achieve('party'); // set off from a garden party
   leaveGardenView(); // a party setting off from a garden
   if (!coopRun && coop) leaveCoop();
   if (!coopRun && worldTiles !== SOLO_TILES) buildWorld(SOLO_TILES);
@@ -6402,7 +6499,7 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   muffleMusic(false);
 
   // Steeping: the vows taken for this run (never in the Daily Brew or co-op).
-  vows = runVows({ daily, coop: coopRun });
+  vows = runVows({ daily, coop: coopRun, shared: sharedVows });
   steep = steepLevel(vows);
   hud.setSteep(steep);
 
@@ -6428,8 +6525,24 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
   stats.magnet *= 1 + 0.25 * pantry('magnet');
   stats.dashCooldown *= 1 - 0.1 * pantry('spring');
   stats.revives += pantry('revive');
+  stats.critChance += 0.02 * pantry('crit');
+  stats.leafValue *= 1 + 0.1 * pantry('study');
+  stats.splashDamage = Math.round(stats.splashDamage * (1 + 0.15 * pantry('kettle')));
+  stats.splashRadius *= 1 + 0.08 * pantry('kettle');
   rerolls = pantry('reroll');
   luck = pantry('luck');
+  // Morning Brew: a random brew to start with (Rare from level 2).
+  if (pantry('morning')) {
+    seeded(() => {
+      const pool = ALL_BREWS.filter((brew) => brew.kind === 'brew' && !brew.needsUltimate && !(brewLevels.get(brew.id) >= brew.maxLevel));
+      const brew = pool[Math.floor(Math.random() * pool.length)];
+      const rarity = pantry('morning') >= 2 ? 1 : 0;
+      brewLevels.set(brew.id, (brewLevels.get(brew.id) ?? 0) + 1);
+      brewTexts.set(brew.id, describe({ brew, value: brew.values?.[rarity], rarity }));
+      brew.apply(player, brew.values?.[rarity]);
+    });
+    refreshOwned();
+  }
 
   // Charms and the keepsake.
   charmCounts.clear();
@@ -6451,6 +6564,13 @@ function startRun({ daily = false, coop: coopRun = false } = {}) {
       leaves: (factor) => (leafBonus = factor),
       fullGauge: () => (fullGaugeStart = true),
       awaken: () => (awaken = true),
+      skill: (level = 1) => {
+        // A random skill not known yet, at `level`.
+        const pool = Object.values(SKILLS).filter((skill) => !skill.fusion && !skills.level(skill.id));
+        const skill = seeded(() => pool[Math.floor(Math.random() * pool.length)]);
+        for (let i = 0; i < level; i++) skills.learn(skill.id);
+      },
+      teamDamage: (per) => coopRun && (stats.damageMultiplier *= 1 + per * (coop?.size - 1 || 0)),
     },
   });
   applyTwists(stats, () => (awaken = true));
@@ -6565,7 +6685,7 @@ function endRun({ victory = false } = {}) {
   const bonus = steepBonus(steep);
   // The Daily Brew's trials raise the score and the leaves; the score already has its multiplier.
   const twistScore = twistDay?.score ?? 1;
-  const leaves = Math.round(leavesForRun({ score: finalScore / bonus / twistScore, wave, bossKills, victory }) * bonus * leafBonus * (twistDay?.leaves ?? 1));
+  const leaves = Math.round(leavesForRun({ score: finalScore / bonus / twistScore, wave, bossKills, victory }) * bonus * leafBonus * (twistDay?.leaves ?? 1) * harvestBonus(meta.levels));
   // What ended the run: the boss of a boss wave if it still stands, otherwise the swarm.
   const bossAlive = config?.isBoss && enemies.some((enemy) => enemy.type.boss && !enemy.dying);
   const killer = victory ? null : bossAlive ? config.boss : 'swarm';
@@ -6578,7 +6698,7 @@ function endRun({ victory = false } = {}) {
   // The server has the final word on the leaves (cloud saves); this screen shows the local count meanwhile.
   reportRun({
     wave, bossKills, victory, score: finalScore, kills, time: Math.floor(timeAlive), steep,
-    maxTier: ascension.tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop), dailyKey: twistDay?.key,
+    maxTier: ascension.tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop), coopSize: coop?.size ?? 0, dailyKey: twistDay?.key,
   });
 
   const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier >= 4, killer });
@@ -6594,6 +6714,10 @@ function endRun({ victory = false } = {}) {
     daily: isDaily(),
     steep,
     cls: runClass.id,
+    // Co-op: the team (the host submits it to the board for its size).
+    coop: coop?.size ?? 0,
+    team: coop ? [playerName() || 'Frog', ...[...coop.remotes.values()].map((remote) => remote.name)] : null,
+    host: !coop || coop.host,
   };
   lastBuild = runBuild();
   hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild });
@@ -6717,11 +6841,12 @@ async function submitRun(name) {
     hud.showSubmitted(result.error, null);
     return;
   }
-  // Show the board this run shines on: the speed board for a Bee-zebub kill, else score (or the Daily Brew).
-  const board = lastRun.daily ? 'daily' : lastRun.clear ? 'speed' : 'all';
-  const rank = { daily: result.dailyRank, speed: result.speedRank, all: result.rank }[board];
+  // Show the board this run shines on: the team's co-op board, the speed board for a Bee-zebub kill, else score
+  // (or the Daily Brew).
+  const board = lastRun.coop >= 2 ? `coop${lastRun.coop}` : lastRun.daily ? 'daily' : lastRun.clear ? 'speed' : 'all';
+  const rank = board.startsWith('coop') ? result.coopRank : { daily: result.dailyRank, speed: result.speedRank, all: result.rank }[board];
   const scores = await fetchScores(board, 10);
-  const where = { daily: "today's Daily Brew", speed: 'the fastest Bee-zebub board', all: 'the leaderboard' }[board];
+  const where = board.startsWith('coop') ? `the ${lastRun.coop}-frog co-op board` : { daily: "today's Daily Brew", speed: 'the fastest Bee-zebub board', all: 'the leaderboard' }[board];
   hud.showSubmitted(rank ? `You're #${rank} on ${where}! 🎉` : `Score submitted to ${where}.`, scores, rank, board);
   if (rank && rank <= 3) play('victory');
 }
@@ -6908,6 +7033,21 @@ const MENU_ACTIONS = {
   'garden-done': doneEditing,
   'garden-leave': closeGarden,
   'garden-edit': editGarden,
+  'garden-emotes': () => {
+    showEmotes = !showEmotes;
+    refreshGardenWalk();
+  },
+  emote: ({ id }) => {
+    const emote = EMOTES.find((e) => e.id === id);
+    if (emote && emoteUnlocked(emote, meta.achievements)) hub.playEmote(id);
+  },
+  'garden-boop': () => hub.boop(),
+  'garden-public': async () => {
+    const now = await setGardenPublic(!cloud.gardenPublic);
+    if (now === null) return;
+    play(now ? 'legendary' : 'click');
+    refreshGardenWalk();
+  },
   'garden-invite': () => {
     if (!garden.walking || hub.leader || settingOff) return;
     hub.toggleInvite();
@@ -6972,7 +7112,9 @@ const MENU_ACTIONS = {
     if (chooseKeepsake(id)) play('pick');
     hud.showKeepsakes();
   },
-  steeping: () => hud.showSteeping(),
+  steeping: () => hud.showSteeping('title'),
+  'coop-steeping': () => net.isHost && hud.showSteeping('room'),
+  'coop-room': () => (net.inRoom ? showRoom() : showLobby()),
   vow: ({ id }) => {
     cycleVow(id);
     play(steepLevel() ? 'charge' : 'click');

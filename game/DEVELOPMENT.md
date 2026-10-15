@@ -80,7 +80,10 @@ Score entries have a short random `id` (assigned on insert; older entries get on
 Copies of one run on several boards share the id; deleting removes it from one board.
 
 **Presence.** Every open game keeps a tiny socket on `/ws?presence=1` (`components/Presence.js`, server side
-`server/presence.js`) that only reports a state word (`{ t: 'state', s: 'run' }`). These sockets live in their own
+`server/presence.js`) that reports what the player is doing: `{ t: 'state', s, n, g, c, d }` (a state word such as
+title, garden, visit, lobby, run, daily, coop, paused or gameover; the player tag's name and #tag; the frog class;
+a detail line like "co-op ×3 (host) · wave 7 · Sage Mountain"). main.js sends `presenceNow()` once a second when it
+changed. The admin page's "Who's online" table lists everyone (only the admin API shows names). These sockets live in their own
 `WebSocketServer`, never reach the co-op relay, and are capped (128-byte messages, about one per second, 8 per IP,
 5000 in total) and pinged every 20 s. Co-op sockets are capped at 16 per IP. main.js opens it at boot
 (`startPresence`) and `setPhase` reports title, run, daily, coop, paused or gameover.
@@ -237,7 +240,7 @@ Copies of one run on several boards share the id; deleting removes it from one b
   at 45% speed and steering it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams; the tongue is a Bézier tube from
   its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame).
-- **Achievements** (`components/Achievements.js`): 35, each with its own `reward` (3 to 60 Golden Leaves), shown
+- **Achievements** (`components/Achievements.js`): 39, each with its own `reward` (3 to 60 Golden Leaves), shown
   in the Pantry. The server checks each against the run report (`earned()` in `server/saves.js`), so a new
   achievement needs a rule there too. Run bookkeeping for them lives in `feats` (main.js).
   First-run **tips** appear once each (`meta.tips`).
@@ -300,6 +303,13 @@ Copies of one run on several boards share the id; deleting removes it from one b
   `WORDS` only as whole words, so Spicy or Peacock pass); the server also runs leaderboard, co-op and garden names
   through `publicName()`. 🏷 on the title (and the co-op lobby's "Playing as" chip) opens `hud.showProfile`;
   `needName(next)` asks for a name before the first co-op or garden step.
+- **The playground** (v0.24): the house and trinkets are solid (`GardenPhysics.js`: height fields sampled once by
+  raycasting down, `hub.world.heightAt`; walls stop you unless they're within `STEP_UP`, tops can be stood on).
+  `BOUNCE` (trampoline, Fairy Ring) throws frogs up; the Teapot Cannon fires them along its facing (`CANNON`); the
+  Tea Ball is shared physics (whoever touches it kicks it and sends a `ball` event; everyone simulates). Emotes
+  (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B: a `boop` event shoves the other frog
+  on its own screen). Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
+  `GET /api/gardens` lists only public ones (also in the co-op lobby). Garden achievements: `tower`, `openhouse`.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
@@ -378,6 +388,12 @@ Copies of one run on several boards share the id; deleting removes it from one b
   Petal Shield and Stolen Honey upgrades always improve the current value (their card text depends on the level).
   The ultimate gauge fills by the health actually taken off bees divided by the wave's `hpScale`, so it charges at
   the same pace all run.
+- **Co-op carries everything:** Pantry upgrades and the keepsake apply in co-op (`startRun` is the same), and since
+  v0.24 so does Steeping: the host's vows go out with the `start` message (`runVows({ coop, shared })`), the room
+  view shows the Steep and the host's "Change vows" button opens the Steeping screen (`showSteeping('room')`).
+  Co-op scores go to their own boards (`coop2`/`coop3`/`coop4` in server.js, with the `team`); only the host
+  submits. Wards and guardians attuned to a player get a ring in the owner's colour (and a pillar of light for your
+  own), arrows only point at yours, and hitting a teammate's says whose it is (`lockedHint`).
 - **Sharing a run:** the game-over screen shows everything gathered (ultimate, skills, brews) and a 📤 Share button
   that opens a popup with a 1200×630 card drawn on a canvas (`ShareCard.js`: score, time, wave, level, bees, form,
   build, the last frame as a backdrop) plus a text line. Share uses the native share sheet (image + text) where
@@ -512,6 +528,8 @@ server proxies `/ws` and `/api`).
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
+| `components/GardenPhysics.js` | Height fields: what frogs stand on in a garden (the house, trinkets). |
+| `components/Emotes.js` | Garden emotes and their achievement unlocks. |
 | `components/PlayerTag.js` | The player tag rules: name cleaning and filtering, colours, random names, #tags (shared with the server). |
 | `components/Quality.js` | The Auto / High / Low setting: quality steps, `looksWeak()` device guess. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |

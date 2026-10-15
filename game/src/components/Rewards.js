@@ -47,6 +47,11 @@ export const TRINKETS = [
   { id: 'duck', name: 'Pond Duck', icon: '🦆', source: 'kettle', how: 'Brewed by the tea kettle' },
   { id: 'snail', name: 'Snail Buddy', icon: '🐌', source: 'kettle', how: 'Brewed by the tea kettle' },
   { id: 'scarebee', name: 'Scare-bee', icon: '🎃', source: 'kettle', how: 'Brewed by the tea kettle' },
+  // The playground (v0.24): things to play with together in a garden.
+  { id: 'trampoline', name: 'Lily Pad Trampoline', icon: '🤸', source: 'milestone', how: 'Play your first run', unlock: (p) => p.runs >= 1, play: 'Bounce on it' },
+  { id: 'ball', name: 'Tea Ball', icon: '⚪', source: 'milestone', how: 'Play 2 runs', unlock: (p) => p.runs >= 2, play: 'Hop into it to kick it' },
+  { id: 'launcher', name: 'Teapot Cannon', icon: '💨', source: 'milestone', how: 'Defeat a boss', unlock: (p) => p.bossKills >= 1, play: 'Hop in: it fires you across the garden' },
+  { id: 'stage', name: 'Little Stage', icon: '🎤', source: 'milestone', how: 'Earn 5 achievements', unlock: (p) => (p.achievements?.length ?? 0) >= 5, play: 'Stand on it and emote' },
 ];
 export const trinketById = (id) => TRINKETS.find((t) => t.id === id);
 const KETTLE_TRINKET_CHANCE = 0.3;
@@ -176,6 +181,7 @@ export const SETS = [
   { id: 'zen', name: 'Zen Corner', icon: '🎐', parts: ['bonsai', 'lantern', 'chimes'], beauty: 60, color: '#ff9ec7', effect: 'petals' },
   { id: 'guardians', name: 'Garden Guardians', icon: '🐸', parts: ['gnome', 'scarebee', 'tulips'], beauty: 50, color: '#7ed957', effect: 'leaves' },
   { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', effect: 'beam' },
+  { id: 'playground', name: 'Playground', icon: '🎪', parts: ['trampoline', 'ball', 'launcher', 'stage'], beauty: 90, color: '#ff9ec7', effect: 'confetti' },
 ];
 const BEAUTY = { milestone: 15, gift: 20, kettle: 12 };
 

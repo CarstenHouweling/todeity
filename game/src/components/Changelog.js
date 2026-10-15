@@ -3,6 +3,31 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.1',
+    date: '2026-10-15',
+    title: 'The lost tongue',
+    changes: [
+      '👅 Fix: every Tongue Lash left a little pink tongue lying in the middle of the garden (it showed up under Tode on the title screen). The lash now shows properly and cleans up after itself',
+    ],
+  },
+  {
+    version: '0.24.0',
+    date: '2026-10-15',
+    title: 'Playground',
+    changes: [
+      '🌍 Make your garden public: it shows up in the Visit list and the co-op lobby, and anyone can hop in',
+      '🏠 The house is solid: climb onto its roof. Trinkets are solid too, and you can stand on them',
+      '🎪 A playground: a Lily Pad Trampoline (bounce high!), a Teapot Cannon that fires you across the garden, a Tea Ball everyone can kick and a Little Stage. Fairy Ring mushrooms are bouncy too',
+      '😀 16 emotes (1–9): wave, sip tea, dance, backflip, confetti and more. Most unlock with achievements. 👉 Boop other frogs (B)',
+      '👥 Co-op leaderboards for teams of 2, 3 and 4 frogs (the host submits the team)',
+      '🔥 The co-op host can steep the run: their vows count for everyone. Pantry upgrades and keepsakes always carried into co-op',
+      '🛡 Co-op wards and guardians are much clearer: yours glow with a pillar of light in your colour, arrows only point at yours, and a hit on a teammate\'s says whose it is',
+      '🍃 Five new Pantry upgrades (Keen Eye, Quick Study, Bigger Kettle, Morning Brew, Golden Harvest) and six new keepsakes',
+      '🏆 New achievements: Frog Tower, Garden Party, Open House and Full Pond',
+      '🔗 Skills fuse from level 3 now (was 4), and upgrades toward a fusion are offered more often',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-10-15',
     title: 'Your name, your colour',

@@ -157,14 +157,21 @@ export function saveDecor(decor) {
  * This save's public garden code (made on first use), for others to look at the garden. It is not the save code:
  * it can't load or change anything. Resolves with the code, or null offline.
  */
-export async function gardenCode(name) {
+export async function gardenCode(name, options = {}) {
   if (cloud.status !== 'online' || !cloud.code) return null;
   try {
-    const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/garden`, { name });
+    const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/garden`, { name, ...options });
+    if (ok) cloud.gardenPublic = Boolean(data.public);
     return ok ? data.garden : null;
   } catch {
     return null;
   }
+}
+
+/** Lists your garden for everyone (or not). Resolves with the new state, or null offline. */
+export async function setGardenPublic(on) {
+  const code = await gardenCode(null, { public: on });
+  return code ? cloud.gardenPublic : null;
 }
 
 /** Someone's garden by its public garden code: { name, decor, level, rank, trinkets, beauty } or { error }. */

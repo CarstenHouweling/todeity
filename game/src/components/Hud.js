@@ -463,7 +463,7 @@ export class Hud {
   /**
    * The co-op lobby. `view` is 'start' (create or join), 'room' (in a room) or 'connecting'.
    */
-  showLobby({ view, code, players = [], isHost, error, name, invite, isPublic = false, rooms = null }) {
+  showLobby({ view, code, players = [], isHost, error, name, invite, isPublic = false, rooms = null, steep = 0, gardens = null }) {
     const errorLine = error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : '';
     let body;
     if (view === 'connecting') {
@@ -481,8 +481,12 @@ export class Hud {
       const toggle = isHost
         ? `<button class="menu-button" data-action="coop-visibility">${isPublic ? '🔒 Make private' : '🌍 Make public'}</button>`
         : '';
+      const steepLine = isHost
+        ? `<p class="sub">🔥 Steep <b>${steep}</b>${steep ? ` · score and leaves ×${steepBonus(steep).toFixed(2)}` : ''} <button type="button" class="tag-chip" data-action="coop-steeping">Change vows</button></p>`
+        : steep ? `<p class="sub">🔥 The host steeped this run: Steep <b>${steep}</b> (×${steepBonus(steep).toFixed(2)})</p>` : '';
       body = `
         ${visibility}
+        ${steepLine}
         <p class="sub">Share this room code with your friends:</p>
         <div class="room-code">${code}</div>
         <p class="sub invite-link">or send them the link <b>${escapeHtml(invite ?? '')}</b></p>
@@ -499,6 +503,8 @@ export class Hud {
         <div class="menu-buttons"><button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-quick">⚡ Quick play</button></div>
         <h3>🌍 Open rooms</h3>
         <div class="room-list">${this.roomList(rooms)}</div>
+        <h3>🏡 Public gardens <small>hop around together, then set off as a party</small></h3>
+        <div class="room-list garden-list">${this.gardenRows(gardens)}</div>
         <div class="menu-buttons lobby-create">
           <button class="menu-button" type="button" data-action="coop-create">🌍 Create public room</button>
           <button class="menu-button" type="button" data-action="coop-create-private">🔒 Create private room</button>
@@ -1038,7 +1044,7 @@ ${ meta.runs > 0 ? '' :
 
   /** A short line over the garden tray ("Tea Party complete!"). */
   gardenFlash(text) {
-    const flash = this.menuName === 'garden-mode' && this.menu.querySelector('.garden-flash');
+    const flash = ['garden-mode', 'garden-walk'].includes(this.menuName) && this.menu.querySelector('.garden-flash');
     if (!flash) return;
     flash.textContent = text;
     flash.hidden = false;
@@ -1078,11 +1084,14 @@ ${ meta.runs > 0 ? '' :
           : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
         : info.touch
           ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), drag the right side to look around.'
-          : 'WASD to hop, Space to jump (you can land on other frogs!), drag to look around. 🚩 Invite others to play together.';
+          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), B to boop, 1–9 to emote. 🚩 Invite others to play together.';
     const buttons = [
       info.own ? tool('garden-edit', '✏️ Edit garden') : '',
+      info.own && info.online ? tool('garden-public', info.public ? '🌍 Public' : '🔒 Private', info.public ? 'on' : '') : '',
       info.leaderName ? tool('garden-ready', info.ready ? '✋ Ready ✓' : '✋ Ready', 'ready') : tool('garden-invite', info.inviting ? '✖ Stop inviting' : '🚩 Invite to play', info.inviting ? '' : 'invite'),
       info.inviting && info.readyCount ? tool('garden-go', `▶ Go now (${info.readyCount + 1})`, 'ready') : '',
+      tool('garden-emotes', '😀 Emotes', info.emotes ? 'on' : ''),
+      tool('garden-boop', '👉 Boop'),
       tool('garden-visit', '👀 Visit'),
       info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
       tool('garden-night', info.night ? '🌙' : '☀️'),
@@ -1097,20 +1106,41 @@ ${ meta.runs > 0 ? '' :
         <h2>🏡 ${where} <small>${who}</small></h2>
         <p class="sub">${hint}</p>
         <div class="garden-tools">${buttons}</div>
+        ${
+          info.emotes
+            ? `<div class="emote-grid">${info.emotes
+                .map(
+                  (e, i) => `<button type="button" class="emote ${e.locked ? 'locked' : ''}" ${e.locked ? 'disabled' : `data-action="emote" data-id="${e.id}"`} title="${e.name}${e.locked ? ` · unlock: ${escapeHtml(e.hint ?? '')}` : ''}"><span>${e.locked ? '🔒' : e.icon}</span><small>${e.name}</small></button>`
+                )
+                .join('')}</div>`
+            : ''
+        }
       </div>
+      <div class="garden-flash" hidden></div>
       ${info.countdown ? `<div class="garden-countdown">${info.countdown}</div>` : ''}`
     );
   }
 
-  /** Asks for a garden code to visit; `gardens`: the liveliest gardens right now ([{ garden, name, frogs, max }]). */
+  /** Public gardens as rows to join: [{ garden, name, frogs, max, beauty }]. */
+  gardenRows(gardens) {
+    if (!gardens) return '<p class="sub room-empty">Looking for gardens…</p>';
+    if (!gardens.length) return '<p class="sub room-empty">No public gardens yet. Make yours public in 🏡 My garden!</p>';
+    return gardens
+      .map(
+        (g) => `<div class="room-row"><span class="room-host">🏡 ${escapeHtml(g.name)}'s garden</span><span class="room-seats"><small>${g.frogs ? `🐸 ${g.frogs}` : 'empty'}${g.beauty ? ` · 🌷 ${g.beauty}` : ''}</small></span><button class="menu-button" type="button" data-action="visit-garden" data-code="${escapeHtml(g.garden)}">Join</button></div>`
+      )
+      .join('');
+  }
+
+  /** Refreshes only the public gardens list in the co-op lobby. */
+  setLobbyGardens(gardens) {
+    const list = this.menuName === 'lobby' && this.menu.querySelector('.garden-list');
+    if (list) list.innerHTML = this.gardenRows(gardens);
+  }
+
+  /** Asks for a garden code to visit; `gardens`: the public gardens, liveliest first. */
   showGardenVisitForm(error = null, gardens = null) {
-    const lively = gardens?.length
-      ? `<h3>🐸 Lively gardens</h3><div class="lively-gardens">${gardens
-          .map(
-            (g) => `<div class="room-row"><span class="room-host">🏡 ${escapeHtml(g.name)}'s garden</span><span class="room-seats"><small>${g.frogs} frog${g.frogs > 1 ? 's' : ''}</small></span><button class="menu-button" type="button" data-action="visit-garden" data-code="${escapeHtml(g.garden)}">Visit</button></div>`
-          )
-          .join('')}</div>`
-      : '';
+    const lively = `<h3>🌍 Public gardens</h3><div class="lively-gardens">${this.gardenRows(gardens)}</div>`;
     this.showModal(
       'garden-visit',
       `<h2>👀 Visit a garden</h2>
@@ -1306,7 +1336,9 @@ ${ meta.runs > 0 ? '' :
   }
 
   /** Steeping: vows that make runs harder for more score and Golden Leaves. */
-  showSteeping() {
+  /** `back`: 'title', or 'room' when the co-op host steeps the run about to start. */
+  showSteeping(back = this.steepingBack ?? 'title') {
+    this.steepingBack = back;
     const steep = steepLevel();
     const rows = VOWS.map((vow) => {
       const rank = vowRank(vow.id);
@@ -1324,12 +1356,12 @@ ${ meta.runs > 0 ? '' :
       <div class="panel">
         <h2>🔥 Steeping</h2>
         <p class="sub">Take vows to steep your runs stronger. Every 🔥 adds 12% to your score and Golden Leaves.
-        Solo runs only: the Daily Brew and co-op are never steeped.</p>
+        ${back === 'room' ? 'These vows count for everyone in your co-op room.' : 'In co-op the host\'s vows count for everyone; the Daily Brew is never steeped.'}</p>
         <p class="steep-total">Steep <b>${steep}</b> / ${STEEP_MAX} · score and leaves ×${steepBonus(steep).toFixed(2)}</p>
         <div class="vows">${rows}</div>
         <div class="menu-buttons">
           <button class="menu-button" data-action="vows-clear">Clear vows</button>
-          <button class="menu-button primary" data-action="title">Done</button>
+          <button class="menu-button primary" data-action="${back === 'room' ? 'coop-room' : 'title'}">Done</button>
         </div>
       </div>`
     );
@@ -1489,13 +1521,15 @@ ${ meta.runs > 0 ? '' :
       daily: [['Score', (e) => e.score.toLocaleString()], ['Wave', (e) => `W${e.wave}`], ['Form', (e) => TIERS[e.tier]?.name ?? '']],
       depth: [['Wave', (e) => `W${e.wave}`], ['Level', (e) => `Lv ${e.level ?? 0}`], ['Score', (e) => e.score.toLocaleString()]],
       speed: [['Time', (e) => formatTime(e.clear)], ['Level', (e) => `Lv ${e.level ?? 0}`], ['Score', (e) => e.score.toLocaleString()]],
-    }[board] ?? [];
+    }[board] ?? [['Score', (e) => e.score.toLocaleString()], ['Wave', (e) => `W${e.wave}`], ['Form', (e) => TIERS[e.tier]?.name ?? '']];
+    // Co-op boards: the whole team.
+    const who = (entry) => (entry.team?.length ? entry.team.map((member) => escapeHtml(member)).join(' · ') : escapeHtml(entry.name));
     const rows = scores
       .map(
         (entry, i) => `
         <tr class="${i + 1 === highlight ? 'me' : ''}">
           <td>${i + 1}</td>
-          <td class="name">${entry.cls ? `<span title="${classById(entry.cls).name}">${classById(entry.cls).icon}</span> ` : ''}${entry.victory ? '👑 ' : ''}${escapeHtml(entry.name)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
+          <td class="name">${entry.cls ? `<span title="${classById(entry.cls).name}">${classById(entry.cls).icon}</span> ` : ''}${entry.victory ? '👑 ' : ''}${who(entry)}${entry.steep ? ` <small class="steep">🔥${entry.steep}</small>` : ''}</td>
           ${columns.map(([, value], c) => `<td class="${c === 2 ? 'form-cell' : ''}">${value(entry)}</td>`).join('')}
         </tr>`
       )
@@ -1515,13 +1549,16 @@ ${ meta.runs > 0 ? '' :
           <button class="menu-button ${board === 'speed' ? 'primary' : ''}" data-action="leaderboard" data-board="speed">⏱ Fastest Bee-zebub</button>
           <button class="menu-button ${board === 'daily' ? 'primary' : ''}" data-action="leaderboard" data-board="daily">📅 Daily Brew</button>
         </div>
+        <div class="tabs coop-tabs"><span>👥 Co-op</span>${[2, 3, 4]
+          .map((n) => `<button class="menu-button ${board === `coop${n}` ? 'primary' : ''}" data-action="leaderboard" data-board="coop${n}">${n} frogs</button>`)
+          .join('')}</div>
         ${scores === undefined ? '<p class="sub">Loading…</p>' : this.scoreTable(scores, null, board)}
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>
       </div>`
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, coop = 0, host = true, team = null }) {
     const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
@@ -1541,10 +1578,14 @@ ${ meta.runs > 0 ? '' :
       ${gathered}
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
       <p class="line">“${line}”</p>
-      <form class="submit-score">
-        <input id="player-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
-        <button class="menu-button" type="submit">🏆 Submit score</button>
-      </form>
+      ${
+        coop >= 2 && !host
+          ? `<p class="sub submit-score">👥 Your host submits the team's score to the ${coop}-frog co-op board.</p>`
+          : `<form class="submit-score">
+        <input id="player-name" maxlength="16" placeholder="${coop >= 2 ? 'Team or your name' : 'Your name'}" value="${escapeHtml(name)}" autocomplete="nickname" />
+        <button class="menu-button" type="submit">🏆 Submit ${coop >= 2 ? `team score (${(team ?? []).map((member) => escapeHtml(member)).join(' · ')})` : 'score'}</button>
+      </form>`
+      }
       <div class="board-slot"></div>
       <div class="menu-buttons">
         <button class="menu-button primary" data-action="start">↻ Play again</button>

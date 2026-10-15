@@ -1084,7 +1084,7 @@ export const SKILLS = {
     text: (level) => `Whip your tongue at bees in front of you for ${Math.round(9 * power(level))} damage, smacking them away.`,
     cooldown: (level) => faster(2.6, level),
     autoTarget: (ctx) => nearest(ctx, 135)?.position ?? null,
-    cast: (ctx, target, level) => new TongueLash(ctx, target, level),
+    cast: (ctx, target, level) => ctx.effects.addEffect(new TongueLash(ctx, target, level)),
   },
   comet: {
     id: 'comet',
@@ -1358,7 +1358,7 @@ export const SKILLS = {
 // Two skills that are both at FUSE_LEVEL or higher can fuse into one stronger skill (offered as a level-up card).
 // The fusion takes one slot instead of two and has FUSION_MAX levels of its own. `vlevel` turns a fusion level into
 // the level the old skill classes understand (Lv 1 hits harder than a mastered skill).
-export const FUSE_LEVEL = 4;
+export const FUSE_LEVEL = 3; // was 4 until v0.24: fusions took too long, especially in co-op
 export const FUSION_MAX = 3;
 const vlevel = (level) => 5 + 2 * level;
 const fpower = (level) => power(vlevel(level));
@@ -1586,9 +1586,12 @@ export class SkillBook {
       return list;
     };
     shuffle(pool);
-    // Prefer skills that are part of a fusion the player is building toward, now and then.
+    // Upgrades that bring a fusion closer (both parts owned, one still below FUSE_LEVEL) come first more often.
+    const towardFusion = (skill) =>
+      !skill.fusion && this.owns(skill.id) && this.level(skill.id) < FUSE_LEVEL && fusionsOf(skill.id).some((f) => f.parts.every((part) => this.owns(part)) && !this.owns(f.id));
+    const nearer = pool.filter((skill) => towardFusion(skill) && Math.random() < 0.6);
     const fusions = shuffle(this.fusionsReady()).slice(0, 1);
-    const picks = [...fusions, ...pool].slice(0, 3);
+    const picks = [...fusions, ...nearer, ...pool.filter((skill) => !nearer.includes(skill))].slice(0, 3);
     return picks.map((skill) => {
       const level = this.level(skill.id) + 1;
       return { skill, level, fusion: Boolean(skill.fusion) && level === 1, hint: this.hint(skill, level) };

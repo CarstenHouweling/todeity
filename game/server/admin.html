@@ -65,6 +65,7 @@
   tr:last-child td { border-bottom: 0; }
   td.num, th.num { text-align: right; }
   td.name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  td.detail { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
   td.actions { text-align: right; }
   td.actions button { margin-left: 4px; }
   .empty { padding: 18px; text-align: center; color: var(--muted); }
@@ -107,6 +108,12 @@
 
     <div class="tiles" id="tiles"></div>
     <div class="chips" id="states"></div>
+
+    <h2>Who's online</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Player</th><th>Doing</th><th>Where</th><th class="num">For</th><th class="num opt">Online</th></tr></thead>
+      <tbody id="players"></tbody>
+    </table></div>
 
     <h2>Co-op rooms</h2>
     <div class="scroll"><table>
@@ -225,10 +232,26 @@
     $('states').replaceChildren(...(states.length
       ? states.map(([state, n]) => el('span', { class: 'chip' }, `${state} `, el('b', { textContent: n })))
       : [el('span', { class: 'chip muted', textContent: 'Nobody online' })]));
+    // Who's online: their player tag, what they're doing (state) and where (the game's detail line).
+    const ACTIVITY = {
+      title: '🏠 Title screen', garden: '🏡 Own garden', visit: '👀 Visiting a garden', lobby: '👥 Co-op lobby', run: '⚔️ Solo run',
+      daily: '📅 Daily Brew', coop: '👥 Co-op run', paused: '⏸ Paused', gameover: '💀 Game over', story: '📖 Story', ending: '🎬 Ending',
+    };
+    const FROGS = { tode: '🐸', brawler: '🥊', sharpshooter: '🎯', alchemist: '⚗️', mage: '🔮', summoner: '📜', ninja: '🥷' };
+    const ago = (ms) => (ms ? fmtUptime(Math.max(0, Math.round((Date.now() - ms) / 1000))) : '–');
+    const players = s.presence.players ?? [];
+    $('players').replaceChildren(...(players.length
+      ? players.map((p) => el('tr', {},
+          el('td', { class: 'name', textContent: `${FROGS[p.cls] ?? ''} ${p.name ?? '(no name yet)'}${p.tag ? ` #${p.tag}` : ''}` }),
+          el('td', { textContent: ACTIVITY[p.state] ?? p.state }),
+          el('td', { class: 'detail', textContent: p.detail || '–' }),
+          el('td', { class: 'num', textContent: ago(p.since) }),
+          el('td', { class: 'num opt', textContent: ago(p.connected) })))
+      : [el('tr', {}, el('td', { class: 'empty', colSpan: 5, textContent: 'Nobody online.' }))]));
     $('rooms').replaceChildren(...(s.coop.rooms.length
       ? s.coop.rooms.map((r) => el('tr', {},
           el('td', { textContent: r.code }), el('td', { class: 'name', textContent: r.host ?? '–' }),
-          el('td', { class: 'num', textContent: `${r.players}/4` }), el('td', { textContent: r.started ? 'In a run' : 'Lobby' })))
+          el('td', { class: 'num', textContent: `${r.players}/4` }), el('td', { textContent: `${r.started ? 'In a run' : 'Lobby'}${r.public ? ' · public' : ''}` })))
       : [el('tr', {}, el('td', { class: 'empty', colSpan: 4, textContent: 'No open rooms.' }))]));
     $('status').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }

@@ -30,6 +30,7 @@ const SET_EFFECTS = {
   petals: { colors: ['#ff9ec7', '#ffd1e3', '#ffffff'], up: -10, gravity: 20, size: 1.8, height: 70, count: 1, every: 0.15, spread: 90, life: 2.4 },
   leaves: { colors: ['#7ed957', '#c8f77a', '#ffd36b'], up: 30, gravity: 30, size: 1.8, height: 8, count: 2, every: 0.2, spread: 70 },
   beam: { colors: ['#fff2a0', '#ffffff'], up: 160, gravity: -40, size: 2, height: 4, count: 2, every: 0.08, spread: 8, glow: true },
+  confetti: { colors: ['#ff9ec7', '#7ed957', '#5fb8ff', '#ffd23f', '#c58aff'], up: 120, gravity: 160, size: 1.8, height: 40, count: 3, every: 0.25, spread: 80, life: 1.4 },
 };
 
 export class TitleGarden {
@@ -250,6 +251,12 @@ export class TitleGarden {
     this.snap = !this.snap;
     this.grid.visible = this.editing && this.snap;
     return this.snap;
+  }
+
+  /** A frog bounced on it: a trampoline's pad dips and springs back. */
+  spring(item) {
+    const inner = item.model.userData.inner;
+    if (inner) inner.userData.springAt = this.time + item.x * 0.01;
   }
 
   setNight(on) {
@@ -569,6 +576,11 @@ export class TitleGarden {
       item.model.position.set(item.x, item.y, bounce + item.lift * (10 + Math.sin(this.time * 6) * 2));
       item.model.rotation.set(Math.sin(this.time * 9) * 0.06 * item.lift, 0, item.r);
       item.model.scale.set(1 / Math.sqrt(squash), 1 / Math.sqrt(squash), squash);
+      // The Tea Ball rolls where its physics (GardenHub.js) puts it.
+      if (item.ball && !this.editing) {
+        item.model.position.copy(item.ball.p);
+        item.model.rotation.set(0, 0, item.ball.spin);
+      }
       item.model.userData.animate?.(this.time + item.x * 0.01, this.night);
       if (item.model.userData.glow) item.model.userData.glow.visible = this.night;
     }

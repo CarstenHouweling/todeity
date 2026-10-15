@@ -18,7 +18,16 @@ export const PANTRY = [
   { id: 'magnet', name: 'Long Tongue', icon: '👅', text: 'Tea leaves fly to you from 25% farther', costs: [40, 110, 240] },
   { id: 'spring', name: 'Springy Legs', icon: '🦵', text: 'Hop dash recharges 10% faster', costs: [90, 220, 420] },
   { id: 'revive', name: 'Lily Pad Blessing', icon: '🪷', text: 'Once per run, rise again with 2 hearts', costs: [450] },
+  // v0.24
+  { id: 'crit', name: 'Keen Eye', icon: '🎯', text: '+2% critical hit chance', costs: [80, 200, 380] },
+  { id: 'study', name: 'Quick Study', icon: '📚', text: 'Tea leaves are worth 10% more: level up faster', costs: [70, 180, 340] },
+  { id: 'kettle', name: 'Bigger Kettle', icon: '💣', text: 'Tea bombs hit 15% harder and 8% wider', costs: [90, 220, 420] },
+  { id: 'morning', name: 'Morning Brew', icon: '🍵', text: 'Start every run with a random brew (Rare at level 2)', costs: [260, 650] },
+  { id: 'harvest', name: 'Golden Harvest', icon: '🌾', text: '+5% Golden Leaves from every run', costs: [150, 400, 800] },
 ];
+
+/** Golden Harvest: the Golden Leaves multiplier of a save's Pantry (the server applies it too). */
+export const harvestBonus = (levels) => 1 + 0.05 * (levels?.harvest ?? 0);
 
 const defaults = () => ({
   leaves: 0,

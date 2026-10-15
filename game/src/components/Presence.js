@@ -1,9 +1,11 @@
 // Presence: a tiny WebSocket to the game server (/ws?presence=1, see game/server/presence.js) so the owner's admin
-// page can count who has the game open and what they are doing. It sends nothing but a short state word, reconnects
-// with backoff when dropped and stays silent without a server (static hosts, offline).
+// page can show who has the game open and what they are doing: a short state word, the player tag (name, #tag), the
+// frog class and a detail line ("wave 7 · Sage Mountain"). It reconnects with backoff when dropped and stays silent
+// without a server (static hosts, offline).
 
 let ws = null;
-let state = 'title';
+let state = { s: 'title' };
+let sentJson = '';
 let started = false;
 let retryDelay = 2_000;
 let retryTimer = null;
@@ -16,7 +18,8 @@ function report() {
   sendTimer = setTimeout(() => {
     sendTimer = null;
     if (ws?.readyState !== 1) return;
-    ws.send(JSON.stringify({ t: 'state', s: state }));
+    sentJson = JSON.stringify({ t: 'state', ...state });
+    ws.send(sentJson);
     lastSent = Date.now();
   }, Math.max(0, lastSent + 1_100 - Date.now()));
 }
@@ -29,6 +32,7 @@ function connect() {
     ws = socket;
     socket.onopen = () => {
       retryDelay = 2_000;
+      sentJson = '';
       report();
     };
     socket.onclose = () => {
@@ -45,7 +49,7 @@ function connect() {
 
 /** Opens the presence socket once; later calls do nothing. `initial` is the first state (default 'title'). */
 export function startPresence(initial = state) {
-  state = initial;
+  state = typeof initial === 'string' ? { s: initial } : initial;
   if (started || typeof WebSocket === 'undefined') return;
   started = true;
   connect();
@@ -60,9 +64,12 @@ export function startPresence(initial = state) {
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && retryNow());
 }
 
-/** What the player is doing now: a short lowercase word such as 'title', 'run' or 'coop'. */
+/**
+ * What the player is doing now: { s: 'title' | 'garden' | 'visit' | 'lobby' | 'run' | 'daily' | 'coop' | 'paused' |
+ * 'gameover', n: name, g: #tag, c: frog class, d: detail line } (or just the state word). Sent only when it changed.
+ */
 export function setPresence(next) {
-  if (next === state) return;
-  state = next;
+  state = typeof next === 'string' ? { s: next } : next;
+  if (JSON.stringify({ t: 'state', ...state }) === sentJson) return;
   report();
 }
