@@ -268,9 +268,22 @@ Copies of one run on several boards share the id; deleting removes it from one b
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
   23): milestones unlock by themselves from the progress (`unlock`), gift and kettle ones are stored in
   `progress.trinkets`. They stand around Tode on the title screen (`TitleGarden.js`, models in `TrinketModels.js`,
-  placements in `progress.decor`, saved with `POST …/decor` via `saveDecor`); 🏡 My garden lifts the camera and shows a
-  tray to place, move (click), turn (↻/R) or put away trinkets. New ones place themselves (`syncTrinkets`,
-  `meta.trinketsSeen` is local). Returning players see a profile on the title (`accountLevel`: level, rank, runs,
+  placements in `progress.decor`, saved with `POST …/decor` via `saveDecor`). New ones place themselves
+  (`syncTrinkets`, `meta.trinketsSeen` is local).
+- **The garden editor** (🏡 My garden, v0.21, `TitleGarden.js`): the camera is the player's (`updateCamera`: yaw,
+  pitch, distance and a target that ease toward `goal`; drag to orbit, wheel or pinch to zoom, right-drag, two
+  fingers or WASD to pan, Q/E to turn, 🧭 `resetView`, 🗺 `planView`). Trinkets are dragged from the tray
+  (`beginTray`, a `pointerdown` on `[data-trinket]` in main.js; a tap instead makes it follow the pointer until the
+  next tap) or on the lawn; R / wheel turns, Delete puts away, G grid snap, Ctrl+Z `undo()` (decor snapshots).
+  The tray keeps its trinket buttons between updates (`hud.refreshGarden`), since one may be under a finger mid-drag.
+  Tray pictures are rendered once (`TrinketPortraits.js`). Trinkets animate (`userData.anim(t, night)` in
+  `TrinketModels.js`); 🌙 night (`meta.gardenNight`, local) switches the title sky and the soft ground glows.
+  **Sets** (`SETS`, `gardenSets`, `gardenBeauty` in Rewards.js): all parts within `SET_RADIUS` of their middle show
+  a ring and particles (`SET_EFFECTS`) and add beauty (shown on the profile).
+- **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
+  **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
+  the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
+  👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a profile on the title (`accountLevel`: level, rank, runs,
   best wave, achievements, streak) instead of the story and controls.
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its

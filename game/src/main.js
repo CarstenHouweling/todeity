@@ -32,7 +32,7 @@ import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, initCloud, loadCode, reportBuy, reportRun, saveDecor } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor } from './components/CloudSave.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
@@ -3886,14 +3886,53 @@ const BASE_CAMERA_ROTATION = camera.quaternion.clone();
 const TITLE_TIER = 0; // the title shows plain Tode: his transformations are a surprise for later
 let titleOrbit = -Math.PI / 4;
 let orbiting = false;
-const gardenView = new THREE.Vector3();
 
 // --- Tode's garden on the title screen: trinkets the player earned and placed (see TitleGarden.js, Rewards.js) ---
-const garden = new TitleGarden({ scene, camera, canvas: renderer.domElement });
-let decorating = false;
+const garden = new TitleGarden({ scene, camera, canvas: renderer.domElement, particles, play });
+let decorating = false; // the garden view is open: editing your own, or visiting someone's
+let trayCollapsed = false;
 let rewardTimer = 0;
-garden.onChange = (decor) => saveDecor(decor);
-garden.onSelect = (id) => decorating && hud.showGarden(id);
+garden.onChange = (decor) => {
+  saveDecor(decor);
+  refreshGardenTray();
+};
+garden.onSelect = refreshGardenTray;
+// Tode turns to look at what was just set down, and now and then hops or cheers.
+garden.onPlaced = (position) => {
+  player.aimAt(position);
+  const roll = Math.random();
+  if (roll < 0.25) player.rig?.play('victory', { once: true });
+  else if (roll < 0.6) player.rig?.play('hop', { once: true });
+};
+garden.onSetFormed = (set) => hud.gardenFlash(`${set.icon} ${set.name} complete! +${set.beauty} beauty`);
+garden.setNight(Boolean(meta.gardenNight));
+
+const gardenState = () => ({
+  held: garden.held?.id ?? null,
+  selected: garden.selected?.id ?? null,
+  snap: garden.snap,
+  night: garden.night,
+  canUndo: garden.undoStack.length > 0,
+  collapsed: trayCollapsed,
+});
+
+function refreshGardenTray() {
+  if (decorating && garden.editing) hud.refreshGarden(gardenState());
+}
+
+// The tray: pressing a trinket starts dragging it (the click that follows does nothing more).
+hud.menu.addEventListener('pointerdown', (event) => {
+  const button = event.target.closest('[data-trinket]');
+  if (!button || !garden.editing) return;
+  event.preventDefault();
+  garden.beginTray(button.dataset.trinket, event);
+});
+
+/** The title screen by day or by night (a garden setting, kept in this browser). */
+function applyTitleSky() {
+  weather.set(meta.gardenNight ? 'night' : 'morning', 'clear');
+  garden.setNight(Boolean(meta.gardenNight));
+}
 
 /** Trinkets earned since this browser last looked find a spot in the garden by themselves. */
 function syncTrinkets() {
@@ -3909,15 +3948,66 @@ function syncTrinkets() {
 function openGarden() {
   if (phase !== 'title') return;
   hud.hideModal();
+  if (garden.visiting) garden.load(meta.decor);
   decorating = true;
-  garden.start();
-  hud.showGarden();
+  garden.enter({ yaw: titleOrbit });
+  hud.showGarden(gardenState());
 }
 
 function closeGarden() {
-  garden.stop();
+  if (garden.visiting) garden.load(meta.decor);
+  garden.exit();
   decorating = false;
+  // The title orbit carries on from wherever the editor camera was.
+  titleOrbit = Math.atan2(camera.position.y, camera.position.x);
+  camera.up.set(0, 0, 1);
   hud.showTitle(bestScore);
+}
+
+async function visitGarden(code) {
+  const result = await fetchGarden(code);
+  if (result.error) {
+    hud.showGardenVisitForm(result.error);
+    return;
+  }
+  if (phase !== 'title') return;
+  hud.hideModal();
+  decorating = true;
+  garden.visit(result.decor);
+  hud.showGardenVisit(result);
+  play('pick');
+}
+
+async function shareGarden() {
+  const code = await gardenCode(playerName());
+  hud.showGardenShare(code, code ? `${location.origin}/?garden=${code}` : '');
+}
+
+/** A picture of the garden without the editor's rings. */
+function gardenPhoto() {
+  const helpers = [garden.marker, garden.selection, garden.boundary, garden.grid];
+  const shown = helpers.map((mesh) => mesh.visible);
+  helpers.forEach((mesh) => (mesh.visible = false));
+  takePhoto();
+  helpers.forEach((mesh, i) => (mesh.visible = shown[i]));
+}
+
+function gardenKeys(delta) {
+  const axis = (plus, minus) => (input.isHeld(...plus) ? 1 : 0) - (input.isHeld(...minus) ? 1 : 0);
+  garden.steer({ x: axis(['KeyD', 'ArrowRight'], ['KeyA', 'ArrowLeft']), y: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), turn: axis(['KeyE'], ['KeyQ']) }, delta);
+  if (input.wasPressed('Escape')) {
+    if (garden.held) {
+      garden.cancelHeld();
+      refreshGardenTray();
+    } else if (garden.visiting) openGarden();
+    else closeGarden();
+  }
+  if (!garden.editing) return;
+  if (input.wasPressed('KeyR')) garden.turn();
+  if (input.wasPressed('Delete', 'Backspace')) garden.putAway();
+  if (input.wasPressed('KeyZ') && input.isHeld('ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight')) garden.undo();
+  if (input.wasPressed('KeyG')) MENU_ACTIONS['garden-snap']();
+  if (input.wasPressed('KeyN')) MENU_ACTIONS['garden-night']();
 }
 
 async function claim(kind) {
@@ -3959,11 +4049,9 @@ function updateCamera(delta) {
   if (phase === 'story' || phase === 'ending' || phase === 'travel') return; // the cut-scenes drive the camera
   // Title screen: a slow cinematic orbit around Tode.
   if (phase === 'title' && decorating) {
-    // My garden: a high, steady view of the lawn around Tode.
+    // My garden: the camera is the player's (see TitleGarden.js).
     orbiting = true;
-    const k = 1 - Math.exp(-3 * delta);
-    camera.position.lerp(gardenView.set(Math.cos(titleOrbit) * 300, Math.sin(titleOrbit) * 300, 330), k);
-    camera.lookAt(0, 0, 0);
+    garden.updateCamera(camera, delta);
     return;
   }
   if (phase === 'title' || phase === 'loading') {
@@ -5906,6 +5994,13 @@ function copyInvite() {
 /** Opened from an invite link: show the co-op lobby with the room code filled in. */
 function openInvite() {
   const params = new URLSearchParams(location.search);
+  // A shared garden (?garden=CODE): go and look at it.
+  if (params.has('garden')) {
+    const garden = (params.get('garden') ?? '').trim();
+    history.replaceState(null, '', location.pathname);
+    if (/^[A-Za-z0-9]{6}$/.test(garden)) visitGarden(garden);
+    return;
+  }
   const code = (params.get('room') ?? '').trim().toUpperCase();
   if (!params.has('room')) return;
   history.replaceState(null, '', location.pathname); // a reload shouldn't join again
@@ -6480,7 +6575,7 @@ function goToTitle() {
   player.reset();
   ascension.setTier(0);
   divinity.setTier(0);
-  weather.set('morning', 'clear');
+  applyTitleSky();
   weather.setCosmic(false);
   hud.setWeather(weather.info);
   hud.setBoss(null);
@@ -6492,6 +6587,11 @@ function goToTitle() {
   setPhase('title');
   player.setClass(chosenClass().id);
   ascension.setTier(TITLE_TIER);
+  if (decorating || garden.visiting) {
+    if (garden.visiting) garden.load(meta.decor);
+    garden.exit();
+    camera.up.set(0, 0, 1);
+  }
   decorating = false;
   syncTrinkets(); // milestones reached in the run put their trinkets in the garden
   hud.showTitle(bestScore);
@@ -6622,9 +6722,36 @@ const MENU_ACTIONS = {
   'claim-kettle': () => claim('kettle'),
   garden: openGarden,
   'garden-done': closeGarden,
-  'hold-trinket': ({ id }) => {
+  'garden-home': openGarden,
+  'garden-undo': () => garden.undo(),
+  'garden-snap': () => {
+    garden.toggleSnap();
     play('click');
-    garden.hold(id);
+    refreshGardenTray();
+  },
+  'garden-night': () => {
+    meta.gardenNight = !meta.gardenNight;
+    saveMeta();
+    applyTitleSky();
+    play('click');
+    refreshGardenTray();
+  },
+  'garden-reset': () => garden.resetView(),
+  'garden-plan': () => garden.planView(),
+  'garden-photo': gardenPhoto,
+  'garden-share': shareGarden,
+  'garden-visit': () => hud.showGardenVisitForm(),
+  'visit-go': () => {
+    const code = hud.modal.querySelector('#garden-code')?.value ?? '';
+    if (code.trim()) visitGarden(code);
+  },
+  'copy-garden': ({ link }) => {
+    const button = hud.modal.querySelector('[data-action="copy-garden"]');
+    copyText(link, () => button && (button.textContent = '✅ Link copied!'), () => button && (button.textContent = 'Copy the link above'));
+  },
+  'garden-collapse': () => {
+    trayCollapsed = !trayCollapsed;
+    refreshGardenTray();
   },
   'turn-trinket': () => garden.turn(),
   'putaway-trinket': () => garden.putAway(),
@@ -6929,14 +7056,13 @@ function frame(realDelta, render = true) {
     updateStory(realDelta);
     if (storyTime > 0.5 && (input.pressed.size > 0 || input.primaryDown)) endStory();
   } else if (phase === 'title' && decorating) {
-    if (input.wasPressed('Escape', 'Enter')) closeGarden();
-    if (input.wasPressed('KeyR')) garden.turn();
+    gardenKeys(realDelta);
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
     if (phase === 'title' && !meta.seenStory) startStory();
     else startRun();
   }
   if (input.wasPressed('KeyM')) toggleMute();
-  if (input.wasPressed('KeyC')) takePhoto();
+  if (input.wasPressed('KeyC')) (decorating ? gardenPhoto() : takePhoto());
   updateGarden(realDelta);
 
   // The world keeps living while menus are open (except when paused).
@@ -7112,6 +7238,7 @@ Promise.all([player.load(chosenClass().id), loadEnemyModel(), loadHouse(HOME)])
     setPhase('title');
     ascension.setTier(TITLE_TIER);
     garden.load(meta.decor);
+    applyTitleSky();
     hud.showTitle(bestScore);
     openInvite();
     initCloud();

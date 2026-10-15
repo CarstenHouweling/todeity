@@ -17,7 +17,8 @@ import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
 import { GRAPHICS_LABELS } from './Quality.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
-import { STREAK_GIFTS, TRINKETS, accountLevel, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
+import { SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
+import { trinketPicture } from './TrinketPortraits.js';
 import { viewHeight, viewWidth } from './Viewport.js';
 
 const ABILITIES = [
@@ -198,6 +199,7 @@ export class Hud {
     this.modal.addEventListener('submit', (event) => {
       event.preventDefault();
       if (event.target.dataset.form === 'save') this.onAction('load-save');
+      if (event.target.dataset.form === 'garden') this.onAction('visit-go');
     });
 
     this.damageNumbers = [];
@@ -894,6 +896,7 @@ ${ meta.runs > 0 ? '' :
       `🏆 ${achieved}/${ACHIEVEMENTS.length}`,
       meta.victories ? `👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : '',
       meta.streak?.count > 1 ? `🔥 ${meta.streak.count}-day streak` : '',
+      meta.decor?.length ? `🌷 ${gardenBeauty(meta.decor)} beauty` : '',
     ].filter(Boolean);
     return `<div class="profile">
       <span class="profile-level"><b>${level}</b><small>LV</small></span>
@@ -951,28 +954,141 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  /** "My garden": the tray of trinkets to place around Tode. `held`: the one following the pointer. */
-  showGarden(held = null) {
+  /**
+   * "My garden": a toolbar, the sets, and the tray of trinkets to drag onto the lawn. `state`: { held, selected,
+   * snap, night, canUndo, collapsed } from the garden. Later changes go through `refreshGarden`, which keeps the
+   * trinket buttons (one may be under a finger mid-drag).
+   */
+  showGarden(state = {}) {
     const owned = new Set(ownedTrinkets(meta));
-    const placed = new Set((meta.decor ?? []).map((item) => item.id));
     const items = TRINKETS.map((t) => {
       const has = owned.has(t.id);
-      const state = !has ? 'locked' : t.id === held ? 'held' : placed.has(t.id) ? 'placed' : '';
-      return `<button type="button" class="trinket ${state}" ${has ? `data-action="hold-trinket" data-id="${t.id}"` : ''} title="${t.name}: ${has ? (placed.has(t.id) ? 'in your garden (click to move it)' : 'click, then click the lawn') : t.how}">
-        <span>${has ? t.icon : '❔'}</span><small>${has ? t.name : t.how}</small></button>`;
+      const picture = has ? trinketPicture(t.id) : '';
+      const face = picture ? `<img src="${picture}" alt="" draggable="false">` : `<span>${has ? t.icon : '❔'}</span>`;
+      return `<button type="button" class="trinket ${has ? '' : 'locked'}" ${has ? `data-trinket="${t.id}"` : ''} title="${t.name}${has ? '' : `: ${t.how}`}">
+        ${face}<small>${has ? t.name : t.how}</small></button>`;
     }).join('');
     this.showMenu(
       'garden-mode',
-      `<div class="garden-tray">
-        <h2>🏡 Tode's garden <small>${owned.size}/${TRINKETS.length} trinkets</small></h2>
-        <p class="sub">${held ? `Click the lawn to set down the ${trinketById(held).name}. <b>↻</b> turns it.` : 'Pick a trinket, then click the lawn. Click a placed one to move it.'}</p>
-        <div class="trinkets">${items}</div>
-        <div class="menu-buttons">
-          ${held ? '<button class="menu-button" data-action="turn-trinket">↻ Turn</button><button class="menu-button" data-action="putaway-trinket">📦 Put away</button>' : ''}
-          <button class="menu-button primary" data-action="garden-done">✓ Done</button>
+      `<div class="garden-flash" hidden></div>
+      <div class="garden-tray ${state.collapsed ? 'collapsed' : ''}">
+        <div class="garden-head"></div>
+        <div class="garden-tools"></div>
+        <div class="garden-body">
+          <div class="garden-sets"></div>
+          <div class="trinkets">${items}</div>
         </div>
       </div>`
     );
+    this.refreshGarden(state);
+  }
+
+  refreshGarden({ held = null, selected = null, snap = false, night = false, canUndo = false, collapsed = false } = {}) {
+    const tray = this.menuName === 'garden-mode' && this.menu.querySelector('.garden-tray');
+    if (!tray) return;
+    const owned = new Set(ownedTrinkets(meta));
+    const placed = new Set((meta.decor ?? []).map((item) => item.id));
+    for (const button of tray.querySelectorAll('[data-trinket]')) {
+      const id = button.dataset.trinket;
+      button.classList.toggle('placed', placed.has(id));
+      button.classList.toggle('held', id === held || id === selected);
+    }
+    tray.classList.toggle('collapsed', collapsed);
+    const decor = meta.decor ?? [];
+    const sets = gardenSets(decor);
+    const active = selected ?? held;
+    tray.querySelector('.garden-head').innerHTML = `
+      <h2>🏡 Tode's garden <small>${owned.size}/${TRINKETS.length} trinkets · 🌷 ${gardenBeauty(decor)} beauty</small></h2>
+      <p class="sub">${
+        held
+          ? `Drop the ${trinketById(held).name} on the lawn. Scroll or <b>R</b> turns it.`
+          : active
+            ? `${trinketById(active).name}: drag it to move it, <b>R</b> turns it, <b>Delete</b> puts it away.`
+            : 'Drag a trinket onto the lawn. Drag the lawn to look around, scroll or pinch to zoom, right-drag or WASD to move.'
+      }</p>`;
+    const tool = (action, label, title, on = false) => `<button type="button" class="garden-tool ${on ? 'on' : ''}" data-action="${action}" title="${title}">${label}</button>`;
+    tray.querySelector('.garden-tools').innerHTML = [
+      active ? tool('turn-trinket', '↻ Turn', 'Turn it (R)') : '',
+      active ? tool('putaway-trinket', '📦 Put away', 'Back into the tray (Delete)') : '',
+      tool('garden-undo', '↶ Undo', 'Undo (Ctrl+Z)', false).replace('<button', canUndo ? '<button' : '<button disabled'),
+      tool('garden-snap', '▦ Grid', 'Line trinkets up on a grid (G)', snap),
+      tool('garden-night', night ? '🌙 Night' : '☀️ Day', 'Day or night (N)', night),
+      tool('garden-reset', '🧭 View', 'Back to the usual view'),
+      tool('garden-plan', '🗺 Top', 'Look straight down'),
+      tool('garden-photo', '📸 Photo', 'Save a picture of your garden'),
+      tool('garden-share', '🔗 Share', 'Your garden code, for friends to visit'),
+      tool('garden-visit', '👀 Visit', "Look at someone else's garden"),
+      tool('garden-collapse', collapsed ? '▴ Tray' : '▾ Tray', 'Show or hide the tray'),
+      '<button type="button" class="garden-tool primary" data-action="garden-done">✓ Done</button>',
+    ].join('');
+    tray.querySelector('.garden-sets').innerHTML = SETS.map((set) => {
+      const done = sets.some((found) => found.set.id === set.id);
+      const parts = set.parts.map((id) => `<span class="${placed.has(id) ? 'have' : owned.has(id) ? '' : 'missing'}">${trinketById(id).icon}</span>`).join('');
+      return `<span class="garden-set ${done ? 'done' : ''}" style="--set:${set.color}" title="${set.name}: place ${set.parts.map((id) => trinketById(id).name).join(', ')} close together (+${set.beauty} beauty)">${set.icon} <b>${set.name}</b> ${parts}${done ? ' ✓' : ''}</span>`;
+    }).join('');
+  }
+
+  /** A short line over the garden tray ("Tea Party complete!"). */
+  gardenFlash(text) {
+    const flash = this.menuName === 'garden-mode' && this.menu.querySelector('.garden-flash');
+    if (!flash) return;
+    flash.textContent = text;
+    flash.hidden = false;
+    flash.classList.remove('show');
+    void flash.offsetWidth;
+    flash.classList.add('show');
+    clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(() => (flash.hidden = true), 2600);
+  }
+
+  /** Looking at someone else's garden. */
+  showGardenVisit({ name, level, rank, trinkets, beauty, decor, garden }) {
+    const sets = gardenSets(decor);
+    this.showMenu(
+      'garden-mode visiting',
+      `<div class="garden-tray visit">
+        <h2>👀 ${escapeHtml(name)}'s garden <small>Lv ${level} ${escapeHtml(rank)} · ${trinkets} trinkets · 🌷 ${beauty} beauty</small></h2>
+        <p class="sub">${sets.length ? `Sets: ${sets.map(({ set }) => `${set.icon} ${set.name}`).join(' · ')}` : 'No sets yet.'} Garden code <b>${escapeHtml(garden)}</b>.</p>
+        <div class="garden-tools">
+          <button type="button" class="garden-tool" data-action="garden-night">🌗 Day / night</button>
+          <button type="button" class="garden-tool" data-action="garden-reset">🧭 View</button>
+          <button type="button" class="garden-tool" data-action="garden-plan">🗺 Top</button>
+          <button type="button" class="garden-tool" data-action="garden-photo">📸 Photo</button>
+          <button type="button" class="garden-tool primary" data-action="garden-home">🏡 Back to my garden</button>
+        </div>
+      </div>`
+    );
+  }
+
+  /** Your public garden code. It is not the save code: it only lets people look. */
+  showGardenShare(code, link) {
+    this.showModal(
+      'garden-share',
+      code
+        ? `<h2>🔗 Share your garden</h2>
+          <p class="sub">Friends can visit your garden with this code. They can only look: it can't load or change your progress, and your save code stays private.</p>
+          <div class="save-code">${escapeHtml(code)}</div>
+          <p class="sub invite-link">or the link <b>${escapeHtml(link)}</b></p>
+          <div class="menu-buttons"><button class="menu-button primary" data-action="copy-garden" data-link="${escapeHtml(link)}">📋 Copy link</button><button class="menu-button" data-action="close-modal">Close</button></div>`
+        : `<h2>🔗 Share your garden</h2><p class="sub">Sharing needs the online save, and the server can't be reached right now.</p>
+          <div class="menu-buttons"><button class="menu-button" data-action="close-modal">Close</button></div>`
+    );
+  }
+
+  /** Asks for a garden code to visit. */
+  showGardenVisitForm(error = null) {
+    this.showModal(
+      'garden-visit',
+      `<h2>👀 Visit a garden</h2>
+      <p class="sub">Enter the garden code a friend shared (6 letters and numbers).</p>
+      ${error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : ''}
+      <form class="lobby-form" data-form="garden">
+        <input id="garden-code" maxlength="8" placeholder="TJ4K9P" autocomplete="off" />
+        <button class="menu-button primary" type="button" data-action="visit-go">Visit</button>
+      </form>
+      <div class="menu-buttons"><button class="menu-button" data-action="close-modal">Close</button></div>`
+    );
+    this.modal.querySelector('#garden-code')?.focus();
   }
 
   /** Today's Daily Brew: the frog of the day and the day's twists, with a button to start. */

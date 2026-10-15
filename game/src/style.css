@@ -3066,3 +3066,87 @@ body.touch .steep-badge {
   background: rgba(126, 217, 87, 0.25);
   color: #c8f77a;
 }
+
+/* Garden editor (v0.21): toolbar, sets, 3D trinket pictures, collapsible tray, visiting */
+.garden-tray {
+  position: relative;
+}
+
+.garden-tray.collapsed .garden-body,
+.garden-tray.collapsed .garden-head .sub {
+  display: none;
+}
+
+.garden-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.garden-tool {
+  padding: 5px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.garden-tool.on { border-color: #ffd36b; background: rgba(255, 211, 107, 0.25); }
+.garden-tool.primary { margin-left: auto; border-color: #ffd36b; background: linear-gradient(#ffcf4a, #f0a020); color: #3b2a14; font-weight: 800; }
+.garden-tool:disabled { opacity: 0.4; cursor: default; }
+
+.garden-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.garden-set {
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 12px;
+}
+
+.garden-set b { font-weight: 700; }
+.garden-set span { opacity: 0.45; }
+.garden-set span.have { opacity: 1; }
+.garden-set span.missing { opacity: 0.2; filter: grayscale(1); }
+.garden-set.done { background: color-mix(in srgb, var(--set) 30%, transparent); box-shadow: 0 0 10px var(--set); }
+
+.trinket {
+  touch-action: none; /* a finger on a trinket drags it out of the tray instead of scrolling */
+}
+
+.trinket img {
+  width: 52px;
+  height: 52px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+}
+
+.trinket.placed img { opacity: 0.55; }
+
+.garden-flash {
+  pointer-events: none;
+  margin-bottom: 8px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: linear-gradient(#ffcf4a, #f0a020);
+  color: #3b2a14;
+  font-weight: 800;
+}
+
+.garden-flash.show { animation: card-in 0.4s ease-out; }
+
+.garden-tray.visit h2 small { display: block; margin-top: 2px; }
+
+/* The garden tray sits above the corner buttons (photo, pause, sound). */
+.menu.garden-mode {
+  padding-bottom: calc(max(16px, var(--safe-bottom)) + 52px);
+}

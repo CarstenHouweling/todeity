@@ -3,6 +3,19 @@
 
 export const CHANGELOG = [
   {
+    version: '0.21.0',
+    date: '2026-10-15',
+    title: 'A garden to wander',
+    changes: [
+      '🧭 Look around your garden: drag the lawn to circle it, scroll or pinch to zoom, right-drag, two fingers or WASD to move, and a top-down view',
+      '🖐 Drag trinkets straight from the tray onto the lawn and around it. Turn them with the scroll wheel or R, line them up on a grid, and undo with Ctrl+Z',
+      '🎀 The tray shows little 3D pictures, and trinkets bounce into place with a puff of dust. Tode turns to look at them',
+      '✨ Trinkets come alive: chimes sway, bees buzz around the hive, the snail goes for a stroll, the duck bobs and fireflies blink. Switch the garden to night and the lanterns, jar and crystal light up the lawn',
+      '🍵 Seven sets: put matching trinkets close together for a Tea Party, a Hall of Victory, a Fairy Glade and more. Each adds to your garden\'s 🌷 beauty',
+      '📸 Garden photos, and 🔗 share your garden: friends visit it with a public garden code that can only look, never touch your progress',
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-10-15',
     title: 'Open gardens',

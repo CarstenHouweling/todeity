@@ -7,6 +7,11 @@
 //   POST /api/save/:code/buy  { id }     → { code, progress }            a Pantry upgrade
 //   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
+//   POST /api/save/:code/garden { name } → { garden }                    this save's public garden code
+//   GET  /api/garden/:garden             → { name, decor, level, … }     look at someone's garden
+//
+// The save code is a password: whoever has it owns the progress, so it is never shown to anyone else. Visiting a
+// garden uses a separate, random **garden code** (save.garden) that only opens a read-only view of the decor.
 //
 // The browser only reports what happened in a run; the server works out the reward with the game's own rules
 // (Meta.js, Achievements.js, Steeping.js), checks that the run is plausible and that the playtime fits the time
@@ -18,7 +23,8 @@ import { PANTRY, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
-import { claimGift, claimKettle, cleanDecor, withRewards } from '../src/components/Rewards.js';
+import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, withRewards } from '../src/components/Rewards.js';
+import { randomInt } from 'node:crypto';
 
 const FLAVOURS = [
   'MINT', 'CHAI', 'MATCHA', 'SENCHA', 'OOLONG', 'EARL', 'HONEY', 'LEMON', 'GINGER', 'PEACH', 'PLUM', 'ROSE',
@@ -38,6 +44,7 @@ const MISS_LIMIT = 20; // unknown codes per IP per hour (no guessing other playe
 const SLACK = 90; // seconds of reported playtime allowed beyond the real time since the last report
 
 let saves = {};
+let gardens = new Map(); // public garden code → save key (never the other way round in any response)
 let file = null;
 let writing = Promise.resolve();
 
@@ -48,7 +55,11 @@ export async function loadSaves(dataDir) {
   } catch {
     saves = {};
   }
-  for (const save of Object.values(saves)) withRewards(save.progress); // saves from before the rewards
+  gardens = new Map();
+  for (const [key, save] of Object.entries(saves)) {
+    withRewards(save.progress); // saves from before the rewards
+    if (save.garden?.code) gardens.set(save.garden.code, key);
+  }
 }
 
 function persist() {
@@ -259,6 +270,14 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     await persist();
     return send(res, 200, view(save));
   }
+  if (action === 'garden') {
+    save.garden ??= { code: newGardenCode(), name: null };
+    gardens.set(save.garden.code, normalizeCode(save.code));
+    if (body.name) save.garden.name = String(body.name).replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 16) || null;
+    save.updated = now;
+    await persist();
+    return send(res, 200, { garden: save.garden.code });
+  }
   if (action === 'buy') {
     const error = applyBuy(save, String(body.id));
     if (error) return send(res, 400, { error, ...view(save) });
@@ -267,4 +286,37 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     return send(res, 200, view(save));
   }
   return send(res, 404, { error: 'Not found.' });
+}
+
+// --- Public gardens ----------------------------------------------------------------------------------
+
+const GARDEN_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I, O, 0 or 1
+function newGardenCode() {
+  for (;;) {
+    const code = Array.from({ length: 6 }, () => GARDEN_LETTERS[randomInt(GARDEN_LETTERS.length)]).join('');
+    if (!gardens.has(code)) return code;
+  }
+}
+
+/** GET /api/garden/:code — a read-only look at a garden. Nothing in it can be used to load or change the save. */
+export async function handleGarden(req, res, url, { send, ip }) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
+  if (overLimit('gmiss', ip, MISS_LIMIT * 3)) return send(res, 429, { error: 'Too many wrong garden codes. Try again later.' });
+  const code = decodeURIComponent(url.pathname.split('/')[3] ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const save = saves[gardens.get(code)];
+  if (!save) {
+    count('gmiss', ip);
+    return send(res, 404, { error: 'No garden with that code.' });
+  }
+  const { progress } = save;
+  const { level, rank } = accountLevel(progress);
+  send(res, 200, {
+    garden: code,
+    name: save.garden.name ?? 'A frog',
+    decor: progress.decor ?? [],
+    level,
+    rank,
+    trinkets: ownedTrinkets(progress).length,
+    beauty: gardenBeauty(progress.decor ?? []),
+  });
 }

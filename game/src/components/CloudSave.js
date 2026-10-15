@@ -150,3 +150,28 @@ export function saveDecor(decor) {
     request(`/${encodeURIComponent(cloud.code)}/decor`, { decor: meta.decor }).catch(() => {});
   }, 800);
 }
+
+/**
+ * This save's public garden code (made on first use), for others to look at the garden. It is not the save code:
+ * it can't load or change anything. Resolves with the code, or null offline.
+ */
+export async function gardenCode(name) {
+  if (cloud.status !== 'online' || !cloud.code) return null;
+  try {
+    const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/garden`, { name });
+    return ok ? data.garden : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Someone's garden by its public garden code: { name, decor, level, rank, trinkets, beauty } or { error }. */
+export async function fetchGarden(code) {
+  try {
+    const response = await fetch(`/api/garden/${encodeURIComponent(code.trim())}`, { cache: 'no-store' });
+    const data = await response.json().catch(() => ({}));
+    return response.ok ? data : { error: data.error ?? "Couldn't find that garden." };
+  } catch {
+    return { error: "Can't reach the server right now." };
+  }
+}

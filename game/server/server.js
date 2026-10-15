@@ -8,6 +8,7 @@
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
 //   GET  /api/rooms   public co-op rooms that can be joined
+//   GET  /api/garden/:code  a read-only look at someone's title garden (see saves.js)
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
 //   WS   /ws?presence=1   who is online (see presence.js)
 //   /admin, /api/admin/…  the owner's admin page and API, only when ADMIN_TOKEN is set (see admin.js)
@@ -22,7 +23,7 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { randomBytes } from 'node:crypto';
-import { handleSave, loadSaves, saveCount } from './saves.js';
+import { handleGarden, handleSave, loadSaves, saveCount } from './saves.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
@@ -416,6 +417,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/health') return send(res, 200, { ok: true });
     if (url.pathname === '/api/rooms' && req.method === 'GET') return listRooms(res);
+    if (url.pathname.startsWith('/api/garden/')) return await handleGarden(req, res, url, { send, ip: clientIp(req) });
     if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) {
       return await handleAdmin(req, res, url, { send, ip: clientIp(req), boards: () => boards, saveScores, stats: adminStats });
     }

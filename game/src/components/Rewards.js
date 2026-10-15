@@ -165,3 +165,39 @@ export function accountLevel(progress) {
   const rank = RANKS.filter(([at]) => level >= at).pop()[1];
   return { level, rank, xp, progress: (xp - from) / (to - from) };
 }
+
+// --- Sets and beauty: trinkets placed close together form a display (looks only, no gameplay) ---------------------
+export const SET_RADIUS = 120; // every part of a set within this distance of the set's middle
+export const SETS = [
+  { id: 'teaparty', name: 'Tea Party', icon: '🍵', parts: ['teapot', 'cups', 'bench'], beauty: 60, color: '#fff2e0', effect: 'steam' },
+  { id: 'victory', name: 'Hall of Victory', icon: '🏆', parts: ['hive', 'helm', 'feather', 'crown', 'horns'], beauty: 150, color: '#ffd36b', effect: 'sparkle' },
+  { id: 'glade', name: 'Fairy Glade', icon: '✨', parts: ['mushrooms', 'crystal', 'jar'], beauty: 70, color: '#c58aff', effect: 'fireflies' },
+  { id: 'pond', name: 'Pond Friends', icon: '🦆', parts: ['duck', 'snail', 'fountain'], beauty: 60, color: '#7fd8ff', effect: 'ripples' },
+  { id: 'zen', name: 'Zen Corner', icon: '🎐', parts: ['bonsai', 'lantern', 'chimes'], beauty: 60, color: '#ff9ec7', effect: 'petals' },
+  { id: 'guardians', name: 'Garden Guardians', icon: '🐸', parts: ['gnome', 'scarebee', 'tulips'], beauty: 50, color: '#7ed957', effect: 'leaves' },
+  { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', effect: 'beam' },
+];
+const BEAUTY = { milestone: 15, gift: 20, kettle: 12 };
+
+/** The sets a garden shows: [{ set, x, y }] (the middle of its parts). */
+export function gardenSets(decor = []) {
+  const at = new Map(decor.map((item) => [item.id, item]));
+  const found = [];
+  for (const set of SETS) {
+    const parts = set.parts.map((id) => at.get(id));
+    if (parts.some((part) => !part)) continue;
+    const x = parts.reduce((sum, p) => sum + p.x, 0) / parts.length;
+    const y = parts.reduce((sum, p) => sum + p.y, 0) / parts.length;
+    if (parts.every((p) => Math.hypot(p.x - x, p.y - y) <= SET_RADIUS)) found.push({ set, x, y });
+  }
+  return found;
+}
+
+/** How lovely a garden is: every placed trinket counts, a finished set much more. */
+export function gardenBeauty(decor = []) {
+  const trinkets = decor.reduce((sum, item) => sum + (BEAUTY[trinketById(item.id)?.source] ?? 0), 0);
+  return trinkets + gardenSets(decor).reduce((sum, { set }) => sum + set.beauty, 0);
+}
+
+/** Which set a trinket belongs to. */
+export const setOf = (id) => SETS.find((set) => set.parts.includes(id));
