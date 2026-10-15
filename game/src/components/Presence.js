@@ -11,6 +11,11 @@ let retryDelay = 2_000;
 let retryTimer = null;
 let sendTimer = null;
 let lastSent = 0;
+let opened = false; // connected at least once
+let onBack = null;
+
+/** `fn()` runs whenever the presence socket connects again after a drop (the server restarted, say for a deploy). */
+export const onServerBack = (fn) => (onBack = fn);
 
 // At most one message per ~second (the server closes sockets that chat more); the latest state wins.
 function report() {
@@ -34,6 +39,8 @@ function connect() {
       retryDelay = 2_000;
       sentJson = '';
       report();
+      if (opened) onBack?.();
+      opened = true;
     };
     socket.onclose = () => {
       if (ws !== socket) return;

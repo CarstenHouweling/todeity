@@ -861,6 +861,7 @@ ${ meta.runs > 0 ? '' :
           ${this.saveChip()}
           <button type="button" data-action="cycle-graphics" title="Low runs smoothly on older phones">🖥 Graphics: ${GRAPHICS_LABELS[this.graphics ?? 'auto']}</button>
           ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
+          ${this.newVersion ? `<button type="button" class="update-pill" data-action="reload" title="The game was updated while you played">✨ v${escapeHtml(this.newVersion)} is out · reload</button>` : ''}
           <button type="button" data-action="changelog">📜 What's new · v${VERSION}</button>
         </div>
       </div>`

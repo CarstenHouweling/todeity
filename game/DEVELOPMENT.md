@@ -53,6 +53,38 @@ az webapp config appsettings set --name todeity-<something-unique> --resource-gr
 Scores are stored as JSON (`scores.json`, top 100 all-time + 14 days of daily boards). The server rate-limits
 submissions per IP and rejects implausible scores; it trusts `X-Forwarded-For`, so it is not cheat-proof.
 
+### Deploying while people play (v0.24.3)
+
+A deploy restarts the Node process (about a minute on B1, which has no staging slot). The game itself keeps running
+in every browser; what touches the server is made to survive the gap:
+
+- **Data files** (`server/store.js`, used for `saves.json` and `scores.json`): never written in place. Each write
+  goes to `<file>.tmp`, is flushed and renamed over the file, so a kill mid-write can't leave half a file. Every
+  write keeps the previous version as `<file>.bak`, and `DATA_DIR/backups/` gets one copy per day (7 days). A file
+  that won't parse is moved aside (`.corrupt-<time>`) and the newest good backup is loaded; with none, **the server
+  refuses to start** instead of starting empty and overwriting everyone's saves. To restore by hand: stop the app,
+  copy a backup over the file, start it.
+- **Shutdown:** on SIGTERM (App Service sends it) the server stops accepting, tells sockets `restarting`, waits for
+  pending writes (at most 8 s) and exits.
+- **Co-op runs carry on:** `Net.js` reconnects for up to 150 s and sends `resume` (code, id, host, name, colour);
+  the server makes the room again with the same code, host and ids (ids start at a random number per process, so
+  new players never take a resuming id). The host keeps simulating meanwhile; when a teammate comes back the host
+  re-sends the current `wave` (and `cleared`), guests ignore a wave they already started (`guestWave`), and missing
+  teammates are only dropped `TEAM_GRACE` (60 s) after we're back (`teammatesChanged` in main.js). A teammate whose
+  puppet was dropped gets a new one when they return. A room made again by a guest closes if the host isn't back in
+  `RESUME_GRACE` (120 s).
+- **Gardens** reconnect by themselves (`GardenHub.reconnect`, backoff up to 15 s).
+- **Run reports** are queued in `localStorage` (`tode-unsent-runs`) until the server answers; each has a `runId`
+  and the server remembers the last 20 per save (`recentRuns`), so a report sent twice pays once. `initCloud`
+  retries quietly when the server was away at start. The queue is sent after every sync and retried every 30 s.
+- **Old pages:** when the presence socket reconnects (`onServerBack`), the game asks `/api/health` for the server's
+  `version`; a different one shows a "✨ vX is out · reload" pill on the title screen (never during a run).
+
+Still lost in a deploy: anything the host sends while the server is away (one-off events like a boss intro or a
+shrine; snapshots and the wave catch up), Pantry purchases made during the gap (they are undone, the leaves come
+back), and a leaderboard submit during the gap (the button can be pressed again). Two runs queued while the server
+is away can trip the playtime check for the second. Deploy when few people play (the admin page's Who's online).
+
 ### Admin
 
 The owner's admin page lives at **`/admin`** (`server/admin.html`, served by `server/admin.js`; not part of the Vite
@@ -422,11 +454,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (`leavesForRun`, `PANTRY`, `ACHIEVEMENTS`, `steepBonus` are imported from `src/`, so the server needs the `src`
   folder next to it), accepts achievements only when the run fits them (`earned()`), and refuses a run whose
   playtime exceeds the real time since the previous report. Pantry purchases are checked too (`reportBuy`).
-  Achievements unlocked this session wait in memory (`notePending`) until the next run report. Without a server
+  Achievements unlocked this session wait in memory (`notePending`) until the next run report. Reports that don't
+  get through wait in `tode-unsent-runs` (see Deploying while people play). Without a server
   the game falls back to local progress. Forged requests can still cheat; this only stops storage edits.
   **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
-  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`.
+  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`.
 
 ## Graphics levels
 
@@ -495,6 +528,8 @@ server proxies `/ws` and `/api`).
   message handling, lobby), and the relay in `server/server.js`.
 - **Arenas** follow the wave number, so every screen travels on its own when the host's `wave` message arrives
   (the host sends it before its own travel). Brimstone Rings are events (`k: 'fring'`), simulated by everyone.
+- **Restarts:** a dropped connection or a server restart doesn't end the run; everyone reconnects into the same
+  room (see Deploying while people play).
 - **Limits.** Browsers pause background tabs, so the host must keep the game visible. No joining a run that has
   started. Knockback from a guest's skills (tornado pull, tongue) only shows on their own screen.
 
@@ -557,6 +592,7 @@ server proxies `/ws` and `/api`).
 | `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the five frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |
 | `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
 | `../server/saves.js` | `/api/save` cloud saves (`saves.json` in `DATA_DIR`): codes, run rewards, Pantry purchases, rate limits. |
+| `../server/store.js` | Safe JSON files: atomic writes, `.bak` and daily backups, refuses to start over a broken file. |
 | `../server/admin.js`, `../server/admin.html` | The owner's `/admin` page and `/api/admin/…` API (only with `ADMIN_TOKEN`; see Admin). |
 | `../server/presence.js` | Presence sockets (`/ws?presence=1`): online count by state, peak, limits, pings. |
 | `style.css` | All UI styling. |

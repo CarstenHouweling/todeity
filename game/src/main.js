@@ -53,7 +53,8 @@ import { TitleGarden } from './components/TitleGarden.js';
 import { GardenHub } from './components/GardenHub.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
 import { EMOTES, emoteUnlocked } from './components/Emotes.js';
-import { setPresence, startPresence } from './components/Presence.js';
+import { onServerBack, setPresence, startPresence } from './components/Presence.js';
+import { VERSION } from './components/Changelog.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
 THREE.Cache.enabled = true;
@@ -4590,7 +4591,11 @@ function startWave(number, weatherKind, mods) {
   mods = [...new Set([...mods, ...forced])];
   if (twist('storm')) weatherKind = 'storm';
   if (destination.weathers && !destination.weathers.includes(weatherKind)) weatherKind = 'clear';
-  if (coop?.host) share({ k: 'wave', n: number, wx: weatherKind, m: mods });
+  if (coop?.host) {
+    lastWaveShare = { k: 'wave', n: number, wx: weatherKind, m: mods };
+    waveClearedShared = false;
+    share(lastWaveShare);
+  }
   if (destination !== arena) startTravel(destination, number, weatherKind, mods);
   else beginWave(number, weatherKind, mods);
 }
@@ -5340,7 +5345,10 @@ function waveCleared() {
   if (feats.bitterWave === wave) achieve('bitter');
   // A whole arena past the garden (its waves with tiles, then its boss) without setting off a cursed tile.
   if (wave >= 10 && wave % 5 === 0 && feats.tileWave <= wave - 5) achieve('lightfeet');
-  if (coop?.host) share({ k: 'cleared' });
+  if (coop?.host) {
+    waveClearedShared = true;
+    share({ k: 'cleared' });
+  }
   const bonus = WAVE_CLEAR_BONUS * wave;
   points += bonus;
   const heal = player.stats.waveHeal;
@@ -6070,13 +6078,16 @@ function handleNet(from, message) {
       if (!coop && hud.menuName === 'lobby' && net.inRoom) showRoom();
       break;
     case 'wave':
-      if (isGuest()) {
+      // (a wave we already started comes again when the host catches us up after a reconnect)
+      if (isGuest() && message.n > guestWave) {
+        guestWave = message.n;
         if (['choosing', 'ultimate', 'skill'].includes(phase)) hud.hideMenu(); // the host moved on without us
         startWave(message.n, message.wx, message.m ?? []);
       }
       break;
     case 'cleared':
       if (isGuest() && (phase === 'fighting' || phase === 'intro')) waveCleared();
+      else if (isGuest() && phase === 'waiting') net.queue('host', { k: 'ready' }); // caught up after a reconnect
       break;
     case 'ready':
       if (coop?.host) markReady(from);
@@ -6165,7 +6176,17 @@ net.on((message) => {
     for (const item of message.d) handleNet(message.from, item);
   } else if (message.t === 'joined' || message.t === 'players') {
     if (!coop && hud.menu.classList.contains('lobby')) showRoom();
-    if (coop && message.t === 'players') dropMissingTeammates();
+    if (coop && message.t === 'players') teammatesChanged();
+  } else if (message.t === 'reconnecting') {
+    // The server restarts (a deploy) or the connection dropped: Net.js gets us back into the room meanwhile.
+    if (coop || hud.menuName === 'lobby') hud.showBanner('📡 Reconnecting…', 'Lost the server for a moment. Keep playing!', 3);
+  } else if (message.t === 'resumed') {
+    resumedAt = performance.now();
+    if (coop) {
+      hud.showCallout('📡 Back online!');
+      // Teammates who never made it back are dropped once the others had time to return.
+      setTimeout(() => coop && !net.resuming && dropMissingTeammates(), TEAM_GRACE + 100);
+    }
   } else if (message.t === 'error') {
     lobbyError = message.message;
     if (!coop && !decorating) showLobby();
@@ -6306,6 +6327,10 @@ function hostStartCoop() {
 function startCoopRun(players, sharedVows = {}) {
   leaveCoop({ keepConnection: true });
   coop = { host: net.isHost, remotes: new Map(), ready: new Set(), size: players.length };
+  roomPresent = new Set(players.map((p) => p.id));
+  lastWaveShare = null;
+  waveClearedShared = false;
+  guestWave = 0;
   for (const info of players) {
     if (info.id === net.id) continue;
     const remote = new RemoteTode(info, { scene, particles, effects, hud });
@@ -6314,6 +6339,37 @@ function startCoopRun(players, sharedVows = {}) {
   }
   buildWorld(COOP_TILES[Math.min(players.length, 4) - 1]);
   startRun({ coop: true, vows: sharedVows });
+}
+
+// --- Riding out a server restart (Net.js resumes the room; see server.js) ---
+const TEAM_GRACE = 60_000; // ms after we're back in the room before missing teammates count as gone
+let resumedAt = -Infinity;
+let lastWaveShare = null; // host: the last wave message, and whether that wave is cleared, for teammates coming back
+let waveClearedShared = false;
+let guestWave = 0; // guest: the last wave the host started for us
+let roomPresent = new Set(); // who was in the room at the last players message
+
+/** The room's players changed: teammates who came back are caught up; ones who left are dropped. */
+function teammatesChanged() {
+  const present = new Set(net.players.map((p) => p.id));
+  for (const info of net.players) {
+    if (info.id === net.id || roomPresent.has(info.id)) continue;
+    // Back after a dropped connection (their puppet may be gone already).
+    if (!coop.remotes.has(info.id)) {
+      const remote = new RemoteTode(info, { scene, particles, effects, hud });
+      coop.remotes.set(info.id, remote);
+      remote.load();
+      hud.showCallout(`${info.name} is back`);
+    }
+    // Host: they missed what happened meanwhile, so tell them the wave again (and whether it's cleared).
+    if (coop.host && lastWaveShare) {
+      net.queue(info.id, lastWaveShare);
+      if (waveClearedShared) net.queue(info.id, { k: 'cleared' });
+    }
+  }
+  roomPresent = present;
+  if (net.resuming || performance.now() - resumedAt < TEAM_GRACE) return; // others may still be on their way back
+  dropMissingTeammates();
 }
 
 function dropMissingTeammates() {
@@ -7213,6 +7269,7 @@ const MENU_ACTIONS = {
     play('click');
     hud.showChangelog();
   },
+  reload: () => location.reload(),
   'close-modal': () => hud.hideModal(),
   share: openShare,
   'share-native': shareNative,
@@ -7237,6 +7294,19 @@ hud.onAction = (action, data = {}) => {
 hud.setMuted(!soundSettings().sfx && !soundSettings().music);
 
 /** Redraws the open title or pause menu, e.g. when a setting shown on a button changed outside it. */
+// After a deploy the server comes back with a newer version: players who kept the page open get a pill on the title
+// screen to reload when it suits them (never in the middle of a run).
+onServerBack(async () => {
+  try {
+    const { version } = await (await fetch('/api/health', { cache: 'no-store' })).json();
+    if (!version || version === VERSION || hud.newVersion === version) return;
+    hud.newVersion = version;
+    refreshMenu();
+  } catch {
+    // not back yet after all
+  }
+});
+
 function refreshMenu() {
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pause') showPauseMenu();

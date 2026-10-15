@@ -3,7 +3,7 @@
 //
 //   POST /api/save                       → { code, progress }            a new save
 //   GET  /api/save/:code                 → { code, progress }
-//   POST /api/save/:code/run  { report } → { code, progress, leaves }    leaves for a finished run
+//   POST /api/save/:code/run  { report } → { code, progress, leaves }    leaves for a finished run (`runId`: once)
 //   POST /api/save/:code/buy  { id }     → { code, progress }            a Pantry upgrade
 //   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
@@ -18,8 +18,8 @@
 // (Meta.js, Achievements.js, Steeping.js), checks that the run is plausible and that the playtime fits the time
 // since the previous report. A determined cheater can still forge requests, but not by editing their storage.
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { jsonFile } from './store.js';
 import { PANTRY, harvestBonus, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
@@ -44,19 +44,16 @@ const RUN_GAP = 10_000; // ms between run reports per save
 const CREATE_LIMIT = 5; // new saves per IP per hour
 const MISS_LIMIT = 20; // unknown codes per IP per hour (no guessing other players' codes)
 const SLACK = 90; // seconds of reported playtime allowed beyond the real time since the last report
+const RECENT_RUNS = 20; // run ids remembered per save, so a report sent twice pays once
 
 let saves = {};
 let gardens = new Map(); // public garden code → save key (never the other way round in any response)
-let file = null;
-let writing = Promise.resolve();
+let file = null; // saves.json, written safely (store.js)
 
+/** Loads the saves; throws when saves.json is broken and has no good backup (see store.js). */
 export async function loadSaves(dataDir) {
-  file = join(dataDir, 'saves.json');
-  try {
-    saves = JSON.parse(await readFile(file, 'utf8'));
-  } catch {
-    saves = {};
-  }
+  file = jsonFile(join(dataDir, 'saves.json'));
+  saves = await file.load(() => ({}));
   gardens = new Map();
   for (const [key, save] of Object.entries(saves)) {
     withRewards(save.progress); // saves from before the rewards
@@ -66,12 +63,11 @@ export async function loadSaves(dataDir) {
 }
 
 function persist() {
-  writing = writing.then(async () => {
-    await mkdir(join(file, '..'), { recursive: true });
-    await writeFile(file, JSON.stringify(saves));
-  });
-  return writing;
+  return file.write(saves);
 }
+
+/** Resolves when every save change is on disk (before the server exits). */
+export const flushSaves = () => file?.flush();
 
 const emptyProgress = () =>
   withRewards({ leaves: 0, levels: {}, achievements: [], runs: 0, bestWave: 0, bossKills: 0, victories: 0, maxTier: 0, eliteKills: 0 });
@@ -259,9 +255,13 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
   }
   const now = Date.now();
   if (action === 'run') {
+    // A report the browser sends again (it never heard back, e.g. during a restart) counts only once.
+    const runId = typeof body.runId === 'string' ? body.runId.slice(0, 32) : null;
+    if (runId && save.recentRuns?.includes(runId)) return send(res, 200, { ...view(save), leaves: 0, duplicate: true });
     if (now - (save.lastRunAt ?? 0) < RUN_GAP) return send(res, 429, { error: 'Slow down a little.', ...view(save) });
     const result = applyRun(save, body, now);
     if (typeof result === 'string') return send(res, 400, { error: result, ...view(save) });
+    if (runId) save.recentRuns = [...(save.recentRuns ?? []), runId].slice(-RECENT_RUNS);
     save.updated = now;
     await persist();
     return send(res, 200, { ...view(save), leaves: result });

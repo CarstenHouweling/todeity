@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.3',
+    date: '2026-10-15',
+    title: 'Hold on tight',
+    changes: [
+      '📡 Co-op runs survive a server restart or a dropped connection: everyone reconnects into the same room and the run carries on',
+      '🏡 Gardens reconnect by themselves after a hiccup',
+      '🍃 A run that ends while the server is away still pays its Golden Leaves: the report waits and is sent when the server is back (and never counts twice)',
+      '💾 Saves and leaderboards are written safely with backups, so a restart can never damage them',
+      '✨ When a new version is out, the title screen offers a reload',
+    ],
+  },
+  {
     version: '0.24.2',
     date: '2026-10-15',
     title: 'No more frozen gardens',

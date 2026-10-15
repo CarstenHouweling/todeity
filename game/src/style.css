@@ -2557,6 +2557,14 @@ body.touch .steep-badge {
   text-shadow: 0 0 10px #c8d8ff, 0 0 22px #9ff4ff, 0 0 30px #c8b0ff, 0 1px 2px #000;
 }
 
+/* A newer version is live (after a deploy): reload when it suits you */
+.title-footer .update-pill {
+  border-color: rgba(255, 211, 107, 0.7);
+  background: rgba(255, 211, 107, 0.2);
+  color: #fff3c4;
+  font-weight: 700;
+}
+
 /* Title screen: start, ways to play, preparing a run, then small extras */
 .title-screen .menu-buttons {
   margin-top: 10px;

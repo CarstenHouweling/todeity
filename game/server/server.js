@@ -18,17 +18,19 @@
 // which survives restarts and deploys).
 
 import { createServer } from 'node:http';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { randomBytes } from 'node:crypto';
-import { gardenName, handleGarden, handleSave, loadSaves, publicGardens, saveCount } from './saves.js';
+import { randomBytes, randomInt } from 'node:crypto';
+import { flushSaves, gardenName, handleGarden, handleSave, loadSaves, publicGardens, saveCount } from './saves.js';
+import { jsonFile } from './store.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
 import { TAG_COLORS, publicName } from '../src/components/PlayerTag.js';
+import { VERSION } from '../src/components/Changelog.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -60,17 +62,13 @@ const MIME = {
 const COOP_BOARDS = ['coop2', 'coop3', 'coop4'];
 const emptyBoards = () => ({ all: [], daily: {}, depth: [], speed: [], coop2: [], coop3: [], coop4: [] });
 let boards = emptyBoards();
-let saving = Promise.resolve();
+const scoresFile = jsonFile(SCORES_FILE); // written safely, with daily backups (store.js)
 
 // Every entry has a short random `id` (the admin API deletes by it). Copies of one run on several boards share it.
 const newId = () => randomBytes(5).toString('hex');
 
 async function loadScores() {
-  try {
-    boards = { ...emptyBoards(), ...JSON.parse(await readFile(SCORES_FILE, 'utf8')) };
-  } catch {
-    boards = emptyBoards();
-  }
+  boards = { ...emptyBoards(), ...(await scoresFile.load(emptyBoards)) };
   // Scores from before entries had ids get one now.
   let added = 0;
   for (const list of [boards.all, boards.depth, boards.speed, ...COOP_BOARDS.map((key) => boards[key]), ...Object.values(boards.daily)]) {
@@ -84,12 +82,7 @@ async function loadScores() {
 }
 
 function saveScores() {
-  // Serialise writes so concurrent submissions never interleave.
-  saving = saving.then(async () => {
-    await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(SCORES_FILE, JSON.stringify(boards));
-  });
-  return saving;
+  return scoresFile.write(boards); // one write at a time, never in place
 }
 
 const ORDERS = {
@@ -244,14 +237,24 @@ async function serveStatic(res, pathname) {
 // client → server: { t: 'create', name, public } | { t: 'join', code, name } | { t: 'quick', name }
 //                  { t: 'visibility', public } (host) | { t: 'start' } / { t: 'open' } (host: a run starts / ended)
 //                  { t: 'relay', to: 'all'|'host'|id, d } | { t: 'leave' }
+//                  { t: 'resume', code, id, hostId, name, color, public, started } (back after a restart or a drop)
 // server → client: { t: 'joined', code, id, hostId, public } | { t: 'players', players, hostId, started, public }
 //                  { t: 'relay', from, d } | { t: 'error', message } | { t: 'closed', reason }
+//                  { t: 'restarting' } (the server is about to restart: reconnect and resume)
+//
+// **Surviving a restart** (a deploy): rooms only live in memory, so when the server comes back the players of a
+// room reconnect and `resume`: the first one back makes the room again with its old code and host, and everyone
+// gets their old id back, so the run carries on (Net.js reconnects, main.js re-sends the wave). Ids start at a
+// random number in every server process, so new players never take an id that someone is about to resume with.
+// A room made again by a guest closes when its host isn't back within RESUME_GRACE.
 
 const MAX_PLAYERS = 4;
 const COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f'];
 const rooms = new Map();
 const MAX_PUBLIC_ROOMS = 200; // a list longer than this is noise (and a sign of abuse)
-let nextClientId = 1;
+let nextClientId = 1 + randomInt(1_000_000) * 1000;
+const RESUME_GRACE = 120_000; // ms a room made again by a guest waits for its host
+let stopping = false; // shutting down: sockets closing now are a restart, not players leaving
 
 function makeCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O, to avoid confusion with 1 and 0
@@ -291,6 +294,43 @@ function joinRoom(client, room, name) {
   client.room = room;
   room.clients.set(client.id, client);
   sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public });
+  broadcastPlayers(room);
+}
+
+/** A player back after a restart or a dropped connection: into their room again (made again if it's gone). */
+function resumeRoom(client, message) {
+  const code = String(message.code ?? '').toUpperCase().trim();
+  const id = Number(message.id);
+  const hostId = Number(message.hostId);
+  const lost = (reason) => sendTo(client.ws, { t: 'closed', reason });
+  if (!/^[A-Z]{4}$/.test(code) || !Number.isSafeInteger(id) || !Number.isSafeInteger(hostId)) return lost('Lost the co-op room.');
+  if (client.room?.code === code && client.id === id) return; // (already back)
+  let room = rooms.get(code);
+  if (room && (room.hostId !== hostId || room.clients.has(id))) return lost('The room carried on without you.');
+  leaveRoom(client);
+  if (!room) {
+    room = { code, hostId, clients: new Map(), started: Boolean(message.started), public: Boolean(message.public) && publicCount() < MAX_PUBLIC_ROOMS, createdAt: Date.now() };
+    rooms.set(code, room);
+    if (id !== hostId) {
+      // Made again by a guest: if the host never comes back, the room can't go on.
+      room.hostTimer = setTimeout(() => {
+        if (rooms.get(code) !== room || room.clients.has(room.hostId)) return;
+        for (const other of room.clients.values()) {
+          sendTo(other.ws, { t: 'closed', reason: "The host didn't come back." });
+          other.room = null;
+        }
+        rooms.delete(code);
+      }, RESUME_GRACE);
+    }
+  }
+  if (id === hostId) clearTimeout(room.hostTimer);
+  client.id = id;
+  client.name = publicName(message.name, 'Frog');
+  const used = new Set([...room.clients.values()].map((c) => c.color));
+  client.color = COLORS.includes(message.color) && !used.has(message.color) ? message.color : COLORS.find((color) => !used.has(color));
+  client.room = room;
+  room.clients.set(client.id, client);
+  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public, resumed: true });
   broadcastPlayers(room);
 }
 
@@ -352,6 +392,8 @@ function handleSocketMessage(client, raw) {
     if (room.clients.size >= MAX_PLAYERS) return sendTo(client.ws, { t: 'error', message: 'That room is full.' });
     leaveRoom(client);
     joinRoom(client, room, message.name);
+  } else if (message.t === 'resume') {
+    resumeRoom(client, message);
   } else if (message.t === 'leave') {
     leaveRoom(client);
   } else if (message.t === 'start' && client.room?.hostId === client.id) {
@@ -451,6 +493,7 @@ sockets.on('connection', (ws, req, ip) => {
   ws.on('pong', () => (ws.isAlive = true));
   ws.on('message', (raw) => handleSocketMessage(client, raw));
   ws.on('close', () => {
+    if (stopping) return; // a restart: the rooms come back when their players resume
     leaveRoom(client);
     leaveGarden(client);
     const left = (relayPerIp.get(ip) ?? 1) - 1;
@@ -498,7 +541,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/save' || url.pathname.startsWith('/api/save/')) {
       return await handleSave(req, res, url, { send, ip: clientIp(req), readJson: async (r) => JSON.parse((await readBody(r)) || '{}') });
     }
-    if (url.pathname === '/api/health') return send(res, 200, { ok: true });
+    if (url.pathname === '/api/health') return send(res, 200, { ok: true, version: VERSION }, { 'Cache-Control': 'no-store' });
     if (url.pathname === '/api/rooms' && req.method === 'GET') return listRooms(res);
     if (url.pathname === '/api/gardens' && req.method === 'GET') return listGardens(res);
     if (url.pathname.startsWith('/api/garden/')) return await handleGarden(req, res, url, { send, ip: clientIp(req) });
@@ -525,4 +568,23 @@ server.on('upgrade', (req, socket, head) => {
   sockets.handleUpgrade(req, socket, head, (ws) => sockets.emit('connection', ws, req, ip));
 });
 
-server.listen(PORT, () => console.log(`Todeity server on http://localhost:${PORT}${adminEnabled() ? ' (admin on /admin)' : ''}`));
+server.listen(PORT, () => console.log(`Todeity server v${VERSION} on http://localhost:${PORT}${adminEnabled() ? ' (admin on /admin)' : ''}`));
+
+// --- Restarts (deploys) ----------------------------------------------------------------------------------
+// App Service sends SIGTERM before it stops the app. Finish writing the saves and scores, and tell co-op and garden
+// players the server is restarting, so they reconnect and carry on instead of ending their run.
+async function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: saving and closing.`);
+  server.close();
+  for (const ws of sockets.clients) {
+    sendTo(ws, { t: 'restarting' });
+    ws.close(1012, 'Server restarting');
+  }
+  const timeout = new Promise((resolve) => setTimeout(resolve, 8_000));
+  await Promise.race([Promise.all([flushSaves(), scoresFile.flush()]), timeout]);
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

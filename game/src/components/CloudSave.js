@@ -9,6 +9,8 @@ import { TAG_COLORS, cleanName, nameProblem } from './PlayerTag.js';
 
 const API = '/api/save';
 const CODE_KEY = 'tode-save-code';
+const RUNS_KEY = 'tode-unsent-runs'; // run reports the server hasn't answered yet (a restart, no connection)
+const RUN_GAP = 11_000; // ms between reports (the server allows one per 10 s)
 const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills', 'streak', 'kettleAt', 'kettles', 'trinkets', 'decor'];
 
 const storage = (action, key, value) => {
@@ -59,13 +61,26 @@ async function request(path, body) {
   return { ok: response.ok, status: response.status, data };
 }
 
-/** On start: load this browser's save, or make one. */
+let syncTries = 0;
+let retryTimer = null;
+
+/** The server couldn't be reached (a restart, no connection): try again in a while. */
+function retryLater(delay) {
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => (cloud.status === 'online' ? sendUnsentRuns() : initCloud()), delay);
+}
+if (typeof addEventListener === 'function') addEventListener('online', () => retryLater(1_000));
+
+/** On start: load this browser's save, or make one. Retries quietly while the server is away. */
 export async function initCloud() {
   if (!isPersisting()) return;
   try {
     if (cloud.code) {
       const { ok, status, data } = await request(`/${encodeURIComponent(cloud.code)}`);
-      if (ok) return apply(data);
+      if (ok) {
+        apply(data);
+        return sendUnsentRuns(); // runs that ended while the server was away
+      }
       if (status !== 404) throw new Error(data.error);
     }
     // First visit (or the save is gone): a fresh save. Progress from before cloud saves doesn't carry over.
@@ -73,9 +88,12 @@ export async function initCloud() {
     const { ok, data } = await request('', {});
     if (!ok) throw new Error(data.error);
     apply(data);
+    sendUnsentRuns();
   } catch {
     cloud.status = 'offline';
     cloud.onChange?.();
+    // Back in 15 s, then less and less often (a static host without a server just stays offline).
+    if (++syncTries <= 12) retryLater(Math.min(15_000 * 1.5 ** (syncTries - 1), 300_000));
   }
 }
 
@@ -97,14 +115,63 @@ export async function loadCode(code) {
  * time, steep, maxTier, goldLeaf, daily, coop }.
  */
 export async function reportRun(run) {
-  if (!cloud.code || !isPersisting() || cloud.status === 'offline') return;
+  if (!cloud.code || !isPersisting()) return;
+  // A run id lets the server pay a report only once, even when it is sent again.
+  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const body = { ...run, eliteKills: Math.max(0, (meta.eliteKills ?? 0) - eliteBase), achievements: [...pending.keys()], runId };
+  eliteBase = meta.eliteKills ?? 0; // (counted in this report now)
+  // Kept until the server answers, so a run that ends while the server restarts still pays its leaves later.
+  unsentRuns(cloud.code, (runs) => runs.push(body));
+  if (cloud.status === 'online') sendUnsentRuns();
+}
+
+/** The reports waiting to be sent for a save code; `change(runs)` edits the list. */
+function unsentRuns(code, change = null) {
+  let all = {};
   try {
-    const body = { ...run, eliteKills: Math.max(0, (meta.eliteKills ?? 0) - eliteBase), achievements: [...pending.keys()] };
-    const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/run`, body);
-    if (ok) pending.clear(); // the server decided about every one of them
-    if (data.progress) apply(data);
+    all = JSON.parse(storage('get', RUNS_KEY) ?? '{}') ?? {};
   } catch {
-    // Offline for now: this run's leaves stay in this browser until the next sync.
+    // a broken list starts over
+  }
+  const runs = Array.isArray(all[code]) ? all[code] : [];
+  if (change) {
+    change(runs);
+    if (runs.length) all[code] = runs.slice(-10);
+    else delete all[code];
+    storage(Object.keys(all).length ? 'set' : 'remove', RUNS_KEY, JSON.stringify(all));
+  }
+  return runs;
+}
+
+let sending = false;
+
+/** Sends the waiting run reports, oldest first; ones that didn't get through wait for the next try. */
+async function sendUnsentRuns() {
+  if (sending || !cloud.code || !isPersisting()) return;
+  sending = true;
+  const code = cloud.code;
+  try {
+    for (let i = 0; ; i++) {
+      const [body] = unsentRuns(code);
+      if (!body) break;
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, RUN_GAP));
+      let answer;
+      try {
+        answer = await request(`/${encodeURIComponent(code)}/run`, body);
+      } catch {
+        answer = null; // no connection
+      }
+      if (!answer || answer.status >= 500 || answer.status === 429) {
+        retryLater(30_000);
+        break;
+      }
+      // Paid, or refused for good (the server decided either way): it leaves the list.
+      unsentRuns(code, (runs) => runs.splice(runs.findIndex((r) => r.runId === body.runId) >>> 0, 1));
+      if (answer.ok) for (const id of body.achievements ?? []) pending.delete(id);
+      if (answer.data.progress && cloud.code === code) apply(answer.data);
+    }
+  } finally {
+    sending = false;
   }
 }
 

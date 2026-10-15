@@ -180,6 +180,7 @@ export class GardenHub {
     this.myBubble = this.hud.attachWorldLabel('', '#ffd36b');
     this.myBubble.classList.add('emote-bubble');
     this.myEmote = null;
+    this.identity = { name, cls, color };
     if (!code) return;
     try {
       await this.net.connect();
@@ -192,6 +193,7 @@ export class GardenHub {
   }
 
   leave() {
+    clearTimeout(this.retryTimer);
     if (this.code && this.net.connected) this.net.send({ t: 'gleave' });
     for (const frog of this.frogs.values()) frog.dispose();
     this.frogs.clear();
@@ -243,8 +245,27 @@ export class GardenHub {
       this.online = false;
       for (const frog of this.frogs.values()) frog.dispose();
       this.frogs.clear();
+      this.party = [];
       this.hooks.onChange?.();
+      this.reconnect();
     }
+  }
+
+  /** Lost the server (a restart for a deploy, a dropped connection): keep trying to get back into this garden. */
+  reconnect(delay = 2_000) {
+    clearTimeout(this.retryTimer);
+    const code = this.code;
+    if (!code) return;
+    this.retryTimer = setTimeout(async () => {
+      if (!this.active || this.code !== code || this.online) return;
+      try {
+        await this.net.connect();
+        if (!this.active || this.code !== code) return;
+        this.net.send({ t: 'genter', garden: code, ...this.identity }); // gwelcome brings everyone back
+      } catch {
+        this.reconnect(Math.min(delay * 1.6, 15_000));
+      }
+    }, delay * (0.75 + Math.random() * 0.5));
   }
 
   addFrog(info) {
