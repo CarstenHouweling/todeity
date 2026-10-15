@@ -280,6 +280,26 @@ Copies of one run on several boards share the id; deleting removes it from one b
   `TrinketModels.js`); 🌙 night (`meta.gardenNight`, local) switches the title sky and the soft ground glows.
   **Sets** (`SETS`, `gardenSets`, `gardenBeauty` in Rewards.js): all parts within `SET_RADIUS` of their middle show
   a ring and particles (`SET_EFFECTS`) and add beauty (shown on the profile).
+- **Gardens as a meeting place** (v0.22, `GardenHub.js`): 🏡 My garden puts Tode in his garden as a hopping frog
+  (`hub.update`: `WALK_SPEED`, Space/Shift/🦘 jumps with `JUMP_SPEED`/`GRAVITY`; the camera follows him, see
+  `TitleGarden.walk`, and is a child of his group, so `updateCamera` gets his position as `origin`). Frogs bump on
+  the same level and can land on each other's heads (`topHeight`, `STAND_RADIUS`; only when falling) and ride along.
+  ✏️ Edit garden (owner only) switches to the editor and back. Everyone in a garden is in a **garden room** on the
+  server (same socket as co-op: `genter`/`gleave`/`gstate`/`gevent`, `GARDEN_MAX` 12, `GET /api/gardens` lists the
+  liveliest), sending states 12×/s; others are `GardenFrog` puppets with a name label. **Parties:** 🚩 Invite
+  (F) opens an `INVITE_RADIUS` circle; the inviter's screen puts frogs inside it into its party (`p` in its state,
+  first come, up to 3); members press ✋ Ready (R); when all are ready a `COUNTDOWN` runs (or ▶ Go now), then
+  `setOffWithParty` (main.js) opens a private co-op room, sends its code in a `go` event, waits for the party to join
+  and calls `hostStartCoop`; members `joinParty` and start on the host's usual `start` message. `startRun` leaves
+  the garden first (`leaveGardenView`). The owner's decor changes go out as `decor` events. On phones the touch
+  controls have a garden mode (move stick and a jump button; the right half turns the camera).
+- **Player tag** (v0.23, `components/PlayerTag.js`, shared with the server): name (2–16 characters, `cleanName`), a
+  4-digit `#tag` the server gives every save, and a name colour (`TAG_COLORS`). It lives in the cloud save
+  (`save.profile`, `POST /api/save/:code/profile`, `saveProfile` in CloudSave.js; `meta.profile` locally) and
+  `playerName()` reads it first. `nameProblem()` refuses rude names (look-alike letters folded; `FRAGMENTS` anywhere,
+  `WORDS` only as whole words, so Spicy or Peacock pass); the server also runs leaderboard, co-op and garden names
+  through `publicName()`. 🏷 on the title (and the co-op lobby's "Playing as" chip) opens `hud.showProfile`;
+  `needName(next)` asks for a name before the first co-op or garden step.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
@@ -492,6 +512,7 @@ server proxies `/ws` and `/api`).
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
+| `components/PlayerTag.js` | The player tag rules: name cleaning and filtering, colours, random names, #tags (shared with the server). |
 | `components/Quality.js` | The Auto / High / Low setting: quality steps, `looksWeak()` device guess. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
@@ -510,7 +531,8 @@ server proxies `/ws` and `/api`).
 | `components/DailyTwists.js` | The Daily Brew's trials and boons per day (no three.js: the server imports it). |
 | `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
 | `components/TrinketModels.js` | Procedural models of the 23 trinkets. |
-| `components/TitleGarden.js` | The trinkets on the title screen and the "My garden" placing mode (raycasts onto the lawn). |
+| `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
+| `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
 | `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
 | `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the five frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |

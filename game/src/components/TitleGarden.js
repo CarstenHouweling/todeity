@@ -41,6 +41,8 @@ export class TitleGarden {
     this.items = []; // { id, x, y, r, model, bounce, lift }
     this.editing = false;
     this.visiting = false;
+    this.walking = false; // hopping around (GardenHub.js): the camera follows `follow`
+    this.follow = null;
     this.night = false;
     this.snap = false;
     this.held = null; // the trinket being dragged or following the pointer
@@ -90,7 +92,7 @@ export class TitleGarden {
   }
 
   get active() {
-    return this.editing || this.visiting;
+    return this.editing || this.visiting || this.walking;
   }
 
   // --- Trinkets ------------------------------------------------------------------------------
@@ -195,19 +197,43 @@ export class TitleGarden {
   enter({ visiting = false, yaw = VIEW.yaw } = {}) {
     this.editing = !visiting;
     this.visiting = visiting;
+    const fromWalk = this.walking;
+    this.walking = false;
     this.boundary.visible = this.editing;
     this.grid.visible = this.editing && this.snap;
     // Start from the camera's current place, so the move into the editor is smooth.
-    const p = this.camera.position;
-    const distance = p.length();
-    this.view = { yaw: Math.atan2(p.y, p.x), pitch: Math.asin(THREE.MathUtils.clamp(p.z / distance, -1, 1)), distance, x: 0, y: 0 };
-    this.goal = { ...VIEW, yaw, x: 0, y: 0 };
+    if (fromWalk) this.goal = { ...VIEW, yaw: this.view.yaw, x: this.view.x, y: this.view.y };
+    else {
+      this.view = this.viewFromCamera();
+      this.goal = { ...VIEW, yaw, x: 0, y: 0 };
+    }
     this.undoStack = [];
+  }
+
+  /** Hopping around: the camera follows `follow` (Tode's position), closer in; the lawn can't be edited. */
+  walk(follow) {
+    const fromEditor = this.editing || this.visiting;
+    this.cancelHeld();
+    this.selected = null;
+    this.editing = this.visiting = false;
+    this.walking = true;
+    this.follow = follow;
+    for (const mesh of [this.boundary, this.grid, this.marker, this.selection]) mesh.visible = false;
+    if (!fromEditor) this.view = this.viewFromCamera();
+    Object.assign(this.goal, { pitch: 0.62, distance: 300 });
+  }
+
+  /** Where the camera is now, as orbit values around the middle of the garden. */
+  viewFromCamera() {
+    const p = this.camera.getWorldPosition(new THREE.Vector3());
+    const distance = Math.max(1, p.length());
+    return { yaw: Math.atan2(p.y, p.x), pitch: Math.asin(THREE.MathUtils.clamp(p.z / distance, -1, 1)), distance, x: 0, y: 0 };
   }
 
   exit() {
     this.cancelHeld();
-    this.editing = this.visiting = false;
+    this.editing = this.visiting = this.walking = false;
+    this.follow = null;
     this.selected = null;
     this.gesture = null;
     this.pointers.clear();
@@ -340,7 +366,7 @@ export class TitleGarden {
     }
     if (this.pointers.size > 2) return;
     const start = { id: event.pointerId, x: event.clientX, y: event.clientY, last: { x: event.clientX, y: event.clientY }, moved: false };
-    const pan = event.button === 2 || event.button === 1 || event.shiftKey;
+    const pan = this.editing && (event.button === 2 || event.button === 1 || event.shiftKey);
     if (this.editing && this.held && !pan) {
       // A trinket picked from the tray with a tap follows the pointer: this tap sets it down.
       this.gesture = { ...start, mode: 'place' };
@@ -466,7 +492,7 @@ export class TitleGarden {
 
   /** Keyboard: WASD / arrows pan, Q/E turn the view. `axes`: { x, y, turn } from -1 to 1. */
   steer({ x, y, turn }, delta) {
-    if (!this.active) return;
+    if (!this.editing && !this.visiting) return;
     this.panBy(-x * 600 * delta, y * 600 * delta);
     this.goal.yaw += turn * 1.6 * delta;
   }
@@ -480,18 +506,24 @@ export class TitleGarden {
     this.goal.distance = Math.max(this.goal.distance, 520);
   }
 
-  /** Places the camera (a child of Tode's group, who stands at the origin on the title screen). */
-  updateCamera(camera, delta) {
+  /** Places the camera; it is a child of Tode's group, at `origin` (where Tode stands) in the world. */
+  updateCamera(camera, delta, origin = null) {
+    if (this.walking && this.follow) {
+      this.goal.x = this.follow.x;
+      this.goal.y = this.follow.y;
+    }
     const k = 1 - Math.exp(-8 * delta);
     // Turn the shorter way round.
     const yawGap = Math.atan2(Math.sin(this.goal.yaw - this.view.yaw), Math.cos(this.goal.yaw - this.view.yaw));
     this.view.yaw += yawGap * k;
     for (const key of ['pitch', 'distance', 'x', 'y']) this.view[key] += (this.goal[key] - this.view[key]) * k;
     const { yaw, pitch, distance, x, y } = this.view;
-    camera.position.set(x + Math.cos(yaw) * Math.cos(pitch) * distance, y + Math.sin(yaw) * Math.cos(pitch) * distance, Math.sin(pitch) * distance);
+    const lookZ = this.walking && this.follow ? this.follow.z * 0.8 + 12 : 0;
+    camera.position.set(x + Math.cos(yaw) * Math.cos(pitch) * distance, y + Math.sin(yaw) * Math.cos(pitch) * distance, lookZ + Math.sin(pitch) * distance);
+    if (origin) camera.position.sub(origin);
     // Looking straight down needs an up that isn't straight up.
     camera.up.set(pitch > 1.45 ? -Math.cos(yaw) : 0, pitch > 1.45 ? -Math.sin(yaw) : 0, pitch > 1.45 ? 0 : 1);
-    camera.lookAt(x, y, 0);
+    camera.lookAt(x, y, lookZ);
   }
 
   // --- Sets --------------------------------------------------------------------------------------

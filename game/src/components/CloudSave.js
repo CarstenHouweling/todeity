@@ -5,6 +5,7 @@
 
 import { isPersisting, meta, saveMeta } from './Meta.js';
 import { claimGift, claimKettle, cleanDecor, withRewards } from './Rewards.js';
+import { TAG_COLORS, cleanName, nameProblem } from './PlayerTag.js';
 
 const API = '/api/save';
 const CODE_KEY = 'tode-save-code';
@@ -42,6 +43,7 @@ function apply(data) {
   meta.achievements.push(...pending.keys());
   for (const reward of pending.values()) meta.leaves += reward;
   eliteBase = progress.eliteKills;
+  if (data.profile) meta.profile = structuredClone(data.profile); // the player tag lives in the cloud save too
   cloud.status = 'online';
   saveMeta();
   cloud.onChange?.();
@@ -174,4 +176,26 @@ export async function fetchGarden(code) {
   } catch {
     return { error: "Can't reach the server right now." };
   }
+}
+
+/**
+ * Sets the player tag (name and colour; the #tag comes from the server). Checked against the name rules here and
+ * on the server. Without a server it's kept in this browser. Resolves with {} or { error }.
+ */
+export async function saveProfile({ name, color }) {
+  const problem = nameProblem(name);
+  if (problem) return { error: problem };
+  const tagColor = TAG_COLORS.includes(color) ? color : null;
+  if (cloud.status === 'online' && cloud.code && isPersisting()) {
+    try {
+      const { ok, data } = await request(`/${encodeURIComponent(cloud.code)}/profile`, { name: cleanName(name), color: tagColor });
+      if (data.progress) apply(data);
+      return ok ? {} : { error: data.error ?? "Couldn't save that name." };
+    } catch {
+      return { error: "Can't reach the server right now." };
+    }
+  }
+  meta.profile = { tag: null, ...meta.profile, name: cleanName(name), color: tagColor };
+  saveMeta();
+  return {};
 }

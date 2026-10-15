@@ -1,6 +1,8 @@
 // Talks to the leaderboard API of game/server/server.js. Everything fails quietly:
 // without a server (e.g. a static host) the leaderboard simply doesn't show up.
 
+import { meta } from './Meta.js';
+
 const API = '/api/scores';
 const NAME_KEY = 'tode-name';
 
@@ -29,7 +31,9 @@ export async function submitScore(entry) {
   }
 }
 
+/** The player tag's name (PlayerTag.js), else the name last typed for a score. */
 export function playerName() {
+  if (meta.profile?.name) return meta.profile.name;
   try {
     return localStorage.getItem(NAME_KEY) ?? '';
   } catch {

@@ -32,7 +32,8 @@ import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile } from './components/CloudSave.js';
+import { randomName } from './components/PlayerTag.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
 import { ARENAS, arenaForWave } from './components/Arenas.js';
@@ -49,6 +50,7 @@ import { BOSS_VOICES, bossTaunt } from './components/Spirits.js';
 import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
 import { ownedTrinkets } from './components/Rewards.js';
 import { TitleGarden } from './components/TitleGarden.js';
+import { GardenHub } from './components/GardenHub.js';
 import { setPresence, startPresence } from './components/Presence.js';
 
 // Teammates load the same models; let the loaders reuse the downloaded files.
@@ -3894,6 +3896,7 @@ let trayCollapsed = false;
 let rewardTimer = 0;
 garden.onChange = (decor) => {
   saveDecor(decor);
+  hub.sendDecor(decor); // visitors see the garden change live
   refreshGardenTray();
 };
 garden.onSelect = refreshGardenTray;
@@ -3945,41 +3948,178 @@ function syncTrinkets() {
   saveMeta();
 }
 
-function openGarden() {
-  if (phase !== 'title') return;
+// --- Gardens as a meeting place: hop around, visit each other, invite and set off together (GardenHub.js) ---
+const hub = new GardenHub(
+  { net, scene, hud, player, particles, play },
+  {
+    onChange: () => refreshGardenWalk(),
+    onGo: (code) => joinParty(code),
+    onSetOff: (party) => setOffWithParty(party),
+    onDecor: (decor) => !garden.editing && garden.load(decor),
+    onFull: () => {
+      closeGarden();
+      hud.showGardenVisitForm('That garden is full right now. Try another one!');
+    },
+  }
+);
+let gardenVisit = null; // the garden we're in: { code, own, owner }
+let ownGardenCode = null;
+let settingOff = false;
+const moveWanted = new THREE.Vector3();
+
+const walkInfo = () => {
+  const leader = hub.leader;
+  const countdown = hub.inviting ? (hub.countdown === null ? null : Math.ceil(hub.countdown)) : leader?.state.c ?? null;
+  return {
+    own: gardenVisit?.own,
+    owner: gardenVisit?.owner,
+    frogs: hub.count,
+    online: hub.online,
+    offline: !gardenVisit?.code,
+    inviting: hub.inviting,
+    partyCount: hub.party.length,
+    readyCount: hub.party.filter((id) => hub.frogs.get(id)?.state.r).length,
+    countdown: settingOff ? '🐸 Off we go!' : countdown,
+    leaderName: leader?.name ?? null,
+    ready: hub.ready,
+    night: Boolean(meta.gardenNight),
+    touch: touch.enabled,
+  };
+};
+
+function refreshGardenWalk() {
+  if (decorating && garden.walking) hud.showGardenWalk(walkInfo());
+}
+
+/** Into a garden as a hopping frog: `code` (null offline), `own`, `owner` (the name on a visited garden). */
+function enterGarden({ code, own, owner = null }) {
   hud.hideModal();
-  if (garden.visiting) garden.load(meta.decor);
   decorating = true;
-  garden.enter({ yaw: titleOrbit });
-  hud.showGarden(gardenState());
+  gardenVisit = { code, own, owner };
+  settingOff = false;
+  hub.enter({ code, own, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+  garden.walk(player.group.position);
+  refreshGardenWalk();
 }
 
-function closeGarden() {
-  if (garden.visiting) garden.load(meta.decor);
-  garden.exit();
-  decorating = false;
-  // The title orbit carries on from wherever the editor camera was.
-  titleOrbit = Math.atan2(camera.position.y, camera.position.x);
-  camera.up.set(0, 0, 1);
-  hud.showTitle(bestScore);
+/** Your own garden (🏡 My garden on the title screen). */
+async function openGarden() {
+  if (phase !== 'title') return;
+  if (decorating && !gardenVisit?.own) hub.leave();
+  garden.load(meta.decor);
+  enterGarden({ code: null, own: true });
+  ownGardenCode ??= await gardenCode(playerName());
+  if (ownGardenCode && decorating && gardenVisit?.own && !gardenVisit.code) {
+    gardenVisit.code = ownGardenCode;
+    hub.enter({ code: ownGardenCode, own: true, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+    refreshGardenWalk();
+  }
 }
 
+/** Someone else's garden by its public code (never the save code). */
 async function visitGarden(code) {
   const result = await fetchGarden(code);
   if (result.error) {
-    hud.showGardenVisitForm(result.error);
+    hud.showGardenVisitForm(result.error, await fetchGardens());
     return;
   }
   if (phase !== 'title') return;
-  hud.hideModal();
-  decorating = true;
-  garden.visit(result.decor);
-  hud.showGardenVisit(result);
+  const own = result.garden === ownGardenCode;
+  garden.load(own ? meta.decor : result.decor);
+  enterGarden({ code: result.garden, own, owner: result.name });
   play('pick');
 }
 
+async function fetchGardens() {
+  try {
+    const response = await fetch('/api/gardens', { cache: 'no-store' });
+    return response.ok ? (await response.json()).gardens : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Leaves the garden view (to the title screen, or because a run starts). */
+function leaveGardenView() {
+  if (!decorating) return;
+  hub.leave();
+  if (!gardenVisit?.own) garden.load(meta.decor);
+  garden.exit();
+  decorating = false;
+  gardenVisit = null;
+  settingOff = false;
+  camera.up.set(0, 0, 1);
+}
+
+function closeGarden() {
+  const world = camera.getWorldPosition(new THREE.Vector3());
+  leaveGardenView();
+  // The title orbit carries on from wherever the garden camera was.
+  titleOrbit = Math.atan2(world.y, world.x);
+  hud.showTitle(bestScore);
+}
+
+/** Your own garden: from hopping around into the editor and back. */
+function editGarden() {
+  if (!decorating || !gardenVisit?.own) return;
+  garden.enter({ yaw: garden.view.yaw });
+  hud.showGarden(gardenState());
+}
+
+function doneEditing() {
+  if (!hub.active) return closeGarden();
+  garden.walk(player.group.position);
+  refreshGardenWalk();
+}
+
+/** Inviter: the party is ready. Open a private co-op room, send them its code, start once they're in. */
+async function setOffWithParty(party) {
+  if (settingOff) return;
+  settingOff = true;
+  refreshGardenWalk();
+  const waitFor = (test, ms) =>
+    new Promise((resolve) => {
+      const started = performance.now();
+      const check = () => (test() || performance.now() - started > ms ? resolve(test()) : setTimeout(check, 100));
+      check();
+    });
+  try {
+    await net.create(playerName(), false);
+    if (!(await waitFor(() => net.code, 4000))) throw new Error('no room');
+    hub.sendGo(net.code, party);
+    await waitFor(() => party.every((id) => net.players.some((p) => p.id === id)), 8000);
+    if (net.players.length < 2 || phase !== 'title') throw new Error('nobody came');
+    hostStartCoop();
+  } catch {
+    if (net.inRoom) net.leave();
+    settingOff = false;
+    hub.inviting && hub.toggleInvite();
+    refreshGardenWalk();
+  }
+}
+
+/** Party member: the inviter opened a room, join it; the run starts when the inviter starts it. */
+async function joinParty(code) {
+  settingOff = true;
+  refreshGardenWalk();
+  try {
+    await net.join(code, playerName());
+  } catch {
+    settingOff = false;
+    refreshGardenWalk();
+  }
+  // If the run never starts, back to hopping around.
+  setTimeout(() => {
+    if (!coop && decorating && settingOff) {
+      if (net.inRoom) net.leave();
+      settingOff = false;
+      refreshGardenWalk();
+    }
+  }, 12000);
+}
+
 async function shareGarden() {
-  const code = await gardenCode(playerName());
+  const code = ownGardenCode ?? (ownGardenCode = await gardenCode(playerName()));
   hud.showGardenShare(code, code ? `${location.origin}/?garden=${code}` : '');
 }
 
@@ -3994,13 +4134,26 @@ function gardenPhoto() {
 
 function gardenKeys(delta) {
   const axis = (plus, minus) => (input.isHeld(...plus) ? 1 : 0) - (input.isHeld(...minus) ? 1 : 0);
+  if (garden.walking) {
+    // Hop where the stick or WASD points, as seen from the camera.
+    input.moveAxis(moveAxis);
+    const yaw = garden.view.yaw;
+    moveWanted.set(-Math.sin(yaw) * moveAxis.x - Math.cos(yaw) * moveAxis.y, Math.cos(yaw) * moveAxis.x - Math.sin(yaw) * moveAxis.y, 0);
+    if (moveWanted.lengthSq() > 1) moveWanted.normalize();
+    hub.update(delta, moveWanted, input.wasPressed('Space', 'ShiftLeft', 'ShiftRight'), !settingOff);
+    if (input.wasPressed('Escape')) closeGarden();
+    if (input.wasPressed('KeyF')) MENU_ACTIONS['garden-invite']();
+    if (input.wasPressed('KeyR')) MENU_ACTIONS['garden-ready']();
+    if (input.wasPressed('KeyN')) MENU_ACTIONS['garden-night']();
+    return;
+  }
+  hub.update(delta, moveWanted.set(0, 0, 0), false, false); // editing: others keep moving, Tode stands still
   garden.steer({ x: axis(['KeyD', 'ArrowRight'], ['KeyA', 'ArrowLeft']), y: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), turn: axis(['KeyE'], ['KeyQ']) }, delta);
   if (input.wasPressed('Escape')) {
     if (garden.held) {
       garden.cancelHeld();
       refreshGardenTray();
-    } else if (garden.visiting) openGarden();
-    else closeGarden();
+    } else doneEditing();
   }
   if (!garden.editing) return;
   if (input.wasPressed('KeyR')) garden.turn();
@@ -4051,7 +4204,7 @@ function updateCamera(delta) {
   if (phase === 'title' && decorating) {
     // My garden: the camera is the player's (see TitleGarden.js).
     orbiting = true;
-    garden.updateCamera(camera, delta);
+    garden.updateCamera(camera, delta, player.group.position);
     return;
   }
   if (phase === 'title' || phase === 'loading') {
@@ -5928,7 +6081,7 @@ net.on((message) => {
     if (coop && message.t === 'players') dropMissingTeammates();
   } else if (message.t === 'error') {
     lobbyError = message.message;
-    if (!coop) showLobby();
+    if (!coop && !decorating) showLobby();
   } else if (message.t === 'closed' || message.t === 'disconnected') {
     const reason = message.reason ?? 'Lost the connection to the co-op server.';
     if (coop) {
@@ -5941,6 +6094,21 @@ net.on((message) => {
     }
   }
 });
+
+// --- The player tag (PlayerTag.js): the name others see, asked for before the first multiplayer step ---
+let afterName = null; // what to do once a name is picked
+
+function openProfile(first = false) {
+  const profile = meta.profile ?? {};
+  hud.showProfile({ name: profile.name ?? playerName(), tag: profile.tag, color: profile.color, first });
+}
+
+/** Runs `next` right away when the player has a name, otherwise after they pick one. */
+function needName(next) {
+  if (meta.profile?.name) return next();
+  afterName = next;
+  openProfile(true);
+}
 
 function showLobby() {
   hud.showLobby({ view: 'start', name: playerName(), error: lobbyError, rooms: publicRooms });
@@ -6009,14 +6177,14 @@ function openInvite() {
 
 /** `action`: 'quick', 'create' (public), 'private' or 'join' (with `listed`: a code from the rooms list). */
 async function lobbyConnect(action, listed = null) {
-  const name = (hud.menu.querySelector('#coop-name')?.value ?? playerName()).trim() || 'Frog';
+  if (!meta.profile?.name) return needName(() => lobbyConnect(action, listed));
+  const name = playerName() || 'Frog';
   const code = (listed ?? hud.menu.querySelector('#coop-code')?.value ?? '').trim().toUpperCase();
   if (action === 'join' && code.length !== 4) {
     lobbyError = 'Room codes have 4 letters.';
     showLobby();
     return;
   }
-  savePlayerName(name);
   hud.showLobby({ view: 'connecting' });
   try {
     if (action === 'quick') await net.quick(name);
@@ -6204,6 +6372,7 @@ function clearWorld() {
 }
 
 function startRun({ daily = false, coop: coopRun = false } = {}) {
+  leaveGardenView(); // a party setting off from a garden
   if (!coopRun && coop) leaveCoop();
   if (!coopRun && worldTiles !== SOLO_TILES) buildWorld(SOLO_TILES);
   // The Daily Brew rolls waves, weather and offers from today's seed, the same for everyone.
@@ -6587,12 +6756,7 @@ function goToTitle() {
   setPhase('title');
   player.setClass(chosenClass().id);
   ascension.setTier(TITLE_TIER);
-  if (decorating || garden.visiting) {
-    if (garden.visiting) garden.load(meta.decor);
-    garden.exit();
-    camera.up.set(0, 0, 1);
-  }
-  decorating = false;
+  leaveGardenView();
   syncTrinkets(); // milestones reached in the run put their trinkets in the garden
   hud.showTitle(bestScore);
 }
@@ -6704,7 +6868,27 @@ const MENU_ACTIONS = {
     if (!meta.seenStory) startStory();
     else startRun();
   },
-  coop: () => (net.inRoom ? showRoom() : showLobby()),
+  coop: () => needName(() => (net.inRoom ? showRoom() : showLobby())),
+  'edit-name': () => openProfile(),
+  'random-name': () => hud.setProfileName(randomName()),
+  'tag-color': ({ color }) => hud.setTagColor(color),
+  'save-profile': async () => {
+    const name = hud.modal.querySelector('#profile-name')?.value ?? '';
+    const result = await saveProfile({ name, color: hud.tagColor });
+    if (result.error) {
+      hud.setProfileError(result.error);
+      return;
+    }
+    play('pick');
+    hud.hideModal();
+    // Everyone sees the new tag: redraw what shows it, and step back into the garden with it.
+    if (hud.menuName === 'lobby' && !net.inRoom) showLobby();
+    refreshMenu();
+    if (hub.active && gardenVisit?.code) hub.enter({ code: gardenVisit.code, own: gardenVisit.own, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+    const next = afterName;
+    afterName = null;
+    next?.();
+  },
   'coop-create': () => lobbyConnect('create'),
   'coop-create-private': () => lobbyConnect('private'),
   'coop-quick': () => lobbyConnect('quick'),
@@ -6720,9 +6904,17 @@ const MENU_ACTIONS = {
   daily: () => (phase === 'title' || phase === 'gameover') && hud.showDaily(dailyTwists(todayKey())),
   'claim-gift': () => claim('gift'),
   'claim-kettle': () => claim('kettle'),
-  garden: openGarden,
-  'garden-done': closeGarden,
-  'garden-home': openGarden,
+  garden: () => needName(openGarden),
+  'garden-done': doneEditing,
+  'garden-leave': closeGarden,
+  'garden-edit': editGarden,
+  'garden-invite': () => {
+    if (!garden.walking || hub.leader || settingOff) return;
+    hub.toggleInvite();
+  },
+  'garden-ready': () => garden.walking && !settingOff && hub.toggleReady(),
+  'garden-go': () => hub.startParty(),
+  'visit-garden': ({ code }) => needName(() => visitGarden(code)),
   'garden-undo': () => garden.undo(),
   'garden-snap': () => {
     garden.toggleSnap();
@@ -6735,15 +6927,16 @@ const MENU_ACTIONS = {
     applyTitleSky();
     play('click');
     refreshGardenTray();
+    refreshGardenWalk();
   },
   'garden-reset': () => garden.resetView(),
   'garden-plan': () => garden.planView(),
   'garden-photo': gardenPhoto,
   'garden-share': shareGarden,
-  'garden-visit': () => hud.showGardenVisitForm(),
+  'garden-visit': async () => hud.showGardenVisitForm(null, await fetchGardens()),
   'visit-go': () => {
     const code = hud.modal.querySelector('#garden-code')?.value ?? '';
-    if (code.trim()) visitGarden(code);
+    if (code.trim()) needName(() => visitGarden(code));
   },
   'copy-garden': ({ link }) => {
     const button = hud.modal.querySelector('[data-action="copy-garden"]');
@@ -7082,16 +7275,16 @@ function frame(realDelta, render = true) {
     }
     divinity.update(delta);
     ascension.update(delta);
-    player.rig.inPlace = PLAYING.has(phase) || phase === 'clash';
+    player.rig.inPlace = PLAYING.has(phase) || phase === 'clash' || (decorating && hub.active);
     player.animate(delta);
     // On the title screen the frog shows off now and then.
-    if (phase === 'title' && (titleMoveIn -= delta) <= 0) {
+    if (phase === 'title' && !decorating && (titleMoveIn -= delta) <= 0) {
       titleMoveIn = 7 + Math.random() * 4;
       player.rig.play(Math.random() < 0.7 ? 'signature' : 'victory', { once: true });
     }
   }
   updateCoop(realDelta, delta);
-  touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate));
+  touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
   const look = ascension.postfxTargets();
   const boost = arena.postfx ?? {};
@@ -7261,6 +7454,7 @@ if (import.meta.env.DEV) {
   window.game = {
     meta, // progress (Golden Leaves, trinkets…): change it, then game.syncGarden()
     garden,
+    hub, // the garden meeting place: frogs, party, inviting
     quality, // graphics: { step, features, ratio }; game.setQualityStep(0–4) to try a step
     setQualityStep,
     setPixelRatio,

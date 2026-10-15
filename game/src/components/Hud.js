@@ -16,6 +16,7 @@ import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
 import { GRAPHICS_LABELS } from './Quality.js';
+import { NAME_MAX, TAG_COLORS } from './PlayerTag.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
 import { SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
 import { trinketPicture } from './TrinketPortraits.js';
@@ -200,6 +201,14 @@ export class Hud {
       event.preventDefault();
       if (event.target.dataset.form === 'save') this.onAction('load-save');
       if (event.target.dataset.form === 'garden') this.onAction('visit-go');
+      if (event.target.dataset.form === 'profile') this.onAction('save-profile');
+    });
+
+    // The player tag popup shows the name as it's typed.
+    this.modal.addEventListener('input', (event) => {
+      if (event.target.id !== 'profile-name') return;
+      const preview = this.modal.querySelector('.tag-name');
+      if (preview) preview.textContent = event.target.value.trim() || '…';
     });
 
     this.damageNumbers = [];
@@ -486,10 +495,8 @@ export class Hud {
       body = `
         ${invited}
         <p class="sub">Up to 4 frogs in one garden: bigger swarms, bigger rewards.</p>
-        <form class="lobby-form" data-form="coop">
-          <input id="coop-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
-          <button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-quick">⚡ Quick play</button>
-        </form>
+        <div class="lobby-who">${this.tagChip()}</div>
+        <div class="menu-buttons"><button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-quick">⚡ Quick play</button></div>
         <h3>🌍 Open rooms</h3>
         <div class="room-list">${this.roomList(rooms)}</div>
         <div class="menu-buttons lobby-create">
@@ -843,6 +850,7 @@ ${ meta.runs > 0 ? '' :
         </div>
         <p class="prompt">or press Space</p>
         <div class="title-footer">
+          ${this.tagChip()}
           ${this.saveChip()}
           <button type="button" data-action="cycle-graphics" title="Low runs smoothly on older phones">🖥 Graphics: ${GRAPHICS_LABELS[this.graphics ?? 'auto']}</button>
           ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
@@ -900,7 +908,7 @@ ${ meta.runs > 0 ? '' :
     ].filter(Boolean);
     return `<div class="profile">
       <span class="profile-level"><b>${level}</b><small>LV</small></span>
-      <span class="profile-info"><b>${rank}</b><span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>
+      <span class="profile-info"><b>${meta.profile?.name ? `${escapeHtml(meta.profile.name)} · ` : ''}${rank}</b><span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>
       <small>${stats.join(' · ')}</small></span>
     </div>`;
   }
@@ -1041,25 +1049,6 @@ ${ meta.runs > 0 ? '' :
     this.flashTimer = setTimeout(() => (flash.hidden = true), 2600);
   }
 
-  /** Looking at someone else's garden. */
-  showGardenVisit({ name, level, rank, trinkets, beauty, decor, garden }) {
-    const sets = gardenSets(decor);
-    this.showMenu(
-      'garden-mode visiting',
-      `<div class="garden-tray visit">
-        <h2>👀 ${escapeHtml(name)}'s garden <small>Lv ${level} ${escapeHtml(rank)} · ${trinkets} trinkets · 🌷 ${beauty} beauty</small></h2>
-        <p class="sub">${sets.length ? `Sets: ${sets.map(({ set }) => `${set.icon} ${set.name}`).join(' · ')}` : 'No sets yet.'} Garden code <b>${escapeHtml(garden)}</b>.</p>
-        <div class="garden-tools">
-          <button type="button" class="garden-tool" data-action="garden-night">🌗 Day / night</button>
-          <button type="button" class="garden-tool" data-action="garden-reset">🧭 View</button>
-          <button type="button" class="garden-tool" data-action="garden-plan">🗺 Top</button>
-          <button type="button" class="garden-tool" data-action="garden-photo">📸 Photo</button>
-          <button type="button" class="garden-tool primary" data-action="garden-home">🏡 Back to my garden</button>
-        </div>
-      </div>`
-    );
-  }
-
   /** Your public garden code. It is not the save code: it only lets people look. */
   showGardenShare(code, link) {
     this.showModal(
@@ -1075,12 +1064,58 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  /** Asks for a garden code to visit. */
-  showGardenVisitForm(error = null) {
+  /**
+   * Hopping around a garden (GardenHub.js): who's here, what to do, and the party buttons. `info`: { own, owner,
+   * frogs, online, inviting, partyCount, readyCount, countdown, leaderName, ready, night, touch }.
+   */
+  showGardenWalk(info) {
+    const tool = (action, label, extra = '') => `<button type="button" class="garden-tool ${extra}" data-action="${action}">${label}</button>`;
+    const hint = info.inviting
+      ? `Your circle is open: frogs who hop in join your party (${info.partyCount + 1}/4). When they're all ✋ ready, off you go!`
+      : info.leaderName
+        ? info.ready
+          ? `Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
+          : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
+        : info.touch
+          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), drag the right side to look around.'
+          : 'WASD to hop, Space to jump (you can land on other frogs!), drag to look around. 🚩 Invite others to play together.';
+    const buttons = [
+      info.own ? tool('garden-edit', '✏️ Edit garden') : '',
+      info.leaderName ? tool('garden-ready', info.ready ? '✋ Ready ✓' : '✋ Ready', 'ready') : tool('garden-invite', info.inviting ? '✖ Stop inviting' : '🚩 Invite to play', info.inviting ? '' : 'invite'),
+      info.inviting && info.readyCount ? tool('garden-go', `▶ Go now (${info.readyCount + 1})`, 'ready') : '',
+      tool('garden-visit', '👀 Visit'),
+      info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
+      tool('garden-night', info.night ? '🌙' : '☀️'),
+      tool('garden-photo', '📸'),
+      tool('garden-leave', '✓ Leave', 'primary'),
+    ].join('');
+    const where = info.own ? 'Your garden' : `${escapeHtml(info.owner ?? 'A frog')}'s garden`;
+    const who = info.online ? `🐸 ${info.frogs} here` : info.offline ? 'offline: just you' : 'connecting…';
+    this.showMenu(
+      'garden-walk',
+      `<div class="garden-bar">
+        <h2>🏡 ${where} <small>${who}</small></h2>
+        <p class="sub">${hint}</p>
+        <div class="garden-tools">${buttons}</div>
+      </div>
+      ${info.countdown ? `<div class="garden-countdown">${info.countdown}</div>` : ''}`
+    );
+  }
+
+  /** Asks for a garden code to visit; `gardens`: the liveliest gardens right now ([{ garden, name, frogs, max }]). */
+  showGardenVisitForm(error = null, gardens = null) {
+    const lively = gardens?.length
+      ? `<h3>🐸 Lively gardens</h3><div class="lively-gardens">${gardens
+          .map(
+            (g) => `<div class="room-row"><span class="room-host">🏡 ${escapeHtml(g.name)}'s garden</span><span class="room-seats"><small>${g.frogs} frog${g.frogs > 1 ? 's' : ''}</small></span><button class="menu-button" type="button" data-action="visit-garden" data-code="${escapeHtml(g.garden)}">Visit</button></div>`
+          )
+          .join('')}</div>`
+      : '';
     this.showModal(
       'garden-visit',
       `<h2>👀 Visit a garden</h2>
-      <p class="sub">Enter the garden code a friend shared (6 letters and numbers).</p>
+      ${lively}
+      <p class="sub">Or enter the garden code a friend shared (6 letters and numbers).</p>
       ${error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : ''}
       <form class="lobby-form" data-form="garden">
         <input id="garden-code" maxlength="8" placeholder="TJ4K9P" autocomplete="off" />
@@ -1089,6 +1124,60 @@ ${ meta.runs > 0 ? '' :
       <div class="menu-buttons"><button class="menu-button" data-action="close-modal">Close</button></div>`
     );
     this.modal.querySelector('#garden-code')?.focus();
+  }
+
+  /**
+   * The player tag: the name others see (gardens, co-op, leaderboard), its #tag and colour. `first`: asked before
+   * the first multiplayer step.
+   */
+  showProfile({ name = '', tag = null, color = null, error = null, first = false }) {
+    this.tagColor = color ?? TAG_COLORS[0];
+    const swatches = TAG_COLORS.map(
+      (c) => `<button type="button" class="tag-swatch ${c === this.tagColor ? 'on' : ''}" style="--swatch:${c}" data-action="tag-color" data-color="${c}" aria-label="Colour ${c}"></button>`
+    ).join('');
+    this.showModal(
+      'profile',
+      `<h2>🏷 ${first ? 'Pick your name first' : 'Your player tag'}</h2>
+      <p class="sub">${first ? 'Other frogs will see it above your frog, in co-op and on the leaderboard.' : 'How other frogs see you: in gardens, in co-op and on the leaderboard.'}</p>
+      <div class="tag-preview" style="--tag:${this.tagColor}"><span class="tag-frog">🐸</span><span class="tag-name">${escapeHtml(name || '…')}</span>${tag ? `<small>#${escapeHtml(tag)}</small>` : ''}</div>
+      <form class="lobby-form" data-form="profile">
+        <input id="profile-name" maxlength="${NAME_MAX}" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
+        <button class="menu-button" type="button" data-action="random-name" title="A random name">🎲</button>
+      </form>
+      <div class="tag-colors">${swatches}</div>
+      <p class="lobby-error profile-error" ${error ? '' : 'hidden'}>${escapeHtml(error ?? '')}</p>
+      <p class="sub small">${tag ? `Your #${escapeHtml(tag)} tells you apart from frogs with the same name. ` : ''}Be kind: rude names aren't allowed.</p>
+      <div class="menu-buttons"><button class="menu-button primary" data-action="save-profile">${first ? 'Continue' : 'Save'}</button><button class="menu-button" data-action="close-modal">Cancel</button></div>`
+    );
+    this.modal.querySelector('#profile-name')?.focus();
+  }
+
+  setTagColor(color) {
+    this.tagColor = color;
+    for (const swatch of this.modal.querySelectorAll('.tag-swatch')) swatch.classList.toggle('on', swatch.dataset.color === color);
+    this.modal.querySelector('.tag-preview')?.style.setProperty('--tag', color);
+  }
+
+  setProfileName(name) {
+    const input = this.modal.querySelector('#profile-name');
+    if (input) input.value = name;
+    const preview = this.modal.querySelector('.tag-name');
+    if (preview) preview.textContent = name;
+  }
+
+  setProfileError(error) {
+    const line = this.modal.querySelector('.profile-error');
+    if (!line) return;
+    line.textContent = error ?? '';
+    line.hidden = !error;
+  }
+
+  /** "Playing as Alice#4821 ✏️": a button that opens the player tag popup. */
+  tagChip() {
+    const profile = meta.profile ?? {};
+    return profile.name
+      ? `<button type="button" class="tag-chip" data-action="edit-name" style="--tag:${profile.color ?? '#c8f77a'}"><small>Playing as</small> <b>${escapeHtml(profile.name)}</b>${profile.tag ? `<small>#${escapeHtml(profile.tag)}</small>` : ''} ✏️</button>`
+      : '<button type="button" class="tag-chip" data-action="edit-name">🏷 Pick a name</button>';
   }
 
   /** Today's Daily Brew: the frog of the day and the day's twists, with a button to start. */

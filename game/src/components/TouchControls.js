@@ -140,9 +140,10 @@ export class TouchControls {
     buttons.className = 'touch-buttons';
     buttons.innerHTML = `
       <button class="touch-button" data-code="KeyE" data-role="ultimate">✨</button>
-      <button class="touch-button big" data-code="ShiftLeft">💨</button>`;
+      <button class="touch-button big" data-code="ShiftLeft" data-role="dash">💨</button>`;
     this.root.append(buttons);
     this.ultimateButton = buttons.querySelector('[data-role="ultimate"]');
+    this.dashButton = buttons.querySelector('[data-role="dash"]');
     for (const button of buttons.querySelectorAll('.touch-button')) {
       button.addEventListener('pointerdown', (event) => {
         event.preventDefault();
@@ -155,9 +156,18 @@ export class TouchControls {
     this.onEnable();
   }
 
-  /** Shows the controls only while playing; glows the ultimate button when it's charged. */
-  update(playing, ultimateReady, hasUltimate) {
+  /**
+   * Shows the controls only while playing; glows the ultimate button when it's charged. `garden`: hopping around a
+   * garden: only the move stick and a jump button (the right half of the screen turns the camera).
+   */
+  update(playing, ultimateReady, hasUltimate, garden = false) {
     if (!this.enabled) return;
+    if (this.root.classList.contains('garden') !== garden) {
+      this.root.classList.toggle('garden', garden);
+      this.dashButton.textContent = garden ? '🦘' : '💨';
+      this.aimStick.end();
+    }
+    playing ||= garden;
     if (this.root.hidden === playing) {
       this.root.hidden = !playing;
       // Let go of both sticks when a menu or cut-scene takes over, so nothing stays pushed.

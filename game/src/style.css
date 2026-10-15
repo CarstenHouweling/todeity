@@ -3150,3 +3150,161 @@ body.touch .steep-badge {
 .menu.garden-mode {
   padding-bottom: calc(max(16px, var(--safe-bottom)) + 52px);
 }
+
+/* Gardens as a meeting place (v0.22) */
+.touch-controls.garden .touch-stick-zone.right,
+.touch-controls.garden .touch-stick.right,
+.touch-controls.garden [data-role='ultimate'] {
+  display: none;
+}
+
+.menu.garden-mode .garden-tray {
+  z-index: 6; /* above the touch sticks */
+}
+
+.menu.garden-walk {
+  justify-content: flex-start;
+  background: none;
+  pointer-events: none;
+  cursor: default;
+}
+
+.garden-bar {
+  pointer-events: auto;
+  position: relative;
+  z-index: 6;
+  width: min(900px, 100%);
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: rgba(10, 30, 15, 0.72);
+}
+
+.garden-bar h2 {
+  margin: 0 0 2px;
+  font-size: 19px;
+}
+
+.garden-bar h2 small {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.garden-bar .sub {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.garden-bar .garden-tools {
+  justify-content: center;
+}
+
+.garden-tool.invite {
+  border-color: #ffd36b;
+  background: linear-gradient(#ffcf4a, #f0a020);
+  color: #3b2a14;
+  font-weight: 800;
+}
+
+.garden-tool.ready {
+  border-color: #7ed957;
+  background: linear-gradient(#a8ee7a, #5fbf3a);
+  color: #10300a;
+  font-weight: 800;
+}
+
+.garden-countdown {
+  pointer-events: none;
+  margin-top: 18vh;
+  font-size: clamp(48px, 12vw, 110px);
+  font-weight: 900;
+  color: #ffe680;
+  text-shadow: 0 0 24px rgba(255, 190, 40, 0.9), 0 4px 0 rgba(0, 0, 0, 0.4);
+  animation: card-in 0.3s ease-out;
+}
+
+.lively-gardens {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+  max-height: 30dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+/* Player tag (v0.23) */
+.tag-preview {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 6px 0 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 22px;
+}
+
+.tag-preview .tag-name {
+  color: var(--tag);
+  font-weight: 900;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--tag) 60%, transparent);
+}
+
+.tag-preview small {
+  opacity: 0.6;
+  font-size: 14px;
+}
+
+.tag-colors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.tag-swatch {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+}
+
+.tag-swatch.on {
+  border-color: #ffffff;
+  box-shadow: 0 0 10px var(--swatch);
+  transform: scale(1.15);
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tag-chip b {
+  color: var(--tag, #c8f77a);
+}
+
+.tag-chip small {
+  opacity: 0.7;
+}
+
+.lobby-who {
+  margin: 4px 0 8px;
+}
+
+.sub.small {
+  font-size: 12px;
+  opacity: 0.75;
+}

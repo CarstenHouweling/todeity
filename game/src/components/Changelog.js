@@ -3,6 +3,28 @@
 
 export const CHANGELOG = [
   {
+    version: '0.23.0',
+    date: '2026-10-15',
+    title: 'Your name, your colour',
+    changes: [
+      '🏷 Your player tag: pick the name other frogs see (🎲 for a random one) and its colour. It\'s saved with your progress, on every device',
+      '#️⃣ Every frog gets a #tag number, so two Lilys can tell each other apart',
+      '👥 Co-op, gardens and the leaderboard all use it, and you\'re asked for a name before your first multiplayer game',
+      '🙅 Rude names aren\'t allowed (and show as Anonymous Frog on the leaderboard)',
+    ],
+  },
+  {
+    version: '0.22.0',
+    date: '2026-10-15',
+    title: 'Garden parties',
+    changes: [
+      '🐸 Hop around your garden: WASD or the left stick to hop, Space (or 🦘) to jump. Land on another frog\'s head and ride along, or build a frog tower',
+      '👀 Visit other gardens live: everybody in a garden sees everybody else. The Visit list shows the liveliest gardens right now',
+      '🚩 Invite to play: your frog raises a flag and opens a circle of light. Frogs who hop in join your party; when everyone presses ✋ Ready, a countdown starts and off you go into a co-op run together',
+      '✏️ Your own garden has an Edit mode for placing trinkets, and visitors see your changes as you make them',
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-10-15',
     title: 'A garden to wander',

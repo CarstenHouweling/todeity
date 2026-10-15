@@ -9,6 +9,7 @@
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
 //   GET  /api/rooms   public co-op rooms that can be joined
 //   GET  /api/garden/:code  a read-only look at someone's title garden (see saves.js)
+//   GET  /api/gardens       gardens with frogs hopping around in them right now (see "Garden rooms")
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
 //   WS   /ws?presence=1   who is online (see presence.js)
 //   /admin, /api/admin/…  the owner's admin page and API, only when ADMIN_TOKEN is set (see admin.js)
@@ -23,10 +24,11 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { randomBytes } from 'node:crypto';
-import { handleGarden, handleSave, loadSaves, saveCount } from './saves.js';
+import { gardenName, handleGarden, handleSave, loadSaves, saveCount } from './saves.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
+import { TAG_COLORS, publicName } from '../src/components/PlayerTag.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -107,13 +109,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const clampInt = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
 
-function cleanName(name) {
-  const cleaned = String(name ?? '')
-    .replace(/[^\p{L}\p{N} _.\-!?']/gu, '')
-    .trim()
-    .slice(0, 16);
-  return cleaned || 'Anonymous Frog';
-}
+// Names follow the player tag rules (PlayerTag.js): a name that breaks them shows as Anonymous Frog.
+const cleanName = (name) => publicName(name, 'Anonymous Frog');
 
 function parseEntry(body) {
   const entry = {
@@ -278,7 +275,7 @@ function leaveRoom(client) {
 
 function joinRoom(client, room, name) {
   const used = new Set([...room.clients.values()].map((c) => c.color));
-  client.name = String(name ?? '').replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 16) || 'Frog';
+  client.name = publicName(name, 'Frog');
   client.color = COLORS.find((color) => !used.has(color));
   client.room = room;
   room.clients.set(client.id, client);
@@ -349,6 +346,12 @@ function handleSocketMessage(client, raw) {
   } else if (message.t === 'start' && client.room?.hostId === client.id) {
     client.room.started = true;
     broadcastPlayers(client.room);
+  } else if (message.t === 'genter') {
+    enterGarden(client, message);
+  } else if (message.t === 'gleave') {
+    leaveGarden(client);
+  } else if ((message.t === 'gstate' || message.t === 'gevent') && client.garden) {
+    gardenRelay(client, message.t, message.d);
   } else if (message.t === 'relay' && client.room) {
     const { room } = client;
     const out = JSON.stringify({ t: 'relay', from: client.id, d: message.d });
@@ -358,6 +361,69 @@ function handleSocketMessage(client, raw) {
       if (wanted && other.ws.readyState === 1) other.ws.send(out);
     }
   }
+}
+
+// --- Garden rooms ---------------------------------------------------------------------------------
+// Frogs hopping around in someone's title garden see each other: a garden room per garden code (see saves.js), up
+// to GARDEN_MAX frogs, on the same socket as co-op (a frog can be in a garden and a co-op room for a moment, while a
+// party sets off). The server only checks the garden exists and passes states and events along.
+//
+// client → server: { t: 'genter', garden, name, cls } | { t: 'gleave' } | { t: 'gstate', d } | { t: 'gevent', d }
+// server → client: { t: 'gwelcome', garden, id, frogs: [{ id, name, cls, color }] } | { t: 'gjoin', frog }
+//                  { t: 'gpart', id } | { t: 'gstate', from, d } | { t: 'gevent', from, d } | { t: 'gfull' }
+const GARDEN_MAX = 12;
+const GARDEN_COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f', '#c58aff', '#ff8a3a', '#7ff0d0', '#ff5a7a', '#e8f8ff', '#b8e34a', '#ffb000', '#9fb8ff'];
+const gardenRooms = new Map(); // garden code → { code, clients: Map(id → client) }
+
+const frogInfo = (client) => ({ id: client.id, name: client.gardenName, cls: client.gardenClass, color: client.gardenColor });
+
+function leaveGarden(client) {
+  const room = client.garden;
+  if (!room) return;
+  room.clients.delete(client.id);
+  client.garden = null;
+  if (!room.clients.size) gardenRooms.delete(room.code);
+  else for (const other of room.clients.values()) sendTo(other.ws, { t: 'gpart', id: client.id });
+}
+
+function enterGarden(client, message) {
+  const code = String(message.garden ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (gardenName(code) === undefined) return sendTo(client.ws, { t: 'error', message: 'No garden with that code.' });
+  leaveGarden(client);
+  const room = gardenRooms.get(code) ?? { code, clients: new Map() };
+  if (room.clients.size >= GARDEN_MAX) return sendTo(client.ws, { t: 'gfull' });
+  gardenRooms.set(code, room);
+  const used = new Set([...room.clients.values()].map((c) => c.gardenColor));
+  client.gardenName = publicName(message.name, 'Frog');
+  client.gardenClass = /^[a-z]{2,16}$/.test(message.cls) ? message.cls : 'tode';
+  // Their own name colour (player tag), or a free one.
+  client.gardenColor = TAG_COLORS.includes(message.color) ? message.color : GARDEN_COLORS.find((color) => !used.has(color)) ?? GARDEN_COLORS[0];
+  client.garden = room;
+  client.gardenBudget = { at: Date.now(), count: 0 };
+  sendTo(client.ws, { t: 'gwelcome', garden: code, id: client.id, frogs: [...room.clients.values()].map(frogInfo) });
+  for (const other of room.clients.values()) sendTo(other.ws, { t: 'gjoin', frog: frogInfo(client) });
+  room.clients.set(client.id, client);
+}
+
+/** States and events are passed to everyone else in the garden (at most ~40 messages a second per frog). */
+function gardenRelay(client, type, data) {
+  const room = client.garden;
+  if (!room) return;
+  const budget = client.gardenBudget;
+  const now = Date.now();
+  if (now - budget.at > 1000) Object.assign(budget, { at: now, count: 0 });
+  if (++budget.count > 40) return;
+  const out = JSON.stringify({ t: type, from: client.id, d: data });
+  for (const other of room.clients.values()) if (other !== client && other.ws.readyState === 1) other.ws.send(out);
+}
+
+/** GET /api/gardens: the liveliest gardens right now. */
+function listGardens(res) {
+  const list = [...gardenRooms.values()]
+    .map((room) => ({ garden: room.code, name: gardenName(room.code) ?? 'A frog', frogs: room.clients.size, max: GARDEN_MAX }))
+    .sort((a, b) => b.frogs - a.frogs)
+    .slice(0, 30);
+  send(res, 200, { gardens: list });
 }
 
 const RELAY_PER_IP = 16; // co-op sockets per IP
@@ -371,6 +437,7 @@ sockets.on('connection', (ws, req, ip) => {
   ws.on('message', (raw) => handleSocketMessage(client, raw));
   ws.on('close', () => {
     leaveRoom(client);
+    leaveGarden(client);
     const left = (relayPerIp.get(ip) ?? 1) - 1;
     if (left > 0) relayPerIp.set(ip, left);
     else relayPerIp.delete(ip);
@@ -394,6 +461,7 @@ const adminStats = () => ({
   startedAt: STARTED_AT,
   uptime: Math.round((Date.now() - STARTED_AT) / 1000),
   presence: presenceStats(),
+  gardens: [...gardenRooms.values()].map((room) => ({ garden: room.code, frogs: room.clients.size })),
   coop: {
     sockets: sockets.clients.size,
     rooms: [...rooms.values()].map((room) => ({
@@ -417,6 +485,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/health') return send(res, 200, { ok: true });
     if (url.pathname === '/api/rooms' && req.method === 'GET') return listRooms(res);
+    if (url.pathname === '/api/gardens' && req.method === 'GET') return listGardens(res);
     if (url.pathname.startsWith('/api/garden/')) return await handleGarden(req, res, url, { send, ip: clientIp(req) });
     if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) {
       return await handleAdmin(req, res, url, { send, ip: clientIp(req), boards: () => boards, saveScores, stats: adminStats });

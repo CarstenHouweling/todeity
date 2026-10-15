@@ -8,6 +8,7 @@
 //   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
 //   POST /api/save/:code/garden { name } → { garden }                    this save's public garden code
+//   POST /api/save/:code/profile { name, color } → { code, progress, profile }   the player tag (name, #tag, colour)
 //   GET  /api/garden/:garden             → { name, decor, level, … }     look at someone's garden
 //
 // The save code is a password: whoever has it owns the progress, so it is never shown to anyone else. Visiting a
@@ -25,6 +26,7 @@ import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
 import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, withRewards } from '../src/components/Rewards.js';
 import { randomInt } from 'node:crypto';
+import { TAG_COLORS, cleanName, nameProblem, newTag, publicName } from '../src/components/PlayerTag.js';
 
 const FLAVOURS = [
   'MINT', 'CHAI', 'MATCHA', 'SENCHA', 'OOLONG', 'EARL', 'HONEY', 'LEMON', 'GINGER', 'PEACH', 'PLUM', 'ROSE',
@@ -58,6 +60,7 @@ export async function loadSaves(dataDir) {
   gardens = new Map();
   for (const [key, save] of Object.entries(saves)) {
     withRewards(save.progress); // saves from before the rewards
+    withProfile(save);
     if (save.garden?.code) gardens.set(save.garden.code, key);
   }
 }
@@ -103,7 +106,13 @@ function overLimit(kind, ip, limit) {
 }
 const count = (kind, ip) => counters.get(`${kind}:${ip}`).count++;
 
-const view = (save) => ({ code: save.code, progress: save.progress });
+const view = (save) => ({ code: save.code, progress: save.progress, profile: save.profile });
+
+/** The player tag of a save (older saves get one, keeping the name they gave their garden). */
+function withProfile(save) {
+  save.profile ??= { name: save.garden?.name ? publicName(save.garden.name, null) : null, tag: newTag(), color: null };
+  return save;
+}
 
 // --- Rules -----------------------------------------------------------------------
 
@@ -222,7 +231,7 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     count('create', ip);
     const display = newCode();
     const now = Date.now();
-    const save = { code: display, progress: emptyProgress(), created: now, updated: now };
+    const save = withProfile({ code: display, progress: emptyProgress(), created: now, updated: now });
     saves[normalizeCode(display)] = save;
     await persist();
     return send(res, 201, view(save));
@@ -270,10 +279,22 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     await persist();
     return send(res, 200, view(save));
   }
+  if (action === 'profile') {
+    if (overLimit('name', ip, 30)) return send(res, 429, { error: 'Too many name changes. Try again later.', ...view(save) });
+    count('name', ip);
+    const problem = nameProblem(body.name);
+    if (problem) return send(res, 400, { error: problem, ...view(save) });
+    save.profile.name = cleanName(body.name);
+    if (TAG_COLORS.includes(body.color)) save.profile.color = body.color;
+    if (save.garden) save.garden.name = save.profile.name;
+    save.updated = now;
+    await persist();
+    return send(res, 200, view(save));
+  }
   if (action === 'garden') {
     save.garden ??= { code: newGardenCode(), name: null };
     gardens.set(save.garden.code, normalizeCode(save.code));
-    if (body.name) save.garden.name = String(body.name).replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 16) || null;
+    save.garden.name = save.profile.name ?? publicName(body.name, null);
     save.updated = now;
     await persist();
     return send(res, 200, { garden: save.garden.code });
@@ -312,11 +333,17 @@ export async function handleGarden(req, res, url, { send, ip }) {
   const { level, rank } = accountLevel(progress);
   send(res, 200, {
     garden: code,
-    name: save.garden.name ?? 'A frog',
+    name: save.profile?.name ?? save.garden.name ?? 'A frog',
     decor: progress.decor ?? [],
     level,
     rank,
     trinkets: ownedTrinkets(progress).length,
     beauty: gardenBeauty(progress.decor ?? []),
   });
+}
+
+/** A garden's public name, or undefined when there's no garden with that code (garden rooms check it). */
+export function gardenName(code) {
+  const save = saves[gardens.get(code)];
+  return save ? save.profile?.name ?? save.garden.name ?? 'A frog' : undefined;
 }
