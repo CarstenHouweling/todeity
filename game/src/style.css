@@ -3171,10 +3171,34 @@ body.touch .steep-badge {
 }
 
 .menu.garden-walk {
+  /* Above the touch sticks (z-index 3) and the jump button: the toolbar's buttons get their taps. The menu itself
+     lets touches through (only the bar takes them), so the lawn still works the move stick and the camera. */
+  z-index: 5;
   justify-content: flex-start;
   background: none;
   pointer-events: none;
   cursor: default;
+}
+
+/* In a garden the jump button has the bottom-right corner to itself (no aim stick there). */
+.touch-controls.garden .touch-buttons {
+  right: calc(24px + var(--safe-right));
+  bottom: calc(28px + var(--safe-bottom));
+}
+
+/* …and the round corner buttons stack above it, off the garden toolbar (they covered ✓ Leave on phones). */
+body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
+  top: auto;
+  right: calc(43px + var(--safe-right));
+  bottom: calc(130px + var(--safe-bottom));
+  flex-direction: column;
+}
+
+@media (max-height: 500px) {
+  /* (zoomed on short screens, which shrinks the offset too) */
+  body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
+    bottom: calc(160px + var(--safe-bottom));
+  }
 }
 
 .garden-bar {

@@ -327,7 +327,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `setOffWithParty` (main.js) opens a private co-op room, sends its code in a `go` event, waits for the party to join
   and calls `hostStartCoop`; members `joinParty` and start on the host's usual `start` message. `startRun` leaves
   the garden first (`leaveGardenView`). The owner's decor changes go out as `decor` events. On phones the touch
-  controls have a garden mode (move stick and a jump button; the right half turns the camera).
+  controls have a garden mode (move stick and a jump button in the bottom-right corner; the right half turns the
+  camera). The garden toolbar (`.menu.garden-walk`, z-index 5) sits above the stick zones (z-index 3) so its
+  buttons get taps; the menu itself passes touches through, and the round corner buttons stack above the jump button.
 - **Player tag** (v0.23, `components/PlayerTag.js`, shared with the server): name (2–16 characters, `cleanName`), a
   4-digit `#tag` the server gives every save, and a name colour (`TAG_COLORS`). It lives in the cloud save
   (`save.profile`, `POST /api/save/:code/profile`, `saveProfile` in CloudSave.js; `meta.profile` locally) and

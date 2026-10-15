@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.4',
+    date: '2026-10-15',
+    title: 'Thumbs in the garden',
+    changes: [
+      '📱 Phones: the garden toolbar works again. Tapping its buttons no longer grabs the move stick instead',
+      '🦘 Phones: in a garden the jump button sits in the bottom-right corner, and the round buttons no longer cover ✓ Leave',
+    ],
+  },
+  {
     version: '0.24.3',
     date: '2026-10-15',
     title: 'Hold on tight',
