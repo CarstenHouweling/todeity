@@ -7,6 +7,7 @@
 //
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
+//   GET  /api/rooms   public co-op rooms that can be joined
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
 //   WS   /ws?presence=1   who is online (see presence.js)
 //   /admin, /api/admin/…  the owner's admin page and API, only when ADMIN_TOKEN is set (see admin.js)
@@ -228,13 +229,19 @@ async function serveStatic(res, pathname) {
 // Rooms have a 4-letter code and up to 4 players. The server only forwards messages; the host's
 // browser runs the bees and the waves.
 //
-// client → server: { t: 'create', name } | { t: 'join', code, name } | { t: 'relay', to: 'all'|'host'|id, d }
-// server → client: { t: 'joined', code, id, hostId } | { t: 'players', players, hostId, started }
+// Rooms are private (joined with their code or an invite link) or public: listed by GET /api/rooms, joined with a
+// click, and filled by Quick play (the fullest open public room, or a new one).
+//
+// client → server: { t: 'create', name, public } | { t: 'join', code, name } | { t: 'quick', name }
+//                  { t: 'visibility', public } (host) | { t: 'start' } / { t: 'open' } (host: a run starts / ended)
+//                  { t: 'relay', to: 'all'|'host'|id, d } | { t: 'leave' }
+// server → client: { t: 'joined', code, id, hostId, public } | { t: 'players', players, hostId, started, public }
 //                  { t: 'relay', from, d } | { t: 'error', message } | { t: 'closed', reason }
 
 const MAX_PLAYERS = 4;
 const COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f'];
 const rooms = new Map();
+const MAX_PUBLIC_ROOMS = 200; // a list longer than this is noise (and a sign of abuse)
 let nextClientId = 1;
 
 function makeCode() {
@@ -249,7 +256,7 @@ const sendTo = (ws, message) => ws.readyState === 1 && ws.send(JSON.stringify(me
 
 function broadcastPlayers(room) {
   const players = [...room.clients.values()].map(({ id, name, color }) => ({ id, name, color }));
-  for (const client of room.clients.values()) sendTo(client.ws, { t: 'players', players, hostId: room.hostId, started: room.started });
+  for (const client of room.clients.values()) sendTo(client.ws, { t: 'players', players, hostId: room.hostId, started: room.started, public: room.public });
 }
 
 function leaveRoom(client) {
@@ -274,8 +281,37 @@ function joinRoom(client, room, name) {
   client.color = COLORS.find((color) => !used.has(color));
   client.room = room;
   room.clients.set(client.id, client);
-  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId });
+  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public });
   broadcastPlayers(room);
+}
+
+function createRoom(client, name, isPublic) {
+  const room = { code: makeCode(), hostId: client.id, clients: new Map(), started: false, public: isPublic && publicCount() < MAX_PUBLIC_ROOMS, createdAt: Date.now() };
+  rooms.set(room.code, room);
+  joinRoom(client, room, name);
+}
+
+const publicCount = () => [...rooms.values()].filter((room) => room.public).length;
+
+/** Public rooms that can be joined right now: the fullest first, then the oldest. */
+function openPublicRooms() {
+  return [...rooms.values()]
+    .filter((room) => room.public && !room.started && room.clients.size < MAX_PLAYERS)
+    .sort((a, b) => b.clients.size - a.clients.size || a.createdAt - b.createdAt);
+}
+
+/** GET /api/rooms: the public rooms list (and how many players are in co-op right now). */
+function listRooms(res) {
+  const open = openPublicRooms().slice(0, 50);
+  send(res, 200, {
+    rooms: open.map((room) => ({
+      code: room.code,
+      host: room.clients.get(room.hostId)?.name ?? 'Frog',
+      players: room.clients.size,
+      max: MAX_PLAYERS,
+    })),
+    playing: [...rooms.values()].reduce((sum, room) => sum + (room.started ? room.clients.size : 0), 0),
+  }, { 'Cache-Control': 'no-store' });
 }
 
 function handleSocketMessage(client, raw) {
@@ -287,9 +323,19 @@ function handleSocketMessage(client, raw) {
   }
   if (message.t === 'create') {
     leaveRoom(client);
-    const room = { code: makeCode(), hostId: client.id, clients: new Map(), started: false };
-    rooms.set(room.code, room);
-    joinRoom(client, room, message.name);
+    createRoom(client, message.name, Boolean(message.public));
+  } else if (message.t === 'quick') {
+    // Quick play: the fullest public room that still has space (players find each other fast), or a new one.
+    leaveRoom(client);
+    const room = openPublicRooms()[0];
+    if (room) joinRoom(client, room, message.name);
+    else createRoom(client, message.name, true);
+  } else if (message.t === 'visibility' && client.room?.hostId === client.id) {
+    client.room.public = Boolean(message.public) && (client.room.public || publicCount() < MAX_PUBLIC_ROOMS);
+    broadcastPlayers(client.room);
+  } else if (message.t === 'open' && client.room?.hostId === client.id) {
+    client.room.started = false; // the run is over: others may join before the next one
+    broadcastPlayers(client.room);
   } else if (message.t === 'join') {
     const room = rooms.get(String(message.code ?? '').toUpperCase().trim());
     if (!room) return sendTo(client.ws, { t: 'error', message: 'No room with that code.' });
@@ -353,6 +399,7 @@ const adminStats = () => ({
       code: room.code,
       players: room.clients.size,
       started: room.started,
+      public: room.public,
       host: room.clients.get(room.hostId)?.name ?? null,
     })),
   },
@@ -368,6 +415,7 @@ const server = createServer(async (req, res) => {
       return await handleSave(req, res, url, { send, ip: clientIp(req), readJson: async (r) => JSON.parse((await readBody(r)) || '{}') });
     }
     if (url.pathname === '/api/health') return send(res, 200, { ok: true });
+    if (url.pathname === '/api/rooms' && req.method === 'GET') return listRooms(res);
     if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) {
       return await handleAdmin(req, res, url, { send, ip: clientIp(req), boards: () => boards, saveScores, stats: adminStats });
     }

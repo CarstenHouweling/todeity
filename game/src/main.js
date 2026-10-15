@@ -27,7 +27,7 @@ import { Divinity } from './components/Divinity.js';
 import { unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
-import { Net } from './components/Net.js';
+import { fetchRooms, Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
@@ -3939,6 +3939,11 @@ function updateGarden(delta) {
   garden.setVisible(phase === 'title');
   if (phase !== 'title') return;
   garden.update(delta);
+  // The Co-op button shows how many public rooms are open.
+  if ((titleRoomsTimer -= delta) <= 0) {
+    titleRoomsTimer = 15;
+    refreshRooms();
+  }
   // The reward countdowns tick once a second; a chip that becomes ready redraws the title.
   if ((rewardTimer -= delta) <= 0) {
     rewardTimer = 1;
@@ -5850,13 +5855,38 @@ net.on((message) => {
 });
 
 function showLobby() {
-  hud.showLobby({ view: 'start', name: playerName(), error: lobbyError });
+  hud.showLobby({ view: 'start', name: playerName(), error: lobbyError, rooms: publicRooms });
   lobbyError = null;
+  pollRooms();
 }
 
 function showRoom() {
   const players = net.players.map((p) => ({ ...p, isHost: p.id === net.hostId }));
-  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost, invite: inviteLink() });
+  hud.showLobby({ view: 'room', code: net.code, players, isHost: net.isHost, invite: inviteLink(), isPublic: net.isPublic });
+}
+
+// The public rooms list: refreshed every few seconds while the lobby is open, and now and then on the title screen
+// (its Co-op button says how many rooms are open).
+let publicRooms = null;
+let roomsPoll = null;
+let titleRoomsTimer = 0;
+
+async function refreshRooms() {
+  publicRooms = await fetchRooms();
+  hud.setLobbyRooms(publicRooms);
+  hud.setCoopRooms(publicRooms);
+}
+
+function pollRooms() {
+  clearInterval(roomsPoll);
+  refreshRooms();
+  roomsPoll = setInterval(() => {
+    if (hud.menuName !== 'lobby' || net.inRoom) {
+      clearInterval(roomsPoll);
+      return;
+    }
+    refreshRooms();
+  }, 3000);
 }
 
 /** A link that opens the game with the co-op lobby ready to join this room (`?room=CODE`). */
@@ -5882,9 +5912,10 @@ function openInvite() {
   if (/^[A-Z]{4}$/.test(code)) hud.showLobby({ view: 'start', name: playerName(), code });
 }
 
-async function lobbyConnect(action) {
+/** `action`: 'quick', 'create' (public), 'private' or 'join' (with `listed`: a code from the rooms list). */
+async function lobbyConnect(action, listed = null) {
   const name = (hud.menu.querySelector('#coop-name')?.value ?? playerName()).trim() || 'Frog';
-  const code = (hud.menu.querySelector('#coop-code')?.value ?? '').trim().toUpperCase();
+  const code = (listed ?? hud.menu.querySelector('#coop-code')?.value ?? '').trim().toUpperCase();
   if (action === 'join' && code.length !== 4) {
     lobbyError = 'Room codes have 4 letters.';
     showLobby();
@@ -5893,7 +5924,8 @@ async function lobbyConnect(action) {
   savePlayerName(name);
   hud.showLobby({ view: 'connecting' });
   try {
-    if (action === 'create') await net.create(name);
+    if (action === 'quick') await net.quick(name);
+    else if (action === 'create' || action === 'private') await net.create(name, action === 'create');
     else await net.join(code, name);
   } catch (error) {
     lobbyError = error.message;
@@ -6247,6 +6279,7 @@ function applyTwists(stats, awaken) {
 
 function endRun({ victory = false } = {}) {
   setPhase('gameover');
+  if (coop?.host) net.reopen(); // between runs new frogs may join the room
   clearCompanions();
   hud.setWaiting(null);
   coopMenuOpen = false;
@@ -6573,7 +6606,11 @@ const MENU_ACTIONS = {
   },
   coop: () => (net.inRoom ? showRoom() : showLobby()),
   'coop-create': () => lobbyConnect('create'),
+  'coop-create-private': () => lobbyConnect('private'),
+  'coop-quick': () => lobbyConnect('quick'),
   'coop-join': () => lobbyConnect('join'),
+  'coop-join-room': ({ code }) => lobbyConnect('join', code),
+  'coop-visibility': () => net.isHost && net.setPublic(!net.isPublic),
   'coop-start': () => hostStartCoop(),
   'coop-invite': copyInvite,
   'coop-leave': () => {

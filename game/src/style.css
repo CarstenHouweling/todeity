@@ -2989,3 +2989,80 @@ body.touch .steep-badge {
   pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.3) 100%);
 }
+
+/* Co-op: public rooms (v0.20) */
+.lobby h3 {
+  margin: 14px 0 6px;
+  font-size: 17px;
+}
+
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 34dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.room-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.room-host {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.room-seats {
+  color: #c8f77a;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.room-seats small {
+  color: #fff;
+  opacity: 0.7;
+  letter-spacing: 0;
+}
+
+.room-row .menu-button {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 15px;
+}
+
+.room-empty {
+  margin: 4px 0;
+  opacity: 0.8;
+}
+
+.lobby-create {
+  margin-top: 8px;
+}
+
+.room-visibility {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.room-visibility.public {
+  background: rgba(126, 217, 87, 0.25);
+  color: #c8f77a;
+}

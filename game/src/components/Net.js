@@ -1,6 +1,16 @@
 // WebSocket client for co-op rooms (server: game/server/server.js, path /ws).
 // Messages are batched: game code calls `queue(to, message)` during a frame and `flush()` once per tick.
 
+/** The public rooms that can be joined: { rooms: [{ code, host, players, max }], playing }, or null without a server. */
+export async function fetchRooms() {
+  try {
+    const response = await fetch('/api/rooms', { cache: 'no-store' });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 export class Net {
   constructor() {
     this.ws = null;
@@ -9,6 +19,7 @@ export class Net {
     this.code = null;
     this.players = [];
     this.started = false;
+    this.isPublic = false; // listed for everyone (see server.js), or only joined by code
     this.listeners = new Set();
     this.outbox = new Map(); // to → messages
   }
@@ -67,10 +78,12 @@ export class Net {
       this.id = message.id;
       this.hostId = message.hostId;
       this.code = message.code;
+      this.isPublic = Boolean(message.public);
     } else if (message.t === 'players') {
       this.players = message.players;
       this.hostId = message.hostId;
       this.started = message.started;
+      this.isPublic = Boolean(message.public);
     } else if (message.t === 'closed') {
       this.code = null;
       this.players = [];
@@ -82,9 +95,25 @@ export class Net {
     if (this.connected) this.ws.send(JSON.stringify(message));
   }
 
-  async create(name) {
+  async create(name, isPublic = false) {
     await this.connect();
-    this.send({ t: 'create', name });
+    this.send({ t: 'create', name, public: isPublic });
+  }
+
+  /** Quick play: the server puts us in the fullest open public room, or makes a new one. */
+  async quick(name) {
+    await this.connect();
+    this.send({ t: 'quick', name });
+  }
+
+  /** Host: list the room for everyone, or make it private (code only). */
+  setPublic(on) {
+    this.send({ t: 'visibility', public: on });
+  }
+
+  /** Host: the run is over, others may join before the next one. */
+  reopen() {
+    this.send({ t: 'open' });
   }
 
   async join(code, name) {

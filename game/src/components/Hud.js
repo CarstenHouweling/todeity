@@ -452,7 +452,7 @@ export class Hud {
   /**
    * The co-op lobby. `view` is 'start' (create or join), 'room' (in a room) or 'connecting'.
    */
-  showLobby({ view, code, players = [], isHost, error, name, invite }) {
+  showLobby({ view, code, players = [], isHost, error, name, invite, isPublic = false, rooms = null }) {
     const errorLine = error ? `<p class="lobby-error">${escapeHtml(error)}</p>` : '';
     let body;
     if (view === 'connecting') {
@@ -464,22 +464,37 @@ export class Hud {
       const start = isHost
         ? `<button class="menu-button primary" data-action="coop-start">▶ Start co-op run</button>`
         : '<p class="sub">Waiting for the host to start…</p>';
+      const visibility = isPublic
+        ? '<p class="room-visibility public">🌍 Public room: anyone can join it from the list</p>'
+        : '<p class="room-visibility">🔒 Private room: only with the code or the link</p>';
+      const toggle = isHost
+        ? `<button class="menu-button" data-action="coop-visibility">${isPublic ? '🔒 Make private' : '🌍 Make public'}</button>`
+        : '';
       body = `
+        ${visibility}
         <p class="sub">Share this room code with your friends:</p>
         <div class="room-code">${code}</div>
         <p class="sub invite-link">or send them the link <b>${escapeHtml(invite ?? '')}</b></p>
         <ul class="lobby-players">${list}</ul>
         <p class="sub">The garden grows and more bees come with every extra frog (up to 4).</p>
-        <div class="menu-buttons">${start}<button class="menu-button" data-action="coop-invite">🔗 Copy invite link</button><button class="menu-button" data-action="coop-leave">Leave</button></div>`;
+        <div class="menu-buttons">${start}${toggle}<button class="menu-button" data-action="coop-invite">🔗 Copy invite link</button><button class="menu-button" data-action="coop-leave">Leave</button></div>`;
     } else {
       // `code`: a room code from an invite link, ready to join.
       const invited = code ? `<p class="sub">You're invited to room <b>${escapeHtml(code)}</b>: enter your name and join.</p>` : '';
       body = `
         ${invited}
+        <p class="sub">Up to 4 frogs in one garden: bigger swarms, bigger rewards.</p>
         <form class="lobby-form" data-form="coop">
           <input id="coop-name" maxlength="16" placeholder="Your name" value="${escapeHtml(name)}" autocomplete="nickname" />
-          <button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-create">✨ Create room</button>
+          <button class="menu-button ${code ? '' : 'primary'}" type="button" data-action="coop-quick">⚡ Quick play</button>
         </form>
+        <h3>🌍 Open rooms</h3>
+        <div class="room-list">${this.roomList(rooms)}</div>
+        <div class="menu-buttons lobby-create">
+          <button class="menu-button" type="button" data-action="coop-create">🌍 Create public room</button>
+          <button class="menu-button" type="button" data-action="coop-create-private">🔒 Create private room</button>
+        </div>
+        <h3>🔑 Join with a code</h3>
         <form class="lobby-form" data-form="coop">
           <input id="coop-code" maxlength="4" placeholder="CODE" autocomplete="off" value="${escapeHtml(code ?? '')}" />
           <button class="menu-button ${code ? 'primary' : ''}" type="button" data-action="coop-join">🚪 Join room</button>
@@ -487,6 +502,36 @@ export class Hud {
         <div class="menu-buttons"><button class="menu-button" data-action="title">Back</button></div>`;
     }
     this.showMenu('lobby', `<div class="panel"><h2>👥 Co-op</h2>${errorLine}${body}</div>`);
+  }
+
+  /** The public rooms in the lobby: `rooms` from /api/rooms (null while loading or without a server). */
+  roomList(rooms) {
+    if (!rooms) return '<p class="sub room-empty">Looking for rooms…</p>';
+    if (!rooms.rooms.length) {
+      return `<p class="sub room-empty">No open rooms right now${rooms.playing ? ` (${rooms.playing} frog${rooms.playing > 1 ? 's' : ''} in a co-op run)` : ''}. Quick play makes one that others can join.</p>`;
+    }
+    return rooms.rooms
+      .map(
+        (room) => `<div class="room-row">
+          <span class="room-host">🐸 ${escapeHtml(room.host)}'s garden</span>
+          <span class="room-seats">${'●'.repeat(room.players)}${'○'.repeat(Math.max(0, room.max - room.players))} <small>${room.players}/${room.max}</small></span>
+          <button class="menu-button" type="button" data-action="coop-join-room" data-code="${escapeHtml(room.code)}">Join</button>
+        </div>`
+      )
+      .join('');
+  }
+
+  /** Refreshes only the room list, so a name being typed isn't lost. */
+  setLobbyRooms(rooms) {
+    const list = this.menuName === 'lobby' && this.menu.querySelector('.room-list');
+    if (list) list.innerHTML = this.roomList(rooms);
+  }
+
+  /** The Co-op button on the title screen: how many public rooms are open. */
+  setCoopRooms(rooms) {
+    this.coopRooms = rooms;
+    const label = this.menuName === 'title-screen' && this.menu.querySelector('[data-coop-count]');
+    if (label) label.textContent = coopLabel(rooms);
   }
 
   /** A gentle hint above the ability bar for new players. */
@@ -785,7 +830,7 @@ ${ meta.runs > 0 ? '' :
         <button class="class-chip" data-action="classes">${this.classFace(chosenClass())}<span><small>Playing as</small><b>${chosenClass().name}</b></span><em>Change ▸</em></button>
         <div class="menu-buttons title-play">
           <button class="menu-button daily-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${dailyTwists(todayKey()).title}</small></button>
-          <button class="menu-button" data-action="coop">👥 Co-op</button>
+          <button class="menu-button" data-action="coop">👥 Co-op <small data-coop-count>${coopLabel(this.coopRooms)}</small></button>
           <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
         </div>
         <div class="menu-buttons title-prepare">
@@ -1381,6 +1426,13 @@ const isTouch = () => document.body.classList.contains('touch');
 export function formatTime(seconds) {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** "3 open rooms" for the title's Co-op button (nothing without a server). */
+function coopLabel(rooms) {
+  if (!rooms) return '';
+  const open = rooms.rooms.length;
+  return open ? `${open} open room${open > 1 ? 's' : ''}` : rooms.playing ? `${rooms.playing} playing` : '';
 }
 
 /** 3:05:09 or 12:34 for a countdown in ms. */

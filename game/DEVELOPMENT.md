@@ -414,8 +414,16 @@ The garden keeps the original low-poly look; every new arena raises the graphics
 
 ## Co-op multiplayer (2–4 players)
 
-Title screen → 👥 Co-op → create a room (4-letter code) or join one; the host starts the run. Needs the server
-(`npm run server` in development; the Vite dev server proxies `/ws`).
+Title screen → 👥 Co-op → ⚡ Quick play, join a listed public room, create a public or private room, or join one
+with its 4-letter code; the host starts the run. Needs the server (`npm run server` in development; the Vite dev
+server proxies `/ws` and `/api`).
+
+- **Public rooms** (v0.20): a room is public or private (`room.public`; the host flips it with `visibility`).
+  `GET /api/rooms` lists the public rooms that aren't running and have space, fullest first (`openPublicRooms`,
+  at most 50 shown, `MAX_PUBLIC_ROOMS` 200 in all), plus how many frogs are in a run. Quick play (`quick`) joins the
+  first of them or creates a public room. The lobby polls the list every 3 s (`pollRooms`, only the `.room-list`
+  is redrawn so a typed name survives) and the title screen every 15 s for the Co-op button (`setCoopRooms`). When a
+  run ends the host sends `open`, so the room is listed (and joinable) again until the next start.
 
 - **Authority split.** The host's browser runs the bees, waves, bosses and weather and sends snapshots (15/s).
   Every player runs their *own* Tode locally (movement, abilities, damage) and streams its state (20/s).
@@ -458,7 +466,7 @@ Title screen → 👥 Co-op → create a room (4-letter code) or join one; the h
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/CloudSave.js` | Cloud save client: save code, sync at start, run and Pantry reports. |
-| `components/Net.js`, `components/RemoteTode.js` | Co-op networking and teammate puppets (see Co-op above). |
+| `components/Net.js`, `components/RemoteTode.js` | Co-op networking (rooms, Quick play, `fetchRooms`) and teammate puppets (see Co-op above). |
 | `components/Presence.js` | `startPresence(state)` / `setPresence(state)`: the presence socket for the admin stats (see Admin). |
 | `components/TouchControls.js` | Twin sticks (move / aim) and buttons for touch devices; touch detection. |
 | `components/Fullscreen.js` | Fullscreen toggle with the prefixed Safari API. |

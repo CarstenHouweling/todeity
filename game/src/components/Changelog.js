@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.20.0',
+    date: '2026-10-15',
+    title: 'Open gardens',
+    changes: [
+      '🌍 Public co-op rooms: the Co-op lobby lists every open room, join one with a click. No code needed',
+      '⚡ Quick play puts you in the fullest open room, or opens a new one others can join',
+      '🔒 Private rooms with a code (or an invite link) still work, and a host can switch a room between public and private',
+      '👥 The Co-op button on the title screen shows how many rooms are open, and between runs new frogs can join a room',
+    ],
+  },
+  {
     version: '0.19.1',
     date: '2026-10-15',
     title: 'Smooth on every phone',
