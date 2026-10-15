@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.5',
+    date: '2026-10-15',
+    title: 'Where the party is',
+    changes: [
+      '👀 Visit a garden lists the busiest public gardens first, then the most beautiful ones (30 at most)',
+    ],
+  },
+  {
     version: '0.24.4',
     date: '2026-10-15',
     title: 'Thumbs in the garden',

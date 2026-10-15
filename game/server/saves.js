@@ -54,6 +54,7 @@ let file = null; // saves.json, written safely (store.js)
 export async function loadSaves(dataDir) {
   file = jsonFile(join(dataDir, 'saves.json'));
   saves = await file.load(() => ({}));
+  gardensChanged();
   gardens = new Map();
   for (const [key, save] of Object.entries(saves)) {
     withRewards(save.progress); // saves from before the rewards
@@ -279,6 +280,7 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     if (overLimit('decor', ip, 600)) return send(res, 429, { error: 'Slow down a little.' });
     count('decor', ip);
     save.progress.decor = cleanDecor(body.decor, save.progress);
+    if (save.garden?.public) gardensChanged();
     save.updated = now;
     await persist();
     return send(res, 200, view(save));
@@ -291,6 +293,7 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     save.profile.name = cleanName(body.name);
     if (TAG_COLORS.includes(body.color)) save.profile.color = body.color;
     if (save.garden) save.garden.name = save.profile.name;
+    if (save.garden?.public) gardensChanged();
     save.updated = now;
     await persist();
     return send(res, 200, view(save));
@@ -300,6 +303,7 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     gardens.set(save.garden.code, normalizeCode(save.code));
     save.garden.name = save.profile.name ?? publicName(body.name, null);
     if (typeof body.public === 'boolean') save.garden.public = body.public; // listed for everyone, or code only
+    gardensChanged();
     save.updated = now;
     await persist();
     return send(res, 200, { garden: save.garden.code, public: Boolean(save.garden.public) });
@@ -348,11 +352,27 @@ export async function handleGarden(req, res, url, { send, ip }) {
   });
 }
 
-/** Public gardens: [{ garden, name, beauty, updated }] (GET /api/gardens adds who's in them). */
-export function publicGardens() {
-  return Object.values(saves)
+const listing = (save) => ({ garden: save.garden.code, name: save.profile?.name ?? save.garden.name ?? 'A frog', beauty: gardenBeauty(save.progress.decor ?? []) });
+
+/** A public garden by its code: { garden, name, beauty }, or null when it isn't listed (GET /api/gardens). */
+export function publicGarden(code) {
+  const save = saves[gardens.get(code)];
+  return save?.garden?.public ? listing(save) : null;
+}
+
+// Every public garden, the loveliest first. Working out beauty for every save is too much for each request, so the
+// list is kept until a garden changes (its decor, name or being public).
+let loveliest = null;
+const gardensChanged = () => (loveliest = null);
+
+/** Public gardens, the most beautiful first (then the most recently changed): [{ garden, name, beauty }]. */
+export function loveliestGardens() {
+  loveliest ??= Object.values(saves)
     .filter((save) => save.garden?.public)
-    .map((save) => ({ garden: save.garden.code, name: save.profile?.name ?? save.garden.name ?? 'A frog', beauty: gardenBeauty(save.progress.decor ?? []), updated: save.updated ?? 0 }));
+    .map((save) => ({ ...listing(save), updated: save.updated ?? 0 }))
+    .sort((a, b) => b.beauty - a.beauty || b.updated - a.updated)
+    .map(({ updated, ...garden }) => garden);
+  return loveliest;
 }
 
 /** A garden's public name, or undefined when there's no garden with that code (garden rooms check it). */

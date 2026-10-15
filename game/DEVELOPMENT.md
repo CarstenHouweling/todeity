@@ -343,7 +343,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Tea Ball is shared physics (whoever touches it kicks it and sends a `ball` event; everyone simulates). Emotes
   (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B: a `boop` event shoves the other frog
   on its own screen). Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
-  `GET /api/gardens` lists only public ones (also in the co-op lobby, and in the 👀 Visit popup, which the title
+  `GET /api/gardens` lists only public ones, at most 30: those with frogs in them right now (fullest first), then
+  the loveliest empty ones (`listGardens`; `loveliestGardens()` in saves.js is cached until a public garden's decor,
+  name or visibility changes; also in the co-op lobby, and in the 👀 Visit popup, which the title
   screen's 👀 Visit garden opens too: it shows at once and `hud.setVisitGardens` fills the list in). Garden achievements: `tower`, `openhouse`.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only

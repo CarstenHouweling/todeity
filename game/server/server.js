@@ -9,7 +9,7 @@
 // beat Bee-zebub, by clear time: play time, menus and pauses excluded).
 //   GET  /api/rooms   public co-op rooms that can be joined
 //   GET  /api/garden/:code  a read-only look at someone's title garden (see saves.js)
-//   GET  /api/gardens       gardens with frogs hopping around in them right now (see "Garden rooms")
+//   GET  /api/gardens       public gardens: the fullest first, then the loveliest (see "Garden rooms")
 //   WS   /ws          co-op rooms (see "Co-op relay" below)
 //   WS   /ws?presence=1   who is online (see presence.js)
 //   /admin, /api/admin/…  the owner's admin page and API, only when ADMIN_TOKEN is set (see admin.js)
@@ -24,7 +24,7 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { randomBytes, randomInt } from 'node:crypto';
-import { flushSaves, gardenName, handleGarden, handleSave, loadSaves, publicGardens, saveCount } from './saves.js';
+import { flushSaves, gardenName, handleGarden, handleSave, loadSaves, loveliestGardens, publicGarden, saveCount } from './saves.js';
 import { jsonFile } from './store.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
@@ -471,16 +471,27 @@ function gardenRelay(client, type, data) {
 }
 
 /**
- * GET /api/gardens: the public gardens (their owners chose to list them), liveliest first, then the loveliest.
- * Private gardens are only visited with their code, never listed.
+ * GET /api/gardens: public gardens (their owners chose to list them), at most LISTED_GARDENS: the ones with frogs in
+ * them right now, fullest first (full ones too, so you can see where the party is), then the loveliest empty ones.
+ * Private gardens are only visited with their code.
  */
+const LISTED_GARDENS = 30;
 function listGardens(res) {
-  const list = publicGardens()
-    .map((garden) => ({ ...garden, frogs: gardenRooms.get(garden.garden)?.clients.size ?? 0, max: GARDEN_MAX }))
-    .sort((a, b) => b.frogs - a.frogs || b.beauty - a.beauty || b.updated - a.updated)
-    .slice(0, 30)
-    .map(({ updated, ...garden }) => garden);
-  send(res, 200, { gardens: list });
+  const busy = [...gardenRooms.values()]
+    .map((room) => {
+      const garden = room.clients.size ? publicGarden(room.code) : null;
+      return garden && { ...garden, frogs: room.clients.size, max: GARDEN_MAX };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.frogs - a.frogs || b.beauty - a.beauty)
+    .slice(0, LISTED_GARDENS);
+  const listed = new Set(busy.map((garden) => garden.garden));
+  const quiet = [];
+  for (const garden of loveliestGardens()) {
+    if (busy.length + quiet.length >= LISTED_GARDENS) break;
+    if (!listed.has(garden.garden)) quiet.push({ ...garden, frogs: 0, max: GARDEN_MAX });
+  }
+  send(res, 200, { gardens: [...busy, ...quiet] });
 }
 
 const RELAY_PER_IP = 16; // co-op sockets per IP
