@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    version: '0.25.2',
+    date: '2026-10-15',
+    title: 'Royal Tea Chest',
+    changes: [
+      '🎁 Every boss leaves a Royal Tea Chest: a reel spins and lands on 1, 3 or 5 rewards (skill levels, or charms once your skills are maxed). Your first chest of a run always holds 3',
+    ],
+  },
+  {
     version: '0.25.1',
     date: '2026-10-15',
     title: 'Close shaves',

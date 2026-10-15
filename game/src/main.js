@@ -22,7 +22,7 @@ import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ul
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { boss as bossMemory, buy, harvestBonus, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
-import { SKILLS, SkillBook } from './components/Skills.js';
+import { FUSION_MAX, MAX_SKILL_LEVEL, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { ACHIEVEMENTS, unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
@@ -897,16 +897,17 @@ function onEnemyKilled(enemy) {
     share({ k: 'fin', big: enemy.type.boss });
   }
   if (enemy.type.boss) {
-    bossDefeated(enemy.type.name, enemy.type.score, enemy.kind);
-    share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score, kd: enemy.kind });
+    bossDefeated(enemy.type.name, enemy.type.score, enemy.kind, enemy.position);
+    share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score, kd: enemy.kind, p: [Math.round(enemy.position.x), Math.round(enemy.position.y)] });
   }
 }
 
 let beezebubTime = 0; // play time when Bee-zebub fell (the speed leaderboard)
 
-function bossDefeated(name, score, kind) {
+function bossDefeated(name, score, kind, at = null) {
   clearBossMechanics();
   bulletsToLeaves();
+  if (at) dropChest(at);
   if (name.includes('zebub') && !beezebubTime) beezebubTime = Math.max(1, Math.floor(timeAlive));
   if (kind) bossMemory(kind).beaten++;
   if (kind) achieve(kind); // queen, shogun, seraph, empress, beezebub
@@ -3002,6 +3003,118 @@ function updateEnemyProjectiles(delta) {
       graze(bullet);
     }
   });
+}
+
+// --- The boss chest -----------------------------------------------------------------------------------------
+// A fallen boss leaves a golden tea chest. It slides to Tode, and the reward chain after the wave opens it first
+// (`offerRewards`): a reel spins and lands on 1, 3 or 5, then that many rewards pop out: a level for a skill Tode
+// already knows (or a charm when they are all maxed). The first chest of a run always holds 3.
+const CHEST = { five: 0.1, three: 0.35, firstCount: 3, slide: 0.6, flyIn: 4 };
+let chestDrop = null; // { group, from, age }: the chest lying where the boss fell
+let chestOpen = null; // { rewards, ready }: the chest on screen
+let chestsThisRun = 0;
+
+const chestGold = new THREE.MeshStandardMaterial({ color: '#ffcf5a', metalness: 0.7, roughness: 0.3, emissive: '#7a4a00', emissiveIntensity: 0.6 });
+const chestWood = new THREE.MeshStandardMaterial({ color: '#7a3f1d', roughness: 0.7 });
+
+function buildChest() {
+  const group = new THREE.Group();
+  const add = (geometry, material, [x, y, z]) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    group.add(mesh);
+    return mesh;
+  };
+  add(new THREE.BoxGeometry(26, 18, 16), chestWood, [0, 0, 8]);
+  add(new THREE.BoxGeometry(28, 20, 4), chestGold, [0, 0, 2]);
+  add(new THREE.BoxGeometry(28, 20, 4), chestGold, [0, 0, 14]);
+  const lid = add(new THREE.CylinderGeometry(10, 10, 26, 16, 1, false, 0, Math.PI), chestWood, [0, 0, 16]);
+  lid.rotation.z = Math.PI / 2;
+  lid.rotation.y = Math.PI / 2;
+  add(new THREE.BoxGeometry(5, 3, 6), chestGold, [0, -10.5, 14]);
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(14, 22, 260, 20, 1, true).rotateX(Math.PI / 2).translate(0, 0, 130), additive('#ffd36b', 0.22));
+  group.add(pillar);
+  return group;
+}
+
+/** Everyone: a boss fell; its chest drops where it stood (not for Bee-zebub's final fall: the ending plays). */
+function dropChest(position) {
+  if (wave === HELL_WAVE && !endless) return;
+  removeChestDrop();
+  const group = buildChest();
+  group.position.copy(position).setZ(0);
+  scene.add(group);
+  chestDrop = { group, from: position.clone().setZ(0), age: 0 };
+  particles.burst(position, { count: 30, colors: ['#ffd36b', '#fff3c4', '#ffb02e'], speed: 160, up: 200, size: 2.2, height: 10, glow: true });
+}
+
+function removeChestDrop() {
+  if (!chestDrop) return;
+  chestDrop.group.removeFromParent();
+  chestDrop.group.traverse((child) => child.geometry?.dispose());
+  chestDrop = null;
+}
+
+/** The chest hops out of the fallen boss, then slides over to Tode. */
+function updateChestDrop(delta) {
+  if (!chestDrop) return;
+  const drop = chestDrop;
+  drop.age += delta;
+  const hop = Math.max(0, 1 - drop.age / CHEST.slide);
+  drop.group.position.z = Math.sin(Math.min(1, drop.age / CHEST.slide) * Math.PI) * 40 * hop;
+  drop.group.rotation.z += delta * 1.5;
+  if (drop.age > CHEST.slide) drop.group.position.lerp(player.position.clone().setZ(0), 1 - Math.exp(-CHEST.flyIn * delta));
+}
+
+/** The rewards inside: `count` of them, skill levels first (a skill can come up more than once), else charms. */
+function rollChest(count) {
+  const levels = new Map(skills.slots.map((slot) => [slot.id, slot.level]));
+  const max = (id) => (SKILLS[id]?.fusion ? FUSION_MAX : MAX_SKILL_LEVEL);
+  return Array.from({ length: count }, () => {
+    const open = [...levels].filter(([id, level]) => level < max(id));
+    if (!open.length) return { kind: 'charm', charm: rollCharm('uncommon') };
+    const [id, level] = open[Math.floor(Math.random() * open.length)];
+    levels.set(id, level + 1);
+    return { kind: 'skill', id, level: level + 1 };
+  });
+}
+
+/** Between waves, before anything else: open the chest a boss left (returns false when there is none). */
+function openChest() {
+  if (!chestDrop) return false;
+  const at = chestDrop.group.position.clone();
+  removeChestDrop();
+  particles.burst(at, { count: 40, colors: ['#ffd36b', '#fff3c4', '#ffffff'], speed: 200, up: 220, size: 2.4, height: 12, glow: true });
+  const roll = Math.random();
+  const count = chestsThisRun === 0 ? CHEST.firstCount : roll < CHEST.five ? 5 : roll < CHEST.five + CHEST.three ? 3 : 1;
+  chestsThisRun++;
+  const rewards = rollChest(count).map((reward) =>
+    reward.kind === 'skill'
+      ? { ...reward, icon: SKILLS[reward.id].icon, name: SKILLS[reward.id].name, detail: `Level ${reward.level}`, color: '#3fd0c0' }
+      : { ...reward, icon: reward.charm.icon, name: reward.charm.name, detail: `${CHARM_RARITIES[reward.charm.rarity].name} charm`, color: CHARM_RARITIES[reward.charm.rarity].color }
+  );
+  chestOpen = { rewards, ready: false };
+  setPhase('chest');
+  const reel = [...new Set([...skills.slots.map((slot) => SKILLS[slot.id].icon), '🍪', '📿', '🥨', '🔔', '🎲'])];
+  hud.showChest({ count, rewards, reel, sound: play, onReady: () => chestOpen && (chestOpen.ready = true) });
+  return true;
+}
+
+/** `moveOn`: co-op, the host started the next wave while the chest was open: take the rewards and go along. */
+function collectChest({ moveOn = false } = {}) {
+  if (phase !== 'chest' || !chestOpen || (!chestOpen.ready && !moveOn)) return;
+  for (const reward of chestOpen.rewards) {
+    if (reward.kind === 'skill') skills.learn(reward.id);
+    else gainCharm(reward.charm);
+  }
+  if (skills.slots.some((slot) => slot.level >= 5)) achieve('mastery');
+  chestOpen = null;
+  hud.hideMenu();
+  play('legendary');
+  postfx.flash('#ffd36b', 0.3);
+  effects.ring(player.position, { radius: 110, color: '#ffd36b', duration: 0.6 });
+  if (!moveOn) offerRewards();
 }
 
 // When a boss breaks into a new stage (or falls), every bullet in the air turns into a tea leaf that flies to Tode.
@@ -5527,6 +5640,7 @@ function offerRewards() {
     startEnding();
     return;
   }
+  if (openChest()) return; // collectChest comes back here
   if (wave >= ULTIMATE_WAVE && !player.ultimate) {
     setPhase('ultimate');
     hud.showUltimates();
@@ -6229,6 +6343,7 @@ function handleNet(from, message) {
       // (a wave we already started comes again when the host catches us up after a reconnect)
       if (isGuest() && message.n > guestWave) {
         guestWave = message.n;
+        if (phase === 'chest') collectChest({ moveOn: true });
         if (['choosing', 'ultimate', 'skill'].includes(phase)) hud.hideMenu(); // the host moved on without us
         startWave(message.n, message.wx, message.m ?? []);
       }
@@ -6311,7 +6426,7 @@ function handleNet(from, message) {
       beginClosingRing();
       break;
     case 'bossDown':
-      bossDefeated(message.n, message.s, message.kd);
+      bossDefeated(message.n, message.s, message.kd, message.p ? new THREE.Vector3(message.p[0], message.p[1], 0) : player.position);
       break;
     case 'over':
       if (phase !== 'gameover') endRun({ victory: message.v });
@@ -6656,6 +6771,8 @@ function clearWorld() {
   clearObjective();
   for (const effect of [...splashEffects]) removeSplashEffect(effect);
   volley = null; // its lanes go with the telegraphs below
+  removeChestDrop();
+  chestOpen = null;
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
   for (const ring of [...fireRings]) removeFireRing(ring);
   for (const bomb of bombs.splice(0)) bomb.mesh.removeFromParent();
@@ -6688,6 +6805,7 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   twistIds = new Set(twistDay ? [...twistDay.trials, ...twistDay.boons] : []);
   submitted = false;
   grazes = 0;
+  chestsThisRun = 0;
   clearWorld();
   resetExperience();
   setArena(ARENAS[0]);
@@ -7450,6 +7568,7 @@ const MENU_ACTIONS = {
     setPhase('cleared', 0);
   },
   retire: () => endRun({ victory: true }),
+  'chest-collect': () => collectChest(),
   'toggle-gentle': () => {
     meta.gentle = !meta.gentle;
     saveMeta();
@@ -7534,6 +7653,7 @@ function updateGame(delta) {
   procBudget = PROC_BUDGET;
   updateWave(delta);
   updateFirstVolley(delta);
+  updateChestDrop(delta);
   updateHazards(delta);
   updateArenaEvents(delta);
   updateObjective(delta);
@@ -7643,6 +7763,8 @@ function frame(realDelta, render = true) {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
   } else if (phase === 'skill') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
+  } else if (phase === 'chest') {
+    if (input.wasPressed('Space', 'Enter', 'Digit1')) collectChest();
   } else if (phase === 'ending') {
     updateEnding(realDelta);
   } else if (phase === 'story') {

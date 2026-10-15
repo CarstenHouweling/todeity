@@ -1492,6 +1492,62 @@ ${ meta.runs > 0 ? '' :
   }
 
   /** `level`: shown as a level-up (the skill pick that every level brings). */
+  /**
+   * The boss chest: a reel spins through icons and lands on how many rewards are inside, then they pop out one by
+   * one. `sound(name)` plays the ticks and fanfares; `onReady` runs when Collect can be pressed.
+   */
+  showChest({ count, rewards, reel, sound, onReady }) {
+    this.showMenu(
+      'chest',
+      `<h1>🎁 Royal Tea Chest</h1>
+      <p class="sub">The boss left something behind…</p>
+      <div class="chest-reel"><span class="chest-icon">🎁</span></div>
+      <p class="chest-count" hidden></p>
+      <div class="chest-rewards"></div>
+      <div class="menu-buttons"><button class="menu-button primary" data-action="chest-collect" disabled>✨ Collect</button></div>
+      <p class="prompt">Space</p>`
+    );
+    const token = (this.chestToken = {});
+    const alive = () => this.chestToken === token && this.menuName === 'chest';
+    const icon = this.menu.querySelector('.chest-icon');
+    const later = (ms, fn) => setTimeout(() => alive() && fn(), ms);
+    // The reel slows down: 18 ticks from 45 ms to about 250 ms apart.
+    let at = 250;
+    for (let i = 0; i < 18; i++) {
+      at += 45 + i * i * 0.65;
+      later(at, () => {
+        icon.textContent = reel[Math.floor(Math.random() * reel.length)];
+        icon.classList.remove('tick');
+        void icon.offsetWidth;
+        icon.classList.add('tick');
+        sound('tick');
+      });
+    }
+    later(at + 320, () => {
+      icon.textContent = count >= 5 ? '🌟' : count >= 3 ? '✨' : '🍵';
+      const label = this.menu.querySelector('.chest-count');
+      label.hidden = false;
+      label.className = `chest-count count-${count}`;
+      label.textContent = count >= 5 ? '×5 · Jackpot!' : count >= 3 ? '×3 · Lucky!' : '×1';
+      sound(count >= 3 ? 'legendary' : 'pick');
+    });
+    const list = this.menu.querySelector('.chest-rewards');
+    rewards.forEach((reward, i) =>
+      later(at + 700 + i * 280, () => {
+        const card = document.createElement('div');
+        card.className = 'chest-reward';
+        card.style.setProperty('--blend', reward.color);
+        card.innerHTML = `<span class="chest-reward-icon">${reward.icon}</span><b>${escapeHtml(reward.name)}</b><small>${escapeHtml(reward.detail)}</small>`;
+        list.append(card);
+        sound('pick');
+      })
+    );
+    later(at + 700 + rewards.length * 280, () => {
+      this.menu.querySelector('[data-action="chest-collect"]').disabled = false;
+      onReady();
+    });
+  }
+
   showSkills(offers, level = 0) {
     const cards = offers
       .map(({ skill, level, fusion, hint }, index) =>

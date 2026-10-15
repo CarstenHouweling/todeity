@@ -720,6 +720,91 @@ canvas.game {
   opacity: 0.8;
 }
 
+/* The boss chest: a spinning reel, the count it lands on, then the rewards. */
+.menu.chest {
+  text-align: center;
+}
+
+.chest-reel {
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 120px;
+  margin: 8px auto;
+  border: 3px solid #ffd76a;
+  border-radius: 24px;
+  background: radial-gradient(circle, rgba(255, 215, 106, 0.35), rgba(60, 30, 0, 0.6));
+  box-shadow: 0 0 30px rgba(255, 207, 90, 0.5);
+}
+
+.chest-icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.chest-icon.tick {
+  animation: chest-tick 0.12s ease-out;
+}
+
+@keyframes chest-tick {
+  from {
+    transform: translateY(-10px) scale(0.85);
+    opacity: 0.6;
+  }
+}
+
+.chest-count {
+  margin: 4px 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff3c4;
+  animation: chest-pop 0.35s ease-out;
+}
+
+.chest-count.count-5 {
+  color: #ffd76a;
+  font-size: 34px;
+  text-shadow: 0 0 18px #ffb02e;
+}
+
+@keyframes chest-pop {
+  from {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.chest-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  min-height: 96px;
+  margin: 10px auto;
+  max-width: 640px;
+}
+
+.chest-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 110px;
+  padding: 8px 6px;
+  border: 2px solid var(--blend);
+  border-radius: 14px;
+  background: rgba(20, 30, 20, 0.75);
+  animation: chest-pop 0.3s ease-out;
+}
+
+.chest-reward-icon {
+  font-size: 34px;
+}
+
+.chest-reward small {
+  opacity: 0.8;
+}
+
 /* Game over: the Gentle Brew offer after an early death. */
 .gentle-offer {
   margin: 6px auto;

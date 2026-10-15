@@ -168,6 +168,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   waves (`skillPickedThisBreak`); extra levels come up `LEVEL_UP_DELAY` seconds into the next wave, one at a time.
   The curve (`leavesForLevel`) gives about one level per wave after the first three. Every player
   gathers their own leaves. **Critical hits** (5%) deal double damage with gold numbers.
+- **Royal Tea Chest** (v0.25.2, "The boss chest" in main.js, `CHEST`): `bossDefeated` drops a golden chest where
+  the boss fell (not Bee-zebub's final fall; co-op guests get the spot in `bossDown`'s `p`), it hops and slides to
+  Tode (`updateChestDrop`), and `offerRewards` opens it before the ultimate and brew picks (phase `chest`,
+  `hud.showChest`: a reel of icons slows down, lands on ×1/×3/×5, then the rewards pop out; Space or ✨ Collect).
+  Count: the run's first chest 3, then 5 (10%), 3 (35%) or 1. Rewards (`rollChest`): a level for a random known skill
+  below its max (fusions to `FUSION_MAX`), else an Uncommon-or-better charm. A co-op guest whose host starts the next
+  wave mid-chest takes the rewards and goes along (`collectChest({ moveOn })`).
 - **Side objectives** (`OBJECTIVES` in main.js): when Tode reaches an arena it gets one: smash 3 wild hives
   (garden) or golden hives (Sky Citadel), hives being `nest` structure enemies that keep letting out bees; or hold
   3 shrines (temple bells, reality rifts), circles that fill while a Tode stands in them and draw bees in. The

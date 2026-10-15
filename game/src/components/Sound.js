@@ -160,6 +160,7 @@ const SOUNDS = {
   },
   shield: () => notes([1200, 900, 1500], { type: 'sine', step: 0.04, duration: 0.15, volume: 0.1 }),
   sting: () => tone({ type: 'sawtooth', frequency: vary(1300), to: 800, duration: 0.06, volume: 0.025 }),
+  tick: () => tone({ type: 'triangle', frequency: vary(1500, 0.1), to: 1100, duration: 0.035, volume: 0.06 }),
   graze: () => tone({ type: 'sine', frequency: vary(2300, 0.05), to: 3100, duration: 0.05, volume: 0.035 }),
   leafStorm: () => {
     notes([660, 880, 1175, 1568], { type: 'sine', step: 0.05, duration: 0.22, volume: 0.09 });
