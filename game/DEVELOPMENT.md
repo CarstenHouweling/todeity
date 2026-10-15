@@ -309,7 +309,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Tea Ball is shared physics (whoever touches it kicks it and sends a `ball` event; everyone simulates). Emotes
   (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B: a `boop` event shoves the other frog
   on its own screen). Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
-  `GET /api/gardens` lists only public ones (also in the co-op lobby). Garden achievements: `tower`, `openhouse`.
+  `GET /api/gardens` lists only public ones (also in the co-op lobby, and in the 👀 Visit popup, which the title
+  screen's 👀 Visit garden opens too: it shows at once and `hud.setVisitGardens` fills the list in). Garden achievements: `tower`, `openhouse`.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
@@ -373,7 +374,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
 - **Title screen layout:** in order of importance: (after the first run) the profile and the reward chips; a big
   Start run; the ways to play (Daily Brew, Co-op, Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping,
-  My garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.
+  My garden, Visit garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
@@ -586,6 +587,13 @@ server proxies `/ws` and `/api`).
   (`setText`/`setStyle` in `Hud.js`). Adaptive resolution won't climb back to a ratio that proved too slow.
 - Constants for tuning sit at the top of each file (`main.js`, `Player.js` `BASE_STATS`, `Enemy.js`
   `ENEMY_TYPES`, `Waves.js`).
+- **The frame loop must not throw.** three.js asks for the next frame only after `setAnimationLoop`'s callback
+  returns, so one exception per frame froze the whole game (v0.24.2: the `flip` move read the Ninja's `gear.tails`
+  on every frog, and the garden's cannon and Backflip emote play `flip` on any class). The callback now catches and
+  logs each distinct error once. Any rig move can be played on any class (emotes, garden events), so a move that
+  touches class gear must guard it (`gear.x ?? []`, `if (gear.x)`), and anything a move shows must be hidden again
+  at the start of `rig.update` (like `gear.flying`, the Alchemist's thrown vial). Entering or leaving a garden plays
+  `idle`, so a title-screen move or an emote doesn't carry over.
 - `AGENTS.md` (repo root) was written for the course: don't look for or run the course's Jest tests.
 
 ## Testing and debugging

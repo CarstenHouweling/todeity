@@ -4051,6 +4051,7 @@ function enterGarden({ code, own, owner = null }) {
   decorating = true;
   gardenVisit = { code, own, owner };
   settingOff = false;
+  player.rig?.play('idle'); // a title-screen move still playing (a thrown vial, a summoned toad) ends here
   hub.enter({ code, own, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
   garden.walk(player.group.position);
   refreshGardenWalk();
@@ -4097,6 +4098,7 @@ async function fetchGardens() {
 function leaveGardenView() {
   if (!decorating) return;
   hub.leave();
+  player.rig?.play('idle'); // an emote still playing stays in the garden
   if (!gardenVisit?.own) garden.load(meta.decor);
   garden.exit();
   decorating = false;
@@ -7073,7 +7075,12 @@ const MENU_ACTIONS = {
   'garden-plan': () => garden.planView(),
   'garden-photo': gardenPhoto,
   'garden-share': shareGarden,
-  'garden-visit': async () => hud.showGardenVisitForm(null, await fetchGardens()),
+  'garden-visit': async () => {
+    // (also on the title screen) The popup opens at once; the public gardens fill in when the server answers.
+    hud.showGardenVisitForm(null, null);
+    const gardens = await fetchGardens();
+    hud.setVisitGardens(gardens);
+  },
   'visit-go': () => {
     const code = hud.modal.querySelector('#garden-code')?.value ?? '';
     if (code.trim()) needName(() => visitGarden(code));
@@ -7557,10 +7564,20 @@ renderer.domElement.after(cssVignette);
 
 applyGraphicsSetting();
 
+// three.js only asks for the next frame after this callback returns, so an error thrown here would stop the loop
+// for good and freeze the game. Log it (once per message) and carry on with the next frame instead.
+const loopErrors = new Set();
 renderer.setAnimationLoop(() => {
-  const delta = Math.min(clock.getDelta(), 0.1);
-  adaptQuality(delta);
-  frame(delta);
+  try {
+    const delta = Math.min(clock.getDelta(), 0.1);
+    adaptQuality(delta);
+    frame(delta);
+  } catch (error) {
+    if (!loopErrors.has(String(error))) {
+      loopErrors.add(String(error));
+      console.error('Frame failed:', error);
+    }
+  }
 });
 
 // --- Load assets, then show the title screen ---

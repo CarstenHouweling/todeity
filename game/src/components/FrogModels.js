@@ -742,14 +742,14 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
         body.rotation.x += -toss * 0.2;
         jaw.rotation.x += toss * 0.5;
         // The thrown vial flies off in an arc.
-        if (t >= 0.62) {
+        if (t >= 0.62 && t < 1) {
           gear.flying ??= gear.potion.clone();
           if (!gear.flying.parent) root.add(gear.flying);
           const k = (t - 0.62) / 0.38;
           gear.flying.visible = true;
           gear.flying.position.set(-4, 14 + k * 16 - k * k * 26, 10 + k * 40);
           gear.flying.rotation.x = k * 12;
-        } else if (gear.flying) gear.flying.visible = false;
+        }
       },
     },
     flip: {
@@ -764,7 +764,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
         frame.rotation.x += -spin * Math.PI * 2;
         stretchLegs(air * 0.6 - crouch * 0.3);
         moveArms(-air * 0.6, air * 0.4);
-        for (const tail of gear.tails) tail.rotation.x += air * 0.9;
+        for (const tail of gear.tails ?? []) tail.rotation.x += air * 0.9; // (only the Ninja has tails)
       },
     },
     cast: {
@@ -884,6 +884,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     gear.circle?.set(0);
     if (gear.cup) gear.cup.visible = false;
     if (gear.potion) gear.potion.visible = false;
+    if (gear.flying) gear.flying.visible = false; // the thrown vial only exists while the throw plays
     if (gear.aimPipe) {
       gear.aimPipe.visible = false;
       gear.pipe.visible = true;

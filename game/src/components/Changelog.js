@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.2',
+    date: '2026-10-15',
+    title: 'No more frozen gardens',
+    changes: [
+      '🧊 Fix: the game could freeze in a garden when a frog did a backflip (the Teapot Cannon, the Backflip emote, or another frog\'s backflip). And if anything ever goes wrong in a frame again, the game keeps running',
+      '🧪 Fix: the Alchemist\'s vial from the title screen no longer lies around (or follows you through your garden). A move still playing ends when you step into a garden or out of it',
+      '👀 Visit garden on the title screen: browse the public gardens without opening your own first',
+    ],
+  },
+  {
     version: '0.24.1',
     date: '2026-10-15',
     title: 'The lost tongue',

@@ -853,6 +853,7 @@ ${ meta.runs > 0 ? '' :
           <button class="menu-button" data-action="keepsakes">${currentKeepsake().icon} Keepsake</button>
           ${meta.runs > 0 ? `<button class="menu-button" data-action="steeping">🔥 Steeping <small>${steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small></button>` : ''}
           <button class="menu-button" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small></button>
+          <button class="menu-button" data-action="garden-visit">👀 Visit garden</button>
         </div>
         <p class="prompt">or press Space</p>
         <div class="title-footer">
@@ -1136,6 +1137,12 @@ ${ meta.runs > 0 ? '' :
   setLobbyGardens(gardens) {
     const list = this.menuName === 'lobby' && this.menu.querySelector('.garden-list');
     if (list) list.innerHTML = this.gardenRows(gardens);
+  }
+
+  /** Refreshes only the public gardens list in the visit popup (a typed code survives). */
+  setVisitGardens(gardens) {
+    const list = this.modalOpen && this.modal.classList.contains('garden-visit') && this.modal.querySelector('.lively-gardens');
+    if (list) list.innerHTML = gardens ? this.gardenRows(gardens) : `<p class="sub room-empty">Public gardens can't be reached right now.</p>`;
   }
 
   /** Asks for a garden code to visit; `gardens`: the public gardens, liveliest first. */
