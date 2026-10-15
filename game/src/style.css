@@ -652,6 +652,7 @@ canvas.game {
 .damage-number.burn { color: #ffa040; font-size: 16px; }
 .damage-number.zap { color: #c8d4ff; }
 .damage-number.frost { color: #a8ecff; }
+.damage-number.graze { color: #e9fbff; font-size: 12px; text-shadow: 0 0 6px #7fd8ff; }
 .damage-number.big { color: #ffe680; font-size: 28px; }
 .damage-number.ready {
   color: #fff3c4;

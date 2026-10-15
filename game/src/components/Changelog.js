@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.25.1',
+    date: '2026-10-15',
+    title: 'Close shaves',
+    changes: [
+      '✦ Graze: stingers that only just miss you sparkle, chime and charge your ultimate (and your score). The game-over screen counts them',
+      '🍃 When a boss breaks into a new stage, or falls, every stinger in the air turns into a tea leaf and flies to you',
+    ],
+  },
+  {
     version: '0.25.0',
     date: '2026-10-15',
     title: 'A warmer welcome',

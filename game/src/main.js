@@ -401,6 +401,7 @@ const TIPS = {
     touch.enabled
       ? 'Red cursed tiles burn a heart, hex you and call an ambush. Walk around them, or tap 💨 to hop over.'
       : 'Red cursed tiles burn a heart, hex you and call an ambush. Walk around them, or hop-dash over them (Space).',
+  graze: () => '✦ Graze! Bullets that only just miss you charge your ultimate and add to your score.',
   dash: () =>
     touch.enabled
       ? 'Tap 💨 to hop-dash right through bees: it hurts them, not you.'
@@ -905,6 +906,7 @@ let beezebubTime = 0; // play time when Bee-zebub fell (the speed leaderboard)
 
 function bossDefeated(name, score, kind) {
   clearBossMechanics();
+  bulletsToLeaves();
   if (name.includes('zebub') && !beezebubTime) beezebubTime = Math.max(1, Math.floor(timeAlive));
   if (kind) bossMemory(kind).beaten++;
   if (kind) achieve(kind); // queen, shogun, seraph, empress, beezebub
@@ -1801,6 +1803,7 @@ function startStage(boss, [, mechanic, count]) {
 
 /** Everyone: the stage callout and a roar. */
 function stageEffects(boss, stage, title) {
+  bulletsToLeaves();
   play('roar');
   shake = Math.max(shake, 14);
   postfx.flash('#ff3b1f', 0.3);
@@ -2957,6 +2960,29 @@ function updateEnemies(delta) {
   if (tactics.sync && tactics.volleyIn <= 0) tactics.volleyIn += syncCooldown();
 }
 
+// Graze: a bullet that passes close to Tode without hitting him (a bullet-hell staple) sparkles, chimes and pays a
+// little ultimate charge and score, so dodging well is rewarded in a game that otherwise fights by itself. Each
+// bullet grazes once, and not while Tode blinks after a hit (that would farm the blink); hop-dashing through a
+// volley does count.
+const GRAZE = { reach: 24, gauge: 0.6, points: 15, chimeGap: 0.06 };
+let grazes = 0; // this run's grazes (the game-over screen shows them)
+let lastGrazeChime = 0;
+
+function graze(bullet) {
+  bullet.grazed = true;
+  grazes++;
+  addGauge(GRAZE.gauge);
+  if (!isGuest()) points += GRAZE.points;
+  const at = new THREE.Vector3(bullet.x, bullet.y, 0);
+  particles.burst(at, { count: 5, colors: ['#ffffff', '#bff4ff', '#ffe9a0'], speed: 70, up: 40, size: 1.4, height: 10, life: 0.35, glow: true });
+  hud.damageNumber(at, '✦', 12, 'graze');
+  if (clock.elapsedTime - lastGrazeChime > GRAZE.chimeGap) {
+    lastGrazeChime = clock.elapsedTime;
+    play('graze');
+  }
+  if (grazes === 5) tip('graze');
+}
+
 function updateEnemyProjectiles(delta) {
   const limit = MAP_HALF_SIZE + 80;
   const reach = player.radius * 0.7; // a forgiving hitbox: bullet-hell games hit on the core only
@@ -2966,12 +2992,36 @@ function updateEnemyProjectiles(delta) {
       bullet.dead = true;
       return;
     }
-    if (player.isInvulnerable || player.downed || phase === 'gameover') return;
-    if ((bullet.x - player.position.x) ** 2 + (bullet.y - player.position.y) ** 2 < (bullet.radius * 0.8 + reach) ** 2) {
+    if (player.downed || phase === 'gameover') return;
+    const distanceSq = (bullet.x - player.position.x) ** 2 + (bullet.y - player.position.y) ** 2;
+    const hitReach = bullet.radius * 0.8 + reach;
+    if (!player.isInvulnerable && distanceSq < hitReach ** 2) {
       bullet.dead = true;
       hurtPlayer(bullet.damage);
+    } else if (!bullet.grazed && distanceSq < (hitReach + GRAZE.reach) ** 2 && (player.isDashing || player.invulnerableLeft <= 0)) {
+      graze(bullet);
     }
   });
+}
+
+// When a boss breaks into a new stage (or falls), every bullet in the air turns into a tea leaf that flies to Tode.
+const STAGE_LEAVES = { total: 24, orbs: 90, sparkles: 160 };
+
+/** Everyone: the bullets in the air become tea leaves (each player gathers their own). */
+function bulletsToLeaves() {
+  const list = bullets.list;
+  if (!list.length) return;
+  const worth = Math.min(STAGE_LEAVES.total, list.length * 0.25) / coopShare();
+  const every = Math.max(1, Math.ceil(list.length / STAGE_LEAVES.orbs));
+  const orbs = Math.ceil(list.length / every);
+  list.forEach((bullet, i) => {
+    const at = new THREE.Vector3(bullet.x, bullet.y, 0);
+    if (i < STAGE_LEAVES.sparkles) particles.burst(at, { count: 2, colors: ['#ffe9a0', '#c8f77a', '#ffffff'], speed: 50, up: 60, size: 1.6, height: 12, life: 0.45, glow: true });
+    if (i % every === 0) leaves.drop(at, worth / orbs, 1);
+  });
+  bullets.clear();
+  leaves.vacuum();
+  play('leafStorm');
 }
 
 // --- Abilities ---
@@ -6637,6 +6687,7 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   twistDay = daily ? dailyTwists(todayKey()) : null;
   twistIds = new Set(twistDay ? [...twistDay.trials, ...twistDay.boons] : []);
   submitted = false;
+  grazes = 0;
   clearWorld();
   resetExperience();
   setArena(ARENAS[0]);
@@ -6883,6 +6934,7 @@ function endRun({ victory = false } = {}) {
     daily: isDaily(),
     steep,
     gentle,
+    grazes,
     cls: runClass.id,
     // Co-op: the team (the host submits it to the board for its size).
     coop: coop?.size ?? 0,

@@ -134,7 +134,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Roguelite bullet hell:** ranged bees shoot harder patterns per arena (`STINGER_PATTERNS`: single shots → fans
   → wide fans → fans plus rings → fast fans), and bosses mix fans, aimed volleys, slow dense rings (`halo`), two-
   and four-armed spirals (`spiral`/`cross`), charges and summons (`ATTACKS` in `startQueenAttack`). Enemy bullets
-  are an instanced field (`components/Bullets.js`), hit on a forgiving core, and tea bombs cancel them. The swarm
+  are an instanced field (`components/Bullets.js`), hit on a forgiving core, and tea bombs cancel them. **Graze**
+  (v0.25.1, `GRAZE`, `graze()` in `updateEnemyProjectiles`): a bullet passing within `GRAZE.reach` of the hitbox
+  without hitting sparkles, chimes and pays 0.6% ultimate charge and 15 points, once per bullet; not while Tode
+  blinks after a hit, but during a hop-dash it counts. **Stage leaves** (`bulletsToLeaves`, called by
+  `stageEffects` and `bossDefeated`, so on every screen in co-op): every bullet in the air becomes a tea leaf (at most
+  `STAGE_LEAVES.total` worth, 0.25 per bullet) and all leaves fly to Tode. The swarm
   cap grows by 6 per arena.
 - **Chaos:** bee health and numbers grow steeply (`waveConfig`). From wave 4 waves may get **modifiers**
   (`MODIFIERS` in `Waves.js`: Frenzy, Horde, Elite Surge, Meteor Shower, Vengeful Swarm, Armoured; two at once

@@ -1594,7 +1594,7 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, coop = 0, host = true, team = null }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, grazes = 0, coop = 0, host = true, team = null }) {
     const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
@@ -1609,7 +1609,7 @@ ${ meta.runs > 0 ? '' :
       `
       <h1>${victory ? 'Victory!' : 'Game Over'}</h1>
       <p>${isRecord ? 'New best score' : 'Score'}: ${score}${daily ? ' <small>📅 Daily Brew</small>' : ''}${steep ? ` <small>🔥 Steep ${steep}</small>` : ''}${gentle ? ' <small>🌿 Gentle</small>' : ''}</p>
-      <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated · ${formatTime(time)}</p>
+      <p class="stats">Reached wave ${wave} · level ${level} · ${kills} bees defeated${grazes ? ` · ✦ ${grazes} grazes` : ''} · ${formatTime(time)}</p>
       ${clear ? `<p class="stats">⏱ Bee-zebub banished in <b>${formatTime(clear)}</b></p>` : ''}
       ${gathered}
       <p class="leaves">+${leaves} 🍃 Golden Leaves (${meta.leaves} total)</p>
