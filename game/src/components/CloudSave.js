@@ -24,8 +24,11 @@ const storage = (action, key, value) => {
   return null;
 };
 
-/** `status`: 'connecting', 'online' or 'offline'. `onChange` runs after the progress changed from the server. */
-export const cloud = { code: storage('get', CODE_KEY), status: 'connecting', onChange: null };
+/**
+ * `status`: 'connecting', 'online' or 'offline'. `onChange` runs after the progress changed from the server;
+ * `onRefused(error)` when the server refused a run report (it pays no leaves).
+ */
+export const cloud = { code: storage('get', CODE_KEY), status: 'connecting', onChange: null, onRefused: null };
 
 // Achievements unlocked this session that the server hasn't confirmed yet: they go with the next run report.
 // Only in memory: kept in storage, they could be edited to unlock keepsakes early.
@@ -168,6 +171,8 @@ async function sendUnsentRuns() {
       // Paid, or refused for good (the server decided either way): it leaves the list.
       unsentRuns(code, (runs) => runs.splice(runs.findIndex((r) => r.runId === body.runId) >>> 0, 1));
       if (answer.ok) for (const id of body.achievements ?? []) pending.delete(id);
+      // Refused: the leaves the game-over screen showed won't come, so say why instead of quietly taking them back.
+      else if (!answer.data.duplicate) cloud.onRefused?.(answer.data.error ?? "The server didn't count that run.");
       if (answer.data.progress && cloud.code === code) apply(answer.data);
     }
   } finally {

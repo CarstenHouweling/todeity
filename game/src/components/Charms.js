@@ -4,7 +4,9 @@ import * as THREE from 'three';
  * Charms: little trinkets that drop from elite bees, bosses, hives and Shrines of Chance. Unlike brews they have no
  * level cap: every copy stacks. Many trigger on hit, on kill or on a critical hit, and what they trigger can trigger
  * other charms in turn (with a weaker chance each step), so big stacks chain into fireworks.
- * Stat charms change Tode's stats once per copy (`apply`); the rest are read by main.js (`charmProcs`).
+ * Stat charms change Tode's stats once per copy (`apply(stats, n)` with the new count); the rest are read by main.js.
+ * Every effect flattens out (`stacked`, `chance`, the `*_MAX` caps): a high-Steep run full of elites used to pile up
+ * 50–90 copies of each, and stats that compounded per copy ran away (×200 damage, +750% speed).
  */
 export const CHARM_RARITIES = {
   common: { name: 'Common', color: '#f2f2f2', weight: 66 },
@@ -14,13 +16,22 @@ export const CHARM_RARITIES = {
 
 const pct = (value) => `${Math.round(value * 100)}%`;
 
+/** A stacking bonus that starts at `base` per copy and flattens out toward `cap`. */
+export const stacked = (base, n, cap) => cap * (1 - Math.exp((-base * n) / cap));
+/** What the n-th copy adds on top of the ones before. */
+const step = (base, n, cap) => stacked(base, n, cap) - stacked(base, n - 1, cap);
+
+export const DICE_MAX = 3; // extra rolls from Loaded Dice
+export const HEART_MAX = 5; // max hearts from Honey Hearts (later copies only heal)
+
 export const CHARMS = [
   // Stats
-  { id: 'bead', icon: '📿', name: 'Steeped Bead', rarity: 'common', text: (n) => `+${8 * n}% damage.`, apply: (s) => (s.damageMultiplier *= 1.08) },
-  { id: 'lemon', icon: '🍋', name: 'Lemon Zest', rarity: 'common', text: (n) => `+${5 * n}% critical hit chance.`, apply: (s) => (s.critChance += 0.05) },
-  { id: 'pretzel', icon: '🥨', name: 'Pretzel Legs', rarity: 'common', text: (n) => `Move ${7 * n}% faster.`, apply: (s) => (s.moveSpeed *= 1.07) },
-  { id: 'candy', icon: '🍬', name: 'Rock Candy', rarity: 'common', text: (n) => `Spit ${6 * n}% faster.`, apply: (s) => (s.spitCooldown /= 1.06) },
-  { id: 'honeyheart', icon: '💗', name: 'Honey Heart', rarity: 'rare', text: (n) => `+${n} max heart${n > 1 ? 's' : ''}.`, apply: (s) => (s.maxHp += 1), heal: 1 },
+  // Multipliers apply the ratio between n and n − 1 copies, so the total is exactly 1 + stacked(…).
+  { id: 'bead', icon: '📿', name: 'Steeped Bead', rarity: 'common', text: (n) => `+${pct(stacked(0.08, n, 1))} damage (up to +100%).`, apply: (s, n) => (s.damageMultiplier *= (1 + stacked(0.08, n, 1)) / (1 + stacked(0.08, n - 1, 1))) },
+  { id: 'lemon', icon: '🍋', name: 'Lemon Zest', rarity: 'common', text: (n) => `+${pct(stacked(0.05, n, 0.5))} critical hit chance (up to +50%).`, apply: (s, n) => (s.critChance += step(0.05, n, 0.5)) },
+  { id: 'pretzel', icon: '🥨', name: 'Pretzel Legs', rarity: 'common', text: (n) => `Move ${pct(stacked(0.07, n, 0.6))} faster (up to 60%).`, apply: (s, n) => (s.moveSpeed *= (1 + stacked(0.07, n, 0.6)) / (1 + stacked(0.07, n - 1, 0.6))) },
+  { id: 'candy', icon: '🍬', name: 'Rock Candy', rarity: 'common', text: (n) => `Spit ${pct(stacked(0.06, n, 1))} faster (up to twice as fast).`, apply: (s, n) => (s.spitCooldown /= (1 + stacked(0.06, n, 1)) / (1 + stacked(0.06, n - 1, 1))) },
+  { id: 'honeyheart', icon: '💗', name: 'Honey Heart', rarity: 'rare', text: (n) => `+${Math.min(n, HEART_MAX)} max heart${n > 1 ? 's' : ''}${n >= HEART_MAX ? ` (the most it gives); more just heal` : ''}.`, apply: (s, n) => n <= HEART_MAX && (s.maxHp += 1), heal: 1 },
   // On hit
   { id: 'chili', icon: '🌶️', name: 'Chili Leaf', rarity: 'common', text: (n) => `${pct(chance(0.1, n))} chance on hit to set a bee on fire.` },
   { id: 'cube', icon: '🧊', name: 'Ice Cube', rarity: 'common', text: (n) => `${pct(chance(0.07, n))} chance on hit to freeze a bee for a moment.` },
@@ -30,11 +41,16 @@ export const CHARMS = [
   { id: 'cup', icon: '☕', name: 'Hot Cup', rarity: 'uncommon', text: (n) => `Critical hits splash ${3 + 2 * n} damage around the bee.` },
   // On kill
   { id: 'firecracker', icon: '🧨', name: 'Sugar Firecracker', rarity: 'common', text: (n) => `Defeated bees have a 25% chance to explode for ${3 + 3 * n} damage.` },
-  { id: 'battery', icon: '🔋', name: 'Leaf Battery', rarity: 'common', text: (n) => `Every defeated bee charges your ultimate by ${(0.3 * n).toFixed(1)}%.` },
+  { id: 'battery', icon: '🔋', name: 'Leaf Battery', rarity: 'common', text: (n) => `Every defeated bee charges your ultimate by ${batteryCharge(n).toFixed(1)}% (up to 3%).` },
   // Rare
-  { id: 'dice', icon: '🎲', name: 'Loaded Dice', rarity: 'rare', text: (n) => `Every chance effect gets ${n} extra roll${n > 1 ? 's' : ''}.` },
+  { id: 'dice', icon: '🎲', name: 'Loaded Dice', rarity: 'rare', text: (n) => `Every chance effect gets ${Math.min(n, DICE_MAX)} extra roll${n > 1 ? 's' : ''}${n >= DICE_MAX ? ' (the most)' : ''}.` },
   { id: 'bell', icon: '🔔', name: 'Echo Bell', rarity: 'rare', text: (n) => `Spit has a ${pct(Math.min(1, 0.2 * n))} chance to fire a second volley.` },
 ];
+
+/** Ultimate charge per kill (percent) from `n` Leaf Batteries. */
+export const batteryCharge = (n) => stacked(0.3, n, 3);
+/** The Sugar Firecracker's blast radius: it grows with copies, but never past twice the first. */
+export const firecrackerRadius = (n) => 60 + stacked(6, n, 60);
 
 /** Stacking chance with diminishing returns: never quite 100%. */
 export function chance(base, stacks) {

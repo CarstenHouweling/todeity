@@ -588,6 +588,11 @@ export class Hud {
     setTimeout(() => toast.remove(), seconds * 1000 + 600);
   }
 
+  /** The server refused a run report: its Golden Leaves won't be paid. */
+  runRefused(error) {
+    this.toast(`<span class="toast-icon">☁️</span><span><b>No Golden Leaves for that run</b><em>${escapeHtml(error)}</em></span>`, '', 8);
+  }
+
   /** `pending`: levels whose skill pick is still to come (co-op saves them for the end of the wave). */
   setXp(fraction, level, pending = 0) {
     setStyle(this.xpFill, 'width', `${(Math.min(1, fraction) * 100).toFixed(1)}%`);

@@ -3,6 +3,27 @@
 
 export const CHANGELOG = [
   {
+    version: '0.24.8',
+    date: '2026-10-15',
+    title: 'Charms with manners',
+    changes: [
+      '📿 Stat charms flatten out instead of multiplying forever: damage up to +100%, crit up to +50%, speed up to +60%, spitting up to twice as fast',
+      '💗 Honey Hearts give up to 5 hearts (more just heal); Loaded Dice up to 3 extra rolls; Leaf Battery up to 3% per bee; Firecracker blasts stop growing',
+      '🐝 Each charm a wave drops from bees makes the next one rarer: a high-Steep wave full of elites drops a handful, not dozens',
+    ],
+  },
+  {
+    version: '0.24.7',
+    date: '2026-10-15',
+    title: 'Paid in full',
+    changes: [
+      '⏱ Beating Bee-zebub puts your time on the fastest Bee-zebub board even when you carry on into endless and fall there',
+      '🍃 Long runs full of elites (high Steep) pay their Golden Leaves again: the server refused them for "too many elites"',
+      '☁️ If the server ever refuses a run, a note says why instead of the leaves quietly disappearing',
+      '✨ Lightning, comets and biscuits no longer stay frozen in the garden after a run',
+    ],
+  },
+  {
     version: '0.24.6',
     date: '2026-10-15',
     title: 'Steady hands',

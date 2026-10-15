@@ -360,12 +360,20 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the other 10 unlock with the harder achievements (`unlock`: Shogun, Mastery, Untouchable, Tea Scholar, Boiling
   Over, Elite Hunter, Living Legend, Flawless, Empress, Bee-zebub), and the achievement toast says so. `apply({ stats, player,
   grant })`: `grant` holds the hooks for effects that aren't stats (a skill pick, a charm, starting Awakened…).
-- **Charms** (`components/Charms.js`): stacking trinkets without a cap, dropped by elites (35%), hives and held
+- **Charms** (`components/Charms.js`): stacking trinkets, dropped by elites (35%, less after each drop in a wave), hives and held
   shrines (always), bosses (3, at least Uncommon) and plain bees (0.4%). They lie on the ground (`CharmDrops`, emoji
   sprites) until picked up and fly to Tode when a wave is cleared. Stat charms `apply` once per copy; the others
   trigger in `charmHit`/`charmKill` from `damageEnemy` (sources in `PROC_SOURCES`). Charm damage passes on half its
   trigger chance (`withProc`, `procScale`) and at most `PROC_BUDGET` triggers fire per frame, so chains die out.
   Loaded Dice add rolls. In co-op every player gathers their own.
+  **Everything flattens out** (v0.24.8): a Steep 18 run full of elites gathered 50–90 copies of each charm, and stat
+  charms that multiplied per copy gave ×200 damage and +750% speed. Stat charms now follow `stacked(base, n, cap)`
+  (about `base` per copy at first, never past `cap`: damage +100%, crit +50%, speed +60%, spit rate ×2); `apply(stats,
+  n)` gets the new count and applies the step from n − 1 to n. Honey Hearts stop at `HEART_MAX` (5), Loaded Dice at
+  `DICE_MAX` (3) extra rolls, Leaf Battery at 3% per kill (`batteryCharge`), the Firecracker's radius at twice its
+  first (`firecrackerRadius`). Charms dropped by elites and plain bees get rarer within a wave (`CHARM_FALLOFF` 0.6
+  per drop, `beeCharmsThisWave`): 5 elites drop ~1.4 (was 1.8), 300 elites ~8 (was ~105). Bosses, hives, wards and
+  shrines are unaffected.
 - **Shrines** (`components/Shrines.js`, `setupShrine` in main.js): from wave 2, about a third of the non-boss waves get one (each usable once);
   stand on it for 0.9 s. Shrine of Chance: 1 heart for a charm (50%), two (15%) or nothing. Bitter
   Shrine (solo): the wave gets elites, frenzy, 50% more bees and a squad, then an extra Epic brew pick
@@ -462,11 +470,15 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (`leavesForRun`, `PANTRY`, `ACHIEVEMENTS`, `steepBonus` are imported from `src/`, so the server needs the `src`
   folder next to it), accepts achievements only when the run fits them (`earned()`), and refuses a run whose
   playtime exceeds the real time since the previous report. Pantry purchases are checked too (`reportBuy`).
+  Elite kills may not exceed kills (with the elite vow and Elite Surge most late bees are elites; a cap per wave
+  refused a Steep 18 run in v0.24.6). A refused report shows a toast with the reason (`cloud.onRefused`,
+  `hud.runRefused`); the game-over screen's leaves are only the local estimate.
   Achievements unlocked this session wait in memory (`notePending`) until the next run report. Reports that don't
   get through wait in `tode-unsent-runs` (see Deploying while people play). Without a server
   the game falls back to local progress. Forged requests can still cheat; this only stops storage edits.
   **Leaderboards** via `game/server`: score, deepest run (wave, then
-  level), fastest Bee-zebub (clear time) and a seeded **Daily Brew**. The run timer (top right) only counts
+  level), fastest Bee-zebub (clear time; any run with a `clear`, also one that died later in endless) and a seeded
+  **Daily Brew**. The run timer (top right) only counts
   fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`.
 
 ## Graphics levels
@@ -614,6 +626,10 @@ server proxies `/ws` and `/api`).
 - **Every damage source goes through `damageEnemy()`** in `main.js`, so kills, score, the ultimate gauge, Hailstorm's
   double damage and the damage multiplier stay consistent. Lightning should also call `lightningHit()`.
 - Effects may spawn other effects during `update()`; `Effects.update` handles that, so keep using `effects.addEffect`.
+  Each effect updates in its own try/catch: an exception used to drop every effect still in flight from the list
+  undisposed, and they stayed frozen in the scene into the garden (v0.24.7). Objects an effect adds to the scene
+  outside `Effect.add` (skill roots, ultimates, the biscuit) are tagged with `markEffect`, and `effects.clear()`
+  also removes any tagged object left in the scene.
 - **Nothing in an arena blocks movement or shots** except the map edge and Tode's house: bees fly over trees,
   rocks and ponds, shots fly over everything, and Tode walks through props, which fade (`updatePropFade`) when
   he is near or between them and the camera (meshes made with `single()` are tagged `userData.prop`).

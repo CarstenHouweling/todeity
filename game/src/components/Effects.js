@@ -6,6 +6,13 @@ const SCREEN_RIGHT = new THREE.Vector3(1, 1, 0).normalize();
 const SPARKS = ['#ffffff', '#cfe0ff', '#9fb8ff'];
 
 const random = (amount) => (Math.random() * 2 - 1) * amount;
+const failures = new Set(); // errors already logged by Effects.update
+
+/** Tags an object an effect adds to the scene, so `Effects.clear()` removes it even if the effect got lost. */
+export function markEffect(object) {
+  object.userData.effect = true;
+  return object;
+}
 
 function jaggedPoints(from, to, segments, jitter) {
   const points = [];
@@ -62,7 +69,7 @@ class Effect {
   }
 
   add(mesh) {
-    this.meshes.push(mesh);
+    this.meshes.push(markEffect(mesh));
     this.effects.ctx.scene.add(mesh);
     return mesh;
   }
@@ -398,9 +405,24 @@ export class Effects {
     const current = this.list;
     this.list = [];
     const survivors = current.filter((effect) => {
-      const alive = effect.update(delta);
-      if (!alive) effect.dispose();
-      return alive;
+      try {
+        const alive = effect.update(delta);
+        if (!alive) effect.dispose();
+        return alive;
+      } catch (error) {
+        // One broken effect must not take the rest with it: an exception here used to drop every effect still in
+        // flight from the list without disposing it, and they stayed in the scene, frozen, into the garden.
+        if (!failures.has(String(error))) {
+          failures.add(String(error));
+          console.error('Effect failed:', error);
+        }
+        try {
+          effect.dispose();
+        } catch {
+          // clear() sweeps what's left
+        }
+        return false;
+      }
     });
     this.list = [...survivors, ...this.list];
   }
@@ -408,5 +430,7 @@ export class Effects {
   clear() {
     for (const effect of this.list) effect.dispose();
     this.list = [];
+    // Anything an effect put in the scene that slipped out of the list goes too (tagged by `markEffect`).
+    for (const object of [...this.ctx.scene.children]) if (object.userData.effect) object.removeFromParent();
   }
 }

@@ -179,7 +179,8 @@ function applyRun(save, body, now) {
   if (run.time < (run.wave - 1) * 8) return 'That was a very fast run.';
   if (run.bossKills > Math.floor(run.wave / 5) + 1) return 'More bosses than waves.';
   if (run.victory && run.wave < 21) return 'Victory comes at wave 21.';
-  if (run.eliteKills > run.wave * 15) return 'Too many elites for that run.';
+  // Every elite killed is a kill; with vows and Elite Surge most late bees are elites, so no cap per wave.
+  if (run.eliteKills > run.kills) return 'Too many elites for that run.';
   const bonus = steepBonus(run.steep);
   if (run.score > (2_000 + run.kills * 200 + run.wave * 2_000) * bonus * twists.score) return 'That score looks a bit too good to be true.';
   // The Golden Leaf keepsake unlocks with the Living Legend achievement.

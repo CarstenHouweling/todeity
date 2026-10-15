@@ -17,7 +17,7 @@ import { Particles } from './components/Particles.js';
 import { babble, hush, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
 import { PostFX } from './components/PostFX.js';
-import { Effects } from './components/Effects.js';
+import { Effects, markEffect } from './components/Effects.js';
 import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ultimates.js';
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
@@ -44,7 +44,7 @@ import { blockBrowserZoom, viewHeight, viewWidth } from './components/Viewport.j
 import { chooseKeepsake, currentKeepsake, keepsakeFor } from './components/Keepsakes.js';
 import { chooseClass, chosenClass, classById, classOfTheDay } from './components/Classes.js';
 import { buildFrog } from './components/FrogModels.js';
-import { chance, charmById, CharmDrops, CHARM_RARITIES, rollCharm } from './components/Charms.js';
+import { batteryCharge, chance, charmById, CharmDrops, CHARM_RARITIES, DICE_MAX, firecrackerRadius, rollCharm } from './components/Charms.js';
 import { CHANCE_TRIES, createShrine, disposeShrine, SHRINE_HOLD, SHRINE_RADIUS, SHRINES, updateShrine } from './components/Shrines.js';
 import { BOSS_VOICES, bossTaunt } from './components/Spirits.js';
 import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
@@ -3492,7 +3492,7 @@ function withProc(scale, fn) {
 /** A chance roll for a charm; Loaded Dice give extra rolls. */
 function procs(probability) {
   if (procBudget <= 0) return false;
-  for (let i = 0; i <= charms('dice'); i++) {
+  for (let i = 0; i <= Math.min(charms('dice'), DICE_MAX); i++) {
     if (Math.random() < probability * procScale) {
       procBudget--;
       return true;
@@ -3526,30 +3526,39 @@ function charmHit(enemy, amount, crit) {
 }
 
 function charmKill(enemy) {
-  if (charms('battery')) addGauge(0.3 * charms('battery'));
+  if (charms('battery')) addGauge(batteryCharge(charms('battery')));
   if (charms('firecracker') && procs(0.25)) {
     const at = enemy.position.clone().setZ(0);
     const n = charms('firecracker');
     play('boom');
     withProc(0.5, () =>
-      effects.blast(at, { radius: 60 + 6 * n, damage: 3 + 3 * n, knockback: 160, color: '#ff6a3d', particleColors: FIRE, source: 'charm' })
+      effects.blast(at, { radius: firecrackerRadius(n), damage: 3 + 3 * n, knockback: 160, color: '#ff6a3d', particleColors: FIRE, source: 'charm' })
     );
   }
 }
 
+// Each charm an elite or plain bee drops in a wave makes the next one rarer (×CHARM_FALLOFF): a wave of a few elites
+// still drops one or two, but a high-Steep wave of hundreds no longer rains dozens of charms.
+const CHARM_FALLOFF = 0.6;
+let beeCharmsThisWave = 0;
+
 /** Elites, hives and bosses drop charms (bosses three, at least Uncommon); plain bees very rarely. */
 function dropCharms(enemy) {
-  const odds = enemy.type.boss || enemy.kind === 'nest' ? 1 : enemy.type.ward ? 0.4 : (enemy.elite ? 0.35 : 0.004) / coopShare();
+  const fromBee = !(enemy.type.boss || enemy.kind === 'nest' || enemy.type.ward);
+  const odds = enemy.type.boss || enemy.kind === 'nest' ? 1 : enemy.type.ward ? 0.4 : ((enemy.elite ? 0.35 : 0.004) / coopShare()) * CHARM_FALLOFF ** beeCharmsThisWave;
   const count = enemy.type.boss ? 3 : 1;
   for (let i = 0; i < count; i++) {
-    if (Math.random() < odds * charmLuck) charmDrops.drop(enemy.position, rollCharm(enemy.type.boss ? 'uncommon' : 'common'));
+    if (Math.random() < odds * charmLuck) {
+      charmDrops.drop(enemy.position, rollCharm(enemy.type.boss ? 'uncommon' : 'common'));
+      if (fromBee) beeCharmsThisWave++;
+    }
   }
 }
 
 function gainCharm(charm) {
   const count = charms(charm.id) + 1;
   charmCounts.set(charm.id, count);
-  charm.apply?.(player.stats);
+  charm.apply?.(player.stats, count);
   if (charm.heal) player.heal(charm.heal);
   updateHealth();
   play(charm.rarity === 'common' ? 'pick' : 'legendary');
@@ -3576,7 +3585,7 @@ const biscuitMaterial = new THREE.MeshStandardMaterial({ color: '#c88a4a', emiss
 /** The Homing Biscuit: flies after its bee (or the next one) and hits hard. */
 class Biscuit {
   constructor(from, target, damage, scale) {
-    this.mesh = new THREE.Mesh(biscuitGeometry, biscuitMaterial);
+    this.mesh = markEffect(new THREE.Mesh(biscuitGeometry, biscuitMaterial));
     this.mesh.position.copy(from).setZ(24);
     scene.add(this.mesh);
     this.target = target;
@@ -4605,6 +4614,7 @@ let waveMods = new Set(); // this wave's modifiers (see Waves.js)
 
 function beginWave(number, weatherKind, mods = []) {
   wave = number;
+  beeCharmsThisWave = 0;
   config = waveConfig(number);
   waveMods = new Set(mods);
   if (waveMods.has('horde')) config.count = Math.round(config.count * 1.5);
@@ -4717,7 +4727,7 @@ function circleHolders(zone) {
 
 /** A finished circle swells and fades out, then it's gone. */
 function retireZone(zone) {
-  const { group } = zone;
+  const group = markEffect(zone.group);
   let t = 0;
   effects.addEffect({
     update(delta) {
@@ -7322,6 +7332,7 @@ cloud.onChange = () => {
   else if (hud.menuName === 'pantry') hud.showPantry();
   if (hud.modal.classList.contains('save') && !hud.modal.hidden && !hud.modal.querySelector('.save-ok, .lobby-error')) hud.showSave();
 };
+cloud.onRefused = (error) => hud.runRefused(error);
 onFullscreenChange(() => {
   // In fullscreen the browser takes Esc to leave fullscreen and the game never sees the key: pause instead.
   if (!isFullscreen() && PLAYING.has(phase)) pause();

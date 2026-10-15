@@ -197,7 +197,9 @@ async function handleScores(req, res, url) {
 
     const rank = insert(boards.all, entry);
     const depthRank = insert(boards.depth, { ...entry }, ORDERS.depth);
-    const speedRank = entry.victory && entry.clear > 0 ? insert(boards.speed, { ...entry }, ORDERS.speed) : null;
+    // Bee-zebub's clear time counts however the run ended: a run that went on into endless and fell still beat him.
+    const beatBeezebub = entry.clear > 0 && entry.clear <= entry.time && entry.wave >= 21;
+    const speedRank = beatBeezebub ? insert(boards.speed, { ...entry }, ORDERS.speed) : null;
     let dailyRank = null;
     if (body.daily) {
       const date = today();

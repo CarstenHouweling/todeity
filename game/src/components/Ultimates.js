@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { markEffect } from './Effects.js';
 import { buildFrog } from './FrogModels.js';
 import { MAP_HALF_SIZE } from './Map.js';
 
@@ -80,7 +81,7 @@ class SteepingBeam {
     }
     this.orb = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), additive('#fff3c4', 0.9));
     this.group.add(this.orb);
-    ctx.scene.add(this.group);
+    ctx.scene.add(markEffect(this.group));
 
     // Tode keeps moving (slowly) and aiming while firing, and nothing can interrupt him.
     ctx.player.channeling = true;
@@ -270,7 +271,7 @@ class GreatTodeSummon {
     }
     this.seal.position.set(this.center.x, this.center.y, 0.8);
     this.seal.scale.setScalar(0.01);
-    ctx.scene.add(this.seal);
+    ctx.scene.add(markEffect(this.seal));
     ctx.play('charge');
     ctx.shake(6);
   }
@@ -370,7 +371,7 @@ class GreatTodeSummon {
     const { ctx, center } = this;
     this.toad = this.createToad();
     this.baseScale = this.toad.children[0].scale.x;
-    ctx.scene.add(this.toad);
+    ctx.scene.add(markEffect(this.toad));
     this.puff(110, 9);
     ctx.play('boom');
     ctx.shake(28);

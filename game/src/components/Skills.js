@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { additive, createTeapot, disposeTree } from './Ultimates.js';
+import { markEffect } from './Effects.js';
 
 /**
  * Skills: abilities Tode learns during a run, picked on every level-up (tea leaves are the experience).
@@ -61,7 +62,7 @@ class TimedEffect {
     this.ctx = ctx;
     this.life = life;
     this.age = 0;
-    this.root = new THREE.Group();
+    this.root = markEffect(new THREE.Group());
     ctx.scene.add(this.root);
   }
 
