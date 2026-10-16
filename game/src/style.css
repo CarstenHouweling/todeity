@@ -3363,10 +3363,19 @@ body.touch .steep-badge {
   cursor: default;
 }
 
-/* In a garden the jump button has the bottom-right corner to itself (no aim stick there). */
+/* In a garden the jump button has the bottom-right corner to itself (no aim stick there), BOOP to its left. */
 .touch-controls.garden .touch-buttons {
   right: calc(24px + var(--safe-right));
   bottom: calc(28px + var(--safe-bottom));
+}
+
+.touch-button.boop {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #fff3c4;
+  border-color: rgba(255, 211, 107, 0.75);
+  background: rgba(120, 60, 110, 0.55);
 }
 
 /* …and the round corner buttons stack above it, off the garden toolbar (they covered ✓ Leave on phones). */

@@ -219,6 +219,11 @@ export class Hud {
     this.muteButton.textContent = muted ? '🔇' : '🔊';
   }
 
+  /** The ⏸ corner button only means something during a run (not on the title screen or in a garden). */
+  setPauseShown(shown) {
+    if (this.pauseButton.hidden === shown) this.pauseButton.hidden = !shown;
+  }
+
   /** `time`: the run's play time in seconds (menus and pauses don't count). */
   setScore(score, best, time = 0) {
     setText(this.score, `Score: ${score}   Best: ${best}   ⏱ ${formatTime(time)}`);
@@ -1113,8 +1118,8 @@ ${ meta.runs > 0 ? '' :
           ? `Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
           : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
         : info.touch
-          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), drag the right side to look around.'
-          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), B to boop, 1–9 to emote. 🚩 Invite others to play together.';
+          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), BOOP a frog or a trinket, drag the right side to look around.'
+          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), B to boop frogs and trinkets, 1–9 to emote. 🚩 Invite others to play together.';
     const buttons = [
       info.own ? tool('garden-edit', '✏️ Edit garden') : '',
       info.own && info.online ? tool('garden-public', info.public ? '🌍 Public' : '🔒 Private', info.public ? 'on' : '') : '',
@@ -1708,7 +1713,8 @@ ${ meta.runs > 0 ? '' :
     if (slot) slot.innerHTML = this.scoreTable(scores, rank, board);
   }
 
-  showVictory() {
+  /** `endless`: offer to keep going (not in the Daily Brew, whose run ends with Bee-zebub). */
+  showVictory({ endless = true } = {}) {
     this.showMenu(
       'game-over victory',
       `
@@ -1722,8 +1728,8 @@ ${ meta.runs > 0 ? '' :
         <p class="thanks">Thank you for playing! 🐸☕</p>
       </div>
       <div class="menu-buttons">
-        <button class="menu-button primary" data-action="endless">∞ Keep going (endless)</button>
-        <button class="menu-button" data-action="retire">☕ Finish the run</button>
+        ${endless ? '<button class="menu-button primary" data-action="endless">∞ Keep going (endless)</button>' : ''}
+        <button class="menu-button${endless ? '' : ' primary'}" data-action="retire">☕ Finish the run</button>
       </div>`
     );
   }

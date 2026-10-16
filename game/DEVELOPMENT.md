@@ -130,7 +130,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
   Buzzbelle (5), the Hornet Shogun (10), the Seraph Queen (15), **Empress Buzzbelle (20)**, then the ground gives
   way and the true finale is **Bee-zebub in the Underworld (21)**, then a victory screen with an optional
-  endless mode. Elite bees from wave 6.
+  endless mode (not in the Daily Brew: `showVictory({ endless })`). Elite bees from wave 6.
 - **Roguelite bullet hell:** ranged bees shoot harder patterns per arena (`STINGER_PATTERNS`: single shots → fans
   → wide fans → fans plus rings → fast fans), and bosses mix fans, aimed volleys, slow dense rings (`halo`), two-
   and four-armed spirals (`spiral`/`cross`), charges and summons (`ATTACKS` in `startQueenAttack`). Enemy bullets
@@ -231,7 +231,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (`setLocomotion`), `flick()` per spit, a one-shot `dash`, `victory` in the ascension and story cut-scenes, a sip in
   the ending, and the signature move now and then on the title screen. `rig.inPlace` keeps moves from walking the frog
   off its hitbox in play. Ascension tints the frog's own materials (`ownMaterials`); later arenas make them glossier but
-  keep them blocky. `/classes.html` (dev only) previews them all.
+  keep them blocky. `/classes.html` (dev only) previews them all (`preview.sheet([{ move: 'dance', at: 0.3, camera: 'face' }])`).
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
   again too); the first run starts with a skippable story
   cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
@@ -306,13 +306,22 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   rebuilds the puppet; spits carry their style (`st`), a Ninja's decoy is a `decoy` message (the host's bees chase it).
   The Summoner's pond toads are local only (their spits show as his).
 - **Co-op objectives:** a circle (arena objective or a boss's circles of light) only fills while every standing
-  frog is in it (`circleHolders`). Shield wards and guardians are attuned to one player each (`attune`, labelled;
+  frog is in it (`circleHolders`). **The host decides how full** (v0.26, `fillCircle`): its snapshot carries `z`
+  (`circleShare()`: `o` objective and `l` lights progress, keyed by arena id and boss net id so a stale list is
+  ignored) and guests show that (`hostCircle`). Each screen used to fill circles itself from its own late view of
+  the teammates, so on a slow device a circle could finish and vanish while the host's was still open (it looked
+  like Low graphics hid it). Shield wards and guardians are attuned to one player each (`attune`, labelled;
   `owner`; the host ignores other players' hits, and an owner who is down or gone frees it).
 - **Daily Brew twists** (`components/DailyTwists.js`, shared with the server): every UTC day rolls one trial
   (`TRIALS`, harder, `reward` multiplies score and Golden Leaves) and one boon (`BOONS`); Sundays two trials,
   Saturdays two boons. The 📅 button opens `hud.showDaily`; main.js reads them with `twist(id)` (stats in
   `applyTwists`, waves in `startWave`/`beginWave`, plus `rollElite`, `healPlayer`, cursed tiles and boss health).
-  The run report sends `dailyKey`; the server only pays the bonus for today's or yesterday's key.
+  The run report sends `dailyKey`; the server only pays the bonus for today's or yesterday's key. A Daily Brew
+  ends with Bee-zebub: its victory screen has no endless button (and the `endless` action refuses).
+- **The run's form** (`runTier()` in main.js): the ending cut-scene turns Tode plain again (`ascension.setTier(0)`)
+  before `endRun`, so `startEnding` keeps the form in `endingTier`. Scores (`tier`), the share card, `rememberRun`
+  and the run report's `maxTier` use `runTier()`. Until v0.26 every won run said "Tode" and reported `maxTier: 0`,
+  so form achievements first reached in a won run were refused by the server.
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
@@ -342,7 +351,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `setOffWithParty` (main.js) opens a private co-op room, sends its code in a `go` event, waits for the party to join
   and calls `hostStartCoop`; members `joinParty` and start on the host's usual `start` message. `startRun` leaves
   the garden first (`leaveGardenView`). The owner's decor changes go out as `decor` events. On phones the touch
-  controls have a garden mode (move stick and a jump button in the bottom-right corner; the right half turns the
+  controls have a garden mode (move stick, a jump button in the bottom-right corner with BOOP to its left; the right half turns the
   camera). The garden toolbar (`.menu.garden-walk`, z-index 5) sits above the stick zones (z-index 3) so its
   buttons get taps; the menu itself passes touches through, and the round corner buttons stack above the jump button.
 - **Player tag** (v0.23, `components/PlayerTag.js`, shared with the server): name (2–16 characters, `cleanName`), a
@@ -356,8 +365,31 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   raycasting down, `hub.world.heightAt`; walls stop you unless they're within `STEP_UP`, tops can be stood on).
   `BOUNCE` (trampoline, Fairy Ring) throws frogs up; the Teapot Cannon fires them along its facing (`CANNON`); the
   Tea Ball is shared physics (whoever touches it kicks it and sends a `ball` event; everyone simulates). Emotes
-  (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B: a `boop` event shoves the other frog
-  on its own screen). Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
+  (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B, or BOOP left of the jump button on
+  phones). **Boops** (v0.26, `boop()`): the frog in reach gets a `boop` event (a shove on its own screen), or a
+  `five` (high five) if it is waving; with no frog in reach the ball gets a big kick, or the nearest trinket within
+  `BOOP.poke` a `poke` event: everyone wobbles it (`garden.poke`, `item.poke` in TitleGarden.update) and plays its
+  answer from `POKES` (a sound, a word or emoji, particles: chimes ring, the duck quacks, the jar lets out
+  fireflies…). Standing still on the bench for `REST_AFTER` starts the hidden looping `rest` emote (tea).
+- **Emotes** (v0.26): an emote is a rig move (`love`, `laugh`, `dance`, `nap`, `bow`, `power` in FrogModels.js, any
+  class) plus a script in `EMOTE_FX` (GardenHub.js: `start`/`update`/`end` with the hub as `this`, `state.parts`
+  for one-off moments via `once`/`every`), drawing with `GardenFx.js` (floating words/emoji sprites, a beating 3D
+  heart, instanced confetti, rockets and star bursts, shooting stars, shockwave domes and rings, a pillar of light,
+  a red carpet, a crown, a disco floor). `loop` emotes (Dance, Nap, rest) last until the frog moves, jumps or is
+  thrown; the state message carries the looping one (`e`), so others stop it, and late joiners start it. A moving
+  `centered` rig move (lying down) recentres itself; `rig.inPlace` leaves it alone. Effects that should stay in
+  view are placed with `awayFromCamera` (each screen places its own). **Ground Pound** jumps (`POUND.up`, own frog
+  only) and on landing sends `slam`: every screen bounces its own frog within `POUND.reach`, and trinkets jump.
+  **Power Up** (`minTier: 1`, unlocked by the best form ever reached: `bestTier(meta)` = `maxTier` or the form
+  achievements) charges for `POWER.charge` s (stars via `ascension.pullStars`), then bursts into the frog's best
+  form (sent as `tier` in the event; puppets get their own `Ascension`) with a sonic boom that shoves frogs within
+  `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4 })`
+  and main.js damps the form's screen warp (`soft`): at garden camera distance on a sunny lawn the full form washed
+  the screen out white.
+- **Level aura** (v0.26, `GardenFx.levelAura`, `auraStage`): every frog in a garden carries its account level
+  (`accountLevel`, sent as `lv` in `genter`, with `mt` the best form; the server passes both in `frogInfo`) as a
+  quiet aura on its group: stages at the rank levels 3, 6, 10, 15, 20, 30 (fireflies → a green ring and drifting
+  leaves → gold with turning dashes → jade → a halo → violet runes). Other frogs' labels show `Lv N`. Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
   `GET /api/gardens` lists only public ones, at most 30: those with frogs in them right now (fullest first), then
   the loveliest empty ones (`listGardens`; `loveliestGardens()` in saves.js is cached until a public garden's decor,
   name or visibility changes; also in the co-op lobby, and in the 👀 Visit popup, which the title
@@ -408,7 +440,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (`duckMusic`). Measured at the speakers (RMS): the boss theme ~0.13 (0.04 dipped), boss voices 0.09–0.13,
   spirits 0.05–0.10, the garden theme ~0.04; keep new voices in that range (`volume`, `VOICE_GAIN`). A boss roars at
   `BOSS_ROARS_AT` and speaks at `BOSS_SPEAKS_AT` (main.js): its taunt used to start under the roar and was drowned
-  out.
+  out. New sounds (v0.26) were checked with the dev meter: `const level = game.sound.meter()` in the console (after a
+  click unlocks audio), call `level()` every ~15 ms while a sound plays and keep the peak RMS (music off with
+  `game.sound.setSound('music', false)`). Peaks: pick 0.026, legendary 0.038, boom 0.10; garden emotes 0.03–0.1.
+  Small speakers play little under ~250 Hz, so a low sound needs its energy higher up (`syllable()`: a voice-like
+  vowel, or a click on a kick). Importing Sound.js again from the console gives a separate copy (Vite's reload
+  timestamps): measure through `game.sound`.
 - **Readability:** enemy bullets have a dark outline (back-face rim mesh) and draw after all other transparent
   effects. The pause menu's **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
   during play (cut-scenes keep the full show) and drop the spit trails.
@@ -454,6 +491,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Title screen layout:** in order of importance: (after the first run) the profile and the reward chips; a big
   Start run; the ways to play (Daily Brew, Co-op, Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping,
   My garden, Visit garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.
+- **Corner buttons:** 📸 and 🔊 always; ⏸ only while a run is playing (`hud.setPauseShown(PLAYING.has(phase))`),
+  never on the title screen or in a garden, where it did nothing.
 - **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
@@ -659,7 +698,8 @@ server proxies `/ws` and `/api`).
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
 | `components/GardenPhysics.js` | Height fields: what frogs stand on in a garden (the house, trinkets). |
-| `components/Emotes.js` | Garden emotes and their achievement unlocks. |
+| `components/Emotes.js` | Garden emotes, their unlocks (achievements, or `minTier`) and `bestTier`. |
+| `components/GardenFx.js` | The garden's effects: emote visuals (sprites, confetti, fireworks, shockwaves, carpet, crown, disco floor) and the level aura. |
 | `components/PlayerTag.js` | The player tag rules: name cleaning and filtering, colours, random names, #tags (shared with the server). |
 | `components/Quality.js` | The Auto / High / Low setting: quality steps, `looksWeak()` device guess. |
 | `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
@@ -766,6 +806,8 @@ const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of wav
 game.levelUp(), game.offerBrews()  // open a skill pick or a brew offer now
 game.ascend(4)            // play the ascension cut-scene to a tier (game.setTier skips it)
 game.holdLevelUps = true  // level-ups wait for the wave's end, as in co-op (footage without pick screens)
+game.action('garden')     // press a menu button (hud.onAction); game.action('emote', { id: 'power' }) in a garden
+game.hub.fx.list          // the garden effects in flight; game.hub.myEmote: the emote playing
 ```
 
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game

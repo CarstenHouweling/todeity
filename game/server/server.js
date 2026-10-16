@@ -424,14 +424,14 @@ function handleSocketMessage(client, raw) {
 // to GARDEN_MAX frogs, on the same socket as co-op (a frog can be in a garden and a co-op room for a moment, while a
 // party sets off). The server only checks the garden exists and passes states and events along.
 //
-// client → server: { t: 'genter', garden, name, cls } | { t: 'gleave' } | { t: 'gstate', d } | { t: 'gevent', d }
-// server → client: { t: 'gwelcome', garden, id, frogs: [{ id, name, cls, color }] } | { t: 'gjoin', frog }
+// client → server: { t: 'genter', garden, name, cls, color, lv, mt } | { t: 'gleave' } | { t: 'gstate', d } | { t: 'gevent', d }
+// server → client: { t: 'gwelcome', garden, id, frogs: [{ id, name, cls, color, lv, mt }] } | { t: 'gjoin', frog }
 //                  { t: 'gpart', id } | { t: 'gstate', from, d } | { t: 'gevent', from, d } | { t: 'gfull' }
 const GARDEN_MAX = 12;
 const GARDEN_COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f', '#c58aff', '#ff8a3a', '#7ff0d0', '#ff5a7a', '#e8f8ff', '#b8e34a', '#ffb000', '#9fb8ff'];
 const gardenRooms = new Map(); // garden code → { code, clients: Map(id → client) }
 
-const frogInfo = (client) => ({ id: client.id, name: client.gardenName, cls: client.gardenClass, color: client.gardenColor });
+const frogInfo = (client) => ({ id: client.id, name: client.gardenName, cls: client.gardenClass, color: client.gardenColor, lv: client.gardenLevel, mt: client.gardenTier });
 
 function leaveGarden(client) {
   const room = client.garden;
@@ -452,6 +452,9 @@ function enterGarden(client, message) {
   const used = new Set([...room.clients.values()].map((c) => c.gardenColor));
   client.gardenName = publicName(message.name, 'Frog');
   client.gardenClass = /^[a-z]{2,16}$/.test(message.cls) ? message.cls : 'tode';
+  // Looks only (the level aura, the Power Up's form), so taken as they come, within bounds.
+  client.gardenLevel = Math.max(1, Math.min(999, Math.round(Number(message.lv) || 1)));
+  client.gardenTier = Math.max(0, Math.min(5, Math.round(Number(message.mt) || 0)));
   // Their own name colour (player tag), or a free one.
   client.gardenColor = TAG_COLORS.includes(message.color) ? message.color : GARDEN_COLORS.find((color) => !used.has(color)) ?? GARDEN_COLORS[0];
   client.garden = room;

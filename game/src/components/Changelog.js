@@ -3,6 +3,23 @@
 
 export const CHANGELOG = [
   {
+    version: '0.26.0',
+    date: '2026-10-16',
+    title: 'Show your power',
+    changes: [
+      '⚡ New emote Power Up: Tode charges up, a sonic boom blasts outward and he shows off the highest divine form you ever reached (it knocks nearby frogs back)',
+      '💥 More big emotes: Ground Pound (bounces everyone near), Star Shower, Fireworks and a Party Popper of fluttering confetti',
+      '💃 Dance and 💤 Nap now last until you move: a disco floor and a groove, or Tode asleep on his side. Love, Laugh and the Royal bow have their own animations',
+      '🌟 Your level glows around you in every garden, from a few fireflies to golden rings, a halo and runes. Other frogs show their level by their name',
+      '👉 Boop a trinket: chimes ring, the duck quacks, the gnome boings, fireflies fly out of the jar. Boop the ball for a big kick, a waving frog for a high five, and sit still on the bench for a cup of tea',
+      '📱 A BOOP button next to the jump button on phones; the ⏸ button only shows during a run',
+      '🔊 Emotes sound like what they do: a real "ha ha ha", a snore, a dance beat, rocket whistles and bangs, a roaring power-up and its sonic boom',
+      '👥 Co-op: circles you hold together now fill the same on every screen (the host decides). A circle could finish and vanish on a teammate\'s screen while it was still open on yours',
+      '📅 The Daily Brew ends with Bee-zebub: no endless mode there',
+      '🏆 A run you win now keeps its form: the boards said "Tode" (the ending shows him plain again before the score was saved), and form achievements reached in that run didn\'t count',
+    ],
+  },
+  {
     version: '0.25.2',
     date: '2026-10-15',
     title: 'Royal Tea Chest',

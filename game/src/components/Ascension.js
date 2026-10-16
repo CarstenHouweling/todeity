@@ -393,6 +393,7 @@ export class Ascension {
     this.particles = particles;
     this.effects = effects;
     this.tier = 0;
+    this.intensity = 1;
     this.time = 0;
     this.emitBudget = 0;
     this.arcTimer = 0;
@@ -423,9 +424,13 @@ export class Ascension {
     return LOOKS[this.tier];
   }
 
-  /** Builds the visuals for `tier` (instantly; the transformation cut-scene lives in main.js). */
-  setTier(tier) {
+  /**
+   * Builds the visuals for `tier` (instantly; the transformation cut-scene lives in main.js). `intensity` thins the
+   * glowing layers (a garden's Power Up: the camera is close and the lawn is bright, so they'd wash out).
+   */
+  setTier(tier, { intensity = 1 } = {}) {
     this.tier = tier;
+    this.intensity = intensity;
     this.clearParts();
     const { player } = this;
     const look = LOOKS[tier];
@@ -530,6 +535,15 @@ export class Ascension {
       }
       this.runes.position.z = 0.9;
       player.group.add(this.runes);
+    }
+    if (intensity !== 1) {
+      for (const root of [this.parts, this.runes, this.debris, this.groundGlow, this.sparkles]) {
+        root?.traverse((child) => {
+          const material = child.material;
+          if (material?.uniforms?.opacity) material.uniforms.opacity.value *= intensity;
+          else if (material?.transparent) material.opacity *= intensity;
+        });
+      }
     }
   }
 
@@ -637,7 +651,7 @@ export class Ascension {
     });
     if (this.crest) this.crest.scale.setScalar(1 + 0.05 * Math.sin(time * 9));
     if (this.halo) this.halo.rotation.z = time * 0.8;
-    if (this.groundGlow) this.groundGlow.material.opacity = 0.12 + 0.06 * Math.sin(time * 5);
+    if (this.groundGlow) this.groundGlow.material.opacity = (0.12 + 0.06 * Math.sin(time * 5)) * this.intensity;
     if (this.runes) {
       this.runes.children.forEach((child, i) => {
         child.rotation.z = time * (child === this.galaxy ? 0.25 : i ? -0.7 : 0.4);
@@ -654,7 +668,7 @@ export class Ascension {
     if (stage.inflow) this.pullStars(delta, stage.inflow.rate, stage.inflow.colors);
 
     // Rising flames and sparks.
-    this.emitBudget += PARTICLES_PER_SECOND[tier] * delta;
+    this.emitBudget += PARTICLES_PER_SECOND[tier] * delta * this.intensity;
     const count = Math.floor(this.emitBudget);
     this.emitBudget -= count;
     if (count > 0) {

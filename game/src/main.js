@@ -14,7 +14,7 @@ import { circlesOverlap, circleIntersectsRect } from './components/collision.js'
 import { ALL_BREWS, BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
-import { babble, hush, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
+import { babble, hush, meter, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
 import { PostFX } from './components/PostFX.js';
 import { Effects, markEffect } from './components/Effects.js';
@@ -48,11 +48,11 @@ import { batteryCharge, chance, charmById, CharmDrops, CHARM_RARITIES, DICE_MAX,
 import { CHANCE_TRIES, createShrine, disposeShrine, SHRINE_HOLD, SHRINE_RADIUS, SHRINES, updateShrine } from './components/Shrines.js';
 import { BOSS_VOICES, bossTaunt } from './components/Spirits.js';
 import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
-import { ownedTrinkets } from './components/Rewards.js';
+import { accountLevel, ownedTrinkets } from './components/Rewards.js';
 import { TitleGarden } from './components/TitleGarden.js';
 import { GardenHub } from './components/GardenHub.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
-import { EMOTES, emoteUnlocked } from './components/Emotes.js';
+import { EMOTES, bestTier, emoteUnlocked } from './components/Emotes.js';
 import { onServerBack, setPresence, startPresence } from './components/Presence.js';
 import { VERSION } from './components/Changelog.js';
 
@@ -337,6 +337,9 @@ let offers = [];
 let rerolls = 0;
 let luck = 0;
 let endless = false;
+let endingTier = 0; // the form Tode had when he beat Bee-zebub (the ending cut-scene shows him plain again)
+/** The run's form for the scores, the share card and the cloud save: the ending doesn't take it away. */
+const runTier = () => Math.max(endingTier, ascension.tier);
 let autoPause = true;
 // autoSpit: on a computer Tode spits by himself whenever a bee is in range (aimed with the mouse), like on touch.
 const settings = { calmFx: false, autoSpit: true, graphics: 'auto', showFps: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
@@ -1592,13 +1595,10 @@ function updateRaid(delta) {
     tether.material.opacity = 0.35 + 0.2 * Math.sin(clock.elapsedTime * 8);
   }
   // Circles of light fill while a Tode stands in them.
-  for (const zone of raid.zones) {
+  for (const [i, zone] of raid.zones.entries()) {
     zone.emblem.rotation.z += delta * (zone.done ? 0.5 : 2);
     if (zone.done) continue;
-    const holders = circleHolders(zone);
-    zone.progress = THREE.MathUtils.clamp(zone.progress + (holders ? (delta / LIGHT_TIMES[arenaIndex()]) * (1 + 0.3 * (holders - 1)) : -delta / 10), 0, 1);
-    zone.fill.geometry.dispose();
-    zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, zone.progress * Math.PI * 2));
+    fillCircle(zone, hostCircle('l', i, boss.netId), 1 / LIGHT_TIMES[arenaIndex()], 1 / 10, delta);
     if (zone.progress >= 1) {
       zone.done = true;
       retireZone(zone);
@@ -4159,7 +4159,7 @@ function syncTrinkets() {
 
 // --- Gardens as a meeting place: hop around, visit each other, invite and set off together (GardenHub.js) ---
 const hub = new GardenHub(
-  { net, scene, hud, player, particles, play },
+  { net, scene, hud, player, particles, play, effects, ascension, postfx },
   {
     onChange: () => refreshGardenWalk(),
     onGo: (code) => joinParty(code),
@@ -4187,11 +4187,14 @@ hub.world = {
   },
   items: () => garden.items,
   spring: (item) => garden.spring(item),
+  poke: (item, options) => garden.poke(item, options),
 };
+/** Who I am in a garden: name, class, colour, account level (my aura) and best form (my Power Up). */
+const gardenIdentity = () => ({ name: playerName(), cls: chosenClass().id, color: meta.profile?.color, level: accountLevel(meta).level, maxTier: bestTier(meta) });
 let showEmotes = false;
 
 /** My emotes: the free ones and those my achievements unlocked, in order (keys 1–9 play the first nine). */
-const myEmotes = () => EMOTES.filter((emote) => emoteUnlocked(emote, meta.achievements));
+const myEmotes = () => EMOTES.filter((emote) => emoteUnlocked(emote, meta));
 
 let gardenVisit = null; // the garden we're in: { code, own, owner }
 let ownGardenCode = null;
@@ -4216,7 +4219,9 @@ const walkInfo = () => {
     night: Boolean(meta.gardenNight),
     touch: touch.enabled,
     public: Boolean(cloud.gardenPublic),
-    emotes: showEmotes ? EMOTES.map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta.achievements), hint: ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name })) : null,
+    emotes: showEmotes
+      ? EMOTES.filter((emote) => !emote.hidden).map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta), hint: emote.how ?? ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name }))
+      : null,
   };
 };
 
@@ -4232,7 +4237,7 @@ function enterGarden({ code, own, owner = null }) {
   gardenVisit = { code, own, owner };
   settingOff = false;
   player.rig?.play('idle'); // a title-screen move still playing (a thrown vial, a summoned toad) ends here
-  hub.enter({ code, own, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+  hub.enter({ code, own, ...gardenIdentity() });
   garden.walk(player.group.position);
   refreshGardenWalk();
 }
@@ -4246,7 +4251,7 @@ async function openGarden() {
   ownGardenCode ??= await gardenCode(playerName());
   if (ownGardenCode && decorating && gardenVisit?.own && !gardenVisit.code) {
     gardenVisit.code = ownGardenCode;
-    hub.enter({ code: ownGardenCode, own: true, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+    hub.enter({ code: ownGardenCode, own: true, ...gardenIdentity() });
     refreshGardenWalk();
   }
 }
@@ -4852,6 +4857,7 @@ const OBJECTIVES = {
 const OBJECTIVE_COUNT = 3;
 const ZONE_RADIUS = 70;
 let objective = null; // { def, done, zones: [{ position, progress, done, group, fill, beam }], announced }
+let hostCircles = null; // guests: the host's circle progress from the snapshots (see fillCircle)
 
 /** Three spots around the middle of the arena, the same on every screen. */
 function objectiveSpots(def) {
@@ -4896,6 +4902,35 @@ function circleHolders(zone) {
   return inside && inside === todes.length ? inside : 0;
 }
 
+/**
+ * Fills (or drains) a circle by `rate` per second while everyone holds it, and redraws its fill. Guests follow the
+ * host's progress instead (`hostCircle`, from the snapshots): every screen sees its teammates a little late (more on
+ * a slow device), so screens that filled circles by themselves disagreed, and a circle could finish and vanish on
+ * a guest's screen while the host's was still open. Returns how many hold it (on this screen).
+ */
+function fillCircle(zone, hostValue, rate, drain, delta) {
+  const holders = circleHolders(zone);
+  zone.progress = hostValue ?? THREE.MathUtils.clamp(zone.progress + (holders ? rate * (1 + 0.3 * (holders - 1)) : -drain) * delta, 0, 1);
+  zone.fill.geometry.dispose();
+  zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, zone.progress * Math.PI * 2));
+  return holders;
+}
+
+/** Guests: the host's progress for circle `i` of `kind` ('o' objective, 'l' lights of `boss`), or undefined. */
+function hostCircle(kind, i, key) {
+  if (!isGuest() || !hostCircles || hostCircles[`${kind}k`] !== key) return undefined;
+  return hostCircles[kind]?.[i];
+}
+
+/** Host: every open circle's progress, for the snapshot (with what they belong to, so a stale list is ignored). */
+function circleShare() {
+  const round = (zone) => (zone.done ? 1 : Math.round(zone.progress * 100) / 100);
+  const share = {};
+  if (objective?.zones.length) Object.assign(share, { o: objective.zones.map(round), ok: arena.id });
+  if (raid?.zones.length) Object.assign(share, { l: raid.zones.map(round), lk: raid.boss.netId });
+  return Object.keys(share).length ? share : undefined;
+}
+
 /** A finished circle swells and fades out, then it's gone. */
 function retireZone(zone) {
   const group = markEffect(zone.group);
@@ -4936,14 +4971,11 @@ function updateObjective(delta) {
   objectiveArrows = [];
   if (!objective) return;
   const { def } = objective;
-  for (const zone of objective.zones) {
+  for (const [i, zone] of objective.zones.entries()) {
     zone.emblem.rotation.z += delta * (zone.done ? 0.5 : 2);
     zone.emblem.position.z = 40 + Math.sin(clock.elapsedTime * 2) * 5;
     if (zone.done) continue;
-    const holders = circleHolders(zone);
-    zone.progress = THREE.MathUtils.clamp(zone.progress + (holders ? (delta / ZONE_TIMES[arenaIndex()]) * (1 + 0.3 * (holders - 1)) : -delta / 15), 0, 1);
-    zone.fill.geometry.dispose();
-    zone.fill.geometry = new THREE.CircleGeometry(ZONE_RADIUS - 5, 64, Math.PI / 2, Math.max(0.0001, zone.progress * Math.PI * 2));
+    const holders = fillCircle(zone, hostCircle('o', i, arena.id), 1 / ZONE_TIMES[arenaIndex()], 1 / 15, delta);
     // Holding a shrine draws the swarm in.
     if (holders && !isGuest() && (zone.spawnTimer -= delta) <= 0) {
       zone.spawnTimer = 1.4 / (1 + 0.35 * arenaIndex());
@@ -5906,6 +5938,7 @@ function startEnding() {
   orbiting = true;
   clearWorld();
   setArena(ARENAS[0]); // home again
+  endingTier = Math.max(endingTier, ascension.tier);
   ascension.setTier(0); // and just Tode again: a frog with a cup of tea
   hud.setForm('', 0);
   hud.showStory();
@@ -5950,7 +5983,7 @@ function updateEnding(delta) {
     hud.hideBossIntro();
     setPhase('victory');
     play('victory');
-    hud.showVictory();
+    hud.showVictory({ endless: !isDaily() }); // the Daily Brew ends with Bee-zebub: one board, one run
   }
 }
 
@@ -6178,6 +6211,7 @@ function snapshot() {
       enemy.maxHp,
       flags(enemy),
     ]),
+    z: circleShare(),
   };
 }
 
@@ -6203,6 +6237,7 @@ function createMirror(id, kind, elite, x, y) {
 
 function applySnapshot(snap) {
   coopScore = snap.sc;
+  hostCircles = snap.z ?? null;
   if (phase === 'fighting') hud.setWave(snap.w, snap.left);
   const seen = new Set();
   for (const [id, kind, mod, x, y, rotation, hp, maxHp, flags] of snap.e) {
@@ -6925,6 +6960,8 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   }
 
   endless = false;
+  endingTier = 0;
+  hostCircles = null;
   Object.assign(feats, { cleanWaves: 0, tileWave: 0, legendaries: 0, shrines: 0, bitterWave: 0, bossHurt: false, fusions: 0 });
   timeAlive = 0;
   beezebubTime = 0;
@@ -7029,7 +7066,8 @@ function endRun({ victory = false } = {}) {
   // What ended the run: the boss of a boss wave if it still stands, otherwise the swarm.
   const bossAlive = config?.isBoss && enemies.some((enemy) => enemy.type.boss && !enemy.dying);
   const killer = victory ? null : bossAlive ? config.boss : 'swarm';
-  rememberRun({ wave, killer, tier: ascension.tier, victory, steep });
+  const tier = runTier();
+  rememberRun({ wave, killer, tier, victory, steep });
   meta.leaves += leaves;
   meta.runs++;
   meta.bossKills += bossKills;
@@ -7038,15 +7076,15 @@ function endRun({ victory = false } = {}) {
   // The server has the final word on the leaves (cloud saves); this screen shows the local count meanwhile.
   reportRun({
     wave, bossKills, victory, score: finalScore, kills, time: Math.floor(timeAlive), steep,
-    maxTier: ascension.tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop), coopSize: coop?.size ?? 0, dailyKey: twistDay?.key,
+    maxTier: tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop), coopSize: coop?.size ?? 0, dailyKey: twistDay?.key,
   });
 
-  const line = runLine({ wave, victory, firstBossKill, reachedGod: ascension.tier >= 4, killer });
+  const line = runLine({ wave, victory, firstBossKill, reachedGod: tier >= 4, killer });
   lastRun = {
     score: finalScore,
     wave,
     level: playerLevel,
-    tier: ascension.tier,
+    tier,
     kills,
     time: Math.floor(timeAlive),
     clear: beezebubTime,
@@ -7082,7 +7120,7 @@ let submitted = false;
 function runBuild() {
   const ultimate = player.ultimate && ULTIMATES[player.ultimate];
   return {
-    form: TIERS[ascension.tier].name,
+    form: TIERS[runTier()].name,
     frogClass: runClass.name,
     keepsake: keepsake ? { icon: keepsake.icon, name: keepsake.name, color: '#c9a2ff' } : null,
     charms: charmList(),
@@ -7353,7 +7391,7 @@ const MENU_ACTIONS = {
     // Everyone sees the new tag: redraw what shows it, and step back into the garden with it.
     if (hud.menuName === 'lobby' && !net.inRoom) showLobby();
     refreshMenu();
-    if (hub.active && gardenVisit?.code) hub.enter({ code: gardenVisit.code, own: gardenVisit.own, name: playerName(), cls: chosenClass().id, color: meta.profile?.color });
+    if (hub.active && gardenVisit?.code) hub.enter({ code: gardenVisit.code, own: gardenVisit.own, ...gardenIdentity() });
     const next = afterName;
     afterName = null;
     next?.();
@@ -7383,7 +7421,7 @@ const MENU_ACTIONS = {
   },
   emote: ({ id }) => {
     const emote = EMOTES.find((e) => e.id === id);
-    if (emote && emoteUnlocked(emote, meta.achievements)) hub.playEmote(id);
+    if (emote && emoteUnlocked(emote, meta)) hub.playEmote(id);
   },
   'garden-boop': () => hub.boop(),
   'garden-public': async () => {
@@ -7564,6 +7602,7 @@ const MENU_ACTIONS = {
   'share-copy-image': shareCopyImage,
   'share-save': shareSave,
   endless: () => {
+    if (isDaily() || phase !== 'victory') return;
     endless = true;
     hud.hideMenu();
     hud.showBanner('Endless Brew', 'How far can a god of tea go?', 2.2);
@@ -7810,12 +7849,14 @@ function frame(realDelta, render = true) {
   updateCoop(realDelta, delta);
   touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
+  hud.setPauseShown(PLAYING.has(phase));
   const look = ascension.postfxTargets();
   const boost = arena.postfx ?? {};
+  const soft = decorating ? 0.35 : 1; // a Power Up in a garden: the camera is close, reality bends less
   postfx.setTargets({
     bloom: look.bloom + (boost.bloom ?? 0),
-    warp: look.warp + (boost.warp ?? 0),
-    aberration: look.aberration + (boost.aberration ?? 0),
+    warp: look.warp * soft + (boost.warp ?? 0),
+    aberration: look.aberration * soft + (boost.aberration ?? 0),
   });
   // Calm effects soften flashes, shakes and particles during play (cut-scenes keep the full show).
   postfx.calm = settings.calmFx && PLAYING.has(phase);
@@ -7989,6 +8030,9 @@ if (import.meta.env.DEV) {
     meta, // progress (Golden Leaves, trinkets…): change it, then game.syncGarden()
     garden,
     hub, // the garden meeting place: frogs, party, inviting
+    hud,
+    action: (name, data = {}) => hud.onAction(name, data), // press a menu button: game.action('garden'), ('emote', { id: 'power' })
+    sound: { play, meter, setSound, unlock: unlockAudio }, // const level = game.sound.meter(); level() → RMS now
     quality, // graphics: { step, features, ratio }; game.setQualityStep(0–4) to try a step
     setQualityStep,
     setPixelRatio,

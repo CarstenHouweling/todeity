@@ -81,6 +81,7 @@ const CAMERAS = {
   game: { position: [150, 150, 150], target: [0, 0, 0], label: '📷 In-game view' },
   close: { position: [-42, 26, 52], target: [0, 12, 0], label: '🔍 Close-up' },
   side: { position: [-78, 16, 0], target: [0, 14, 6], label: '📷 Side' },
+  face: { position: [0, 30, 80], target: [0, 16, 0], label: '🙂 Face' },
   wide: { position: [-80, 55, 120], target: [0, 26, -18], label: '🔭 Wide' },
 };
 let mode = 'cycle';
@@ -109,7 +110,7 @@ bar.addEventListener('click', (event) => {
     }
   }
   if (button.dataset.camera) {
-    if (['close', 'side', 'wide'].includes(button.dataset.camera) && cameraName === button.dataset.camera) closeIndex = (closeIndex + 1) % frogs.length;
+    if (['close', 'side', 'wide', 'face'].includes(button.dataset.camera) && cameraName === button.dataset.camera) closeIndex = (closeIndex + 1) % frogs.length;
     cameraName = button.dataset.camera;
   }
   if ('turn' in button.dataset) turntable = !turntable;
@@ -121,7 +122,7 @@ const camera = new THREE.PerspectiveCamera(32, window.innerWidth / window.innerH
 const lookAt = new THREE.Vector3();
 function placeCamera() {
   const view = CAMERAS[cameraName];
-  const single = ['close', 'side', 'wide'].includes(cameraName);
+  const single = ['close', 'side', 'wide', 'face'].includes(cameraName);
   const focusX = single ? frogs[closeIndex].x : 0;
   // Step back until the whole row (or the one frog of a close-up) fits across the screen.
   const halfWidth = cameraName === 'wide' ? 60 : single ? 26 : ((frogs.length - 1) / 2) * SPACING + 34;
@@ -197,7 +198,7 @@ function render() {
   document.body.classList.toggle('compact', gap < 190);
   for (const { frog, x, label } of frogs) {
     screen.set(x, -6, 0).project(camera);
-    const visible = screen.z < 1 && Math.abs(screen.x) < 1.1 && !['close', 'side', 'wide'].includes(cameraName);
+    const visible = screen.z < 1 && Math.abs(screen.x) < 1.1 && !['close', 'side', 'wide', 'face'].includes(cameraName);
     label.style.display = visible ? '' : 'none';
     label.style.left = `${((screen.x + 1) / 2) * window.innerWidth}px`;
     label.style.top = `${((1 - screen.y) / 2) * window.innerHeight}px`;

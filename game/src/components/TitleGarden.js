@@ -259,6 +259,12 @@ export class TitleGarden {
     if (inner) inner.userData.springAt = this.time + item.x * 0.01;
   }
 
+  /** Somebody booped it: it wobbles and hops (`spin`: it twirls round once as well). */
+  poke(item, { spin = false } = {}) {
+    item.poke = 1;
+    item.pokeSpin = spin;
+  }
+
   setNight(on) {
     this.night = on;
   }
@@ -573,8 +579,11 @@ export class TitleGarden {
       // Dropped: a little bounce with a squash. Held: it floats and wobbles.
       const bounce = Math.abs(Math.sin(item.bounce * Math.PI * 2)) * item.bounce * 12;
       const squash = 1 - Math.sin(item.bounce * Math.PI * 3) * 0.12 * item.bounce;
-      item.model.position.set(item.x, item.y, bounce + item.lift * (10 + Math.sin(this.time * 6) * 2));
-      item.model.rotation.set(Math.sin(this.time * 9) * 0.06 * item.lift, 0, item.r);
+      // Booped: a wobble and a hop (GardenHub.js).
+      const poke = (item.poke = Math.max(0, (item.poke ?? 0) - delta * 1.3));
+      const twirl = item.pokeSpin ? (1 - poke) ** 2 * Math.PI * 2 * (poke > 0 ? 1 : 0) : 0;
+      item.model.position.set(item.x, item.y, bounce + item.lift * (10 + Math.sin(this.time * 6) * 2) + Math.sin(Math.min(1, (1 - poke) * 3) * Math.PI) * 5 * poke);
+      item.model.rotation.set(Math.sin(this.time * 9) * 0.06 * item.lift + Math.sin(this.time * 24) * 0.16 * poke, Math.cos(this.time * 21) * 0.12 * poke, item.r + twirl);
       item.model.scale.set(1 / Math.sqrt(squash), 1 / Math.sqrt(squash), squash);
       // The Tea Ball rolls where its physics (GardenHub.js) puts it.
       if (item.ball && !this.editing) {

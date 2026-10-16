@@ -11,6 +11,7 @@ let musicBus = null;
 let musicFilter = null;
 let musicDuck = null; // dips the music while someone talks
 let voiceBus = null; // voices have their own level and a limiter, so they can be loud without distorting
+let master = null;
 const settings = { sfx: true, music: true };
 const lastPlayed = new Map();
 const unlockListeners = [];
@@ -35,7 +36,7 @@ export function unlockAudio() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     context = new AudioContext();
-    const master = context.createGain();
+    master = context.createGain();
     master.connect(context.destination);
 
     sfxBus = context.createGain();
@@ -87,6 +88,24 @@ export function setSound(channel, on) {
   if (channel === 'music') musicBus.gain.setTargetAtTime(on ? MUSIC_VOLUME : 0, context.currentTime, 0.1);
 }
 
+/**
+ * Dev: how loud the game is at the speakers. `meter()` returns a function giving the RMS of the last ~40 ms; call it
+ * every frame while a sound plays and keep the highest (see DEVELOPMENT.md for the levels things are tuned to).
+ */
+export function meter() {
+  if (!context) return () => 0;
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  const silent = context.createGain();
+  silent.gain.value = 0;
+  master.connect(analyser).connect(silent).connect(context.destination);
+  const data = new Float32Array(analyser.fftSize);
+  return () => {
+    analyser.getFloatTimeDomainData(data);
+    return Math.sqrt(data.reduce((sum, v) => sum + v * v, 0) / data.length);
+  };
+}
+
 /** Muffles the music, e.g. while paused. */
 export function muffleMusic(muffled) {
   if (!context) return;
@@ -109,6 +128,41 @@ export function tone({ type = 'sine', frequency, to = frequency, duration, volum
   oscillator.start(start);
   oscillator.stop(start + duration + 0.02);
   return oscillator;
+}
+
+/**
+ * A sung or spoken syllable: a buzz through a vowel's two resonances (see the voices below), so even a deep one
+ * comes through phone and laptop speakers. `vowel`: an index into VOWELS; `to`: the pitch at the end.
+ */
+function syllable({ pitch, to = pitch, vowel = 0, length = 0.15, volume = 0.5, delay = 0, type = 'sawtooth', breath = 0 }) {
+  const at = context.currentTime + delay;
+  const [f1, f2] = VOWELS[vowel];
+  const lift = Math.max(1, pitch / 280);
+  const mouth = context.createGain();
+  const envelope = context.createGain();
+  for (const [frequency, q, level] of [[f1 * lift, 5, 1], [f2 * lift, 7, 0.7]]) {
+    const resonance = context.createBiquadFilter();
+    resonance.type = 'bandpass';
+    resonance.frequency.value = frequency;
+    resonance.Q.value = q;
+    const amount = context.createGain();
+    amount.gain.value = level;
+    mouth.connect(resonance).connect(amount).connect(envelope);
+  }
+  envelope.gain.setValueAtTime(0.0001, at);
+  envelope.gain.exponentialRampToValueAtTime(volume, at + Math.min(0.03, length * 0.2));
+  envelope.gain.setValueAtTime(volume, at + length * 0.6);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, at + length);
+  envelope.connect(sfxBus);
+  const oscillator = context.createOscillator();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(pitch, at);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, to), at + length);
+  oscillator.connect(mouth);
+  oscillator.start(at);
+  oscillator.stop(at + length + 0.02);
+  // An "h" in front (a laugh's breath).
+  if (breath) noise({ duration: 0.06, volume: breath, filter: 'highpass', frequency: 1800, delay: Math.max(0, delay - 0.03) });
 }
 
 let noiseBuffer = null;
@@ -213,7 +267,80 @@ const SOUNDS = {
     tone({ type: 'sawtooth', frequency: 70, to: 140, duration: 1.1, volume: 0.15 });
     noise({ duration: 1.2, volume: 0.3, filter: 'lowpass', frequency: 700, to: 200 });
   },
+  // The garden (v0.26): emotes and trinkets that answer a boop. Tuned with `meter()` against the effects players
+  // know (pick ~0.05, legendary ~0.06 RMS at full sound): everything sits in the 300–3,000 Hz that small speakers play.
+  chime: () => notes([vary(1568, 0.02), 2093, 2637, 3136].sort(() => Math.random() - 0.5), { type: 'sine', step: 0.09, duration: 0.7, volume: 0.11 }),
+  quack: () => {
+    syllable({ pitch: 440, to: 330, vowel: 5, length: 0.13, volume: 0.9 });
+    syllable({ pitch: 420, to: 300, vowel: 5, length: 0.16, volume: 0.9, delay: 0.17 });
+  },
+  boing: () => tone({ type: 'sine', frequency: 220, to: 880, duration: 0.3, volume: 0.16 }),
+  launch: () => {
+    tone({ type: 'sine', frequency: 700, to: 2600, duration: 0.85, volume: 0.09 });
+    noise({ duration: 0.8, volume: 0.07, filter: 'highpass', frequency: 2500 });
+  },
+  crackle: () => {
+    noise({ duration: 0.4, volume: 0.65, filter: 'lowpass', frequency: 1600, to: 300 });
+    tone({ type: 'triangle', frequency: 320, to: 110, duration: 0.25, volume: 0.12 });
+    for (let i = 0; i < 8; i++) noise({ duration: 0.035, volume: 0.14, frequency: 2500 + Math.random() * 2500, q: 2, delay: 0.2 + Math.random() * 0.6 });
+  },
+  popper: () => {
+    noise({ duration: 0.16, volume: 0.6, frequency: 1600, to: 600, q: 0.8 });
+    notes([784, 988, 1175, 1568], { type: 'triangle', step: 0.06, volume: 0.12 });
+  },
+  // "Ha ha ha ha!": breathy "ah"s falling in pitch, then a wheeze.
+  laugh: () => {
+    const base = vary(360, 0.1);
+    for (let i = 0; i < 6; i++) syllable({ pitch: base * (1 - i * 0.05), to: base * (0.92 - i * 0.05), vowel: i % 3 === 2 ? 5 : 0, length: 0.11, volume: 0.75, delay: i * 0.14, breath: 0.05 });
+    syllable({ pitch: base * 1.3, to: base * 0.9, vowel: 2, length: 0.35, volume: 0.45, delay: 0.92 });
+  },
+  // A snore: a rattling "aw" breathing in, a soft "pfff" out.
+  snore: () => {
+    syllable({ pitch: 95, to: 120, vowel: 3, length: 1, volume: 0.55 });
+    noise({ duration: 1, volume: 0.06, frequency: 600, to: 900, q: 1.5 });
+    noise({ duration: 0.6, volume: 0.08, filter: 'highpass', frequency: 1800, delay: 1.1 });
+  },
+  fanfare: () => notes([392, 523, 659, 784, 659, 784, 1047], { type: 'triangle', step: 0.1, duration: 0.25, volume: 0.15 }),
+  clap: () => {
+    noise({ duration: 0.06, volume: 0.3, frequency: 1800, q: 1.2 });
+    notes([1047, 1568], { type: 'sine', step: 0.06, volume: 0.12 });
+  },
+  // Powering up: a rising roar ("aaaAAAH") over rushing wind and a rumble.
+  powerUp: () => {
+    syllable({ pitch: 120, to: 330, vowel: 0, length: 1.55, volume: 0.6 });
+    syllable({ pitch: 180, to: 495, vowel: 3, length: 1.55, volume: 0.35 });
+    noise({ duration: 1.5, volume: 0.14, frequency: 400, to: 3200, q: 1.5 });
+    tone({ type: 'triangle', frequency: 220, to: 440, duration: 1.5, volume: 0.06 });
+  },
+  // The sonic boom when the form bursts out.
+  sonicBoom: () => {
+    noise({ duration: 0.9, volume: 0.75, filter: 'lowpass', frequency: 2600, to: 150 });
+    tone({ type: 'sawtooth', frequency: 260, to: 70, duration: 0.6, volume: 0.12 });
+    notes([523, 784, 1047, 1568], { type: 'sine', step: 0.05, duration: 0.6, volume: 0.1 });
+  },
+  // Love: two soft heartbeats and a rising "aww".
+  love: () => {
+    for (const at of [0, 0.22]) tone({ type: 'triangle', frequency: 330, to: 180, duration: 0.12, volume: 0.14, delay: at });
+    notes([659, 784, 988], { type: 'sine', step: 0.12, duration: 0.4, volume: 0.1 });
+  },
 };
+
+// Dance: a little groove, one eighth note per call (`step` counts on), two bars long. Kick on the beats, a snare
+// on 2 and 4, a hi-hat in between, a walking bass and a plucked hook.
+const GROOVE_BASS = [220, 0, 220, 262, 196, 0, 196, 247, 175, 0, 175, 220, 196, 0, 247, 294];
+const GROOVE_HOOK = [880, 0, 0, 784, 0, 659, 0, 0, 698, 0, 0, 659, 0, 587, 659, 0];
+export function groove(step) {
+  if (!context || !settings.sfx || context.state !== 'running') return;
+  const i = step % 16;
+  if (i % 2 === 0) {
+    tone({ type: 'sine', frequency: 180, to: 60, duration: 0.16, volume: 0.22 });
+    noise({ duration: 0.02, volume: 0.12, frequency: 3500, q: 1 }); // the kick's click (small speakers lose the thump)
+  }
+  if (i % 4 === 2) noise({ duration: 0.12, volume: 0.16, frequency: 1800, q: 0.9 });
+  if (i % 2 === 1) noise({ duration: 0.03, volume: 0.05, filter: 'highpass', frequency: 7000 });
+  if (GROOVE_BASS[i]) tone({ type: 'triangle', frequency: GROOVE_BASS[i], duration: 0.2, volume: 0.12 });
+  if (GROOVE_HOOK[i]) tone({ type: 'square', frequency: GROOVE_HOOK[i], duration: 0.12, volume: 0.025 });
+}
 
 // Minimum seconds between two plays of the same sound, so big fights don't get too loud.
 const THROTTLE = { hit: 0.03, pop: 0.04, sting: 0.05, spit: 0.04, zap: 0.04, burn: 0.08, thunder: 0.3, boom: 0.1 };

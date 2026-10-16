@@ -857,6 +857,157 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     },
   };
 
+  // --- Garden emotes (Emotes.js): any class can play them, so they only bend the shared joints. ---------------
+  Object.assign(MOVES, {
+    love: {
+      length: 2.8,
+      pose: (t) => {
+        // Hands clasped at the heart, swaying dreamily on tiptoes, eyes half closed, and a big sigh.
+        const hold = ramp(t, 0, 0.12) - ramp(t, 0.88, 1);
+        handSign(hold * 0.85);
+        const sway = Math.sin(t * Math.PI * 4) * hold;
+        body.rotation.z += sway * 0.16;
+        head.rotation.z += sway * 0.22;
+        head.rotation.x += -hold * 0.2;
+        frame.position.y += Math.abs(Math.sin(t * Math.PI * 8)) * 1.4 * hold;
+        for (const eye of eyes) eye.scale.y *= 1 - hold * 0.7;
+        throat.scale.setScalar(1 + bump(t, 0.45, 0.75) * 0.7);
+      },
+    },
+    laugh: {
+      length: 3.4,
+      centered: true,
+      pose: (t) => {
+        // Doubled up laughing, then rolling on his back, legs kicking, holding his belly… and back up.
+        const lean = bump(t, 0, 0.32);
+        const back = ramp(t, 0.14, 0.3) - ramp(t, 0.8, 0.95);
+        const tilt = lean * 0.45 * (1 - back) + back * 1.3;
+        frame.rotation.x += -tilt;
+        frame.position.y += back * 8;
+        frame.position.z += back * 7; // (rolled back around his feet: keep him over his spot)
+        frame.rotation.z += Math.sin(t * Math.PI * 6) * 0.28 * back;
+        const fit = Math.min(1, lean + back);
+        jaw.rotation.x += fit * (0.3 + Math.abs(Math.sin(time * 26)) * 0.55);
+        head.rotation.y += Math.sin(time * 13) * 0.14 * fit;
+        head.rotation.x += -0.2 * fit;
+        for (const { side, arm, forearm } of arms) {
+          arm.rotation.x += -0.8 * fit;
+          arm.rotation.z += -side * 0.35 * fit;
+          forearm.rotation.z += side * 0.8 * fit + Math.sin(time * 20 + side) * 0.2 * back;
+        }
+        for (const { side, thigh, shin } of hindLegs) {
+          const kick = Math.sin(time * 15 + side * 1.7) * back;
+          thigh.rotation.x += back * 0.9 + kick * 0.55;
+          shin.rotation.x += -kick * 0.6 - back * 0.3;
+        }
+        for (const eye of eyes) eye.scale.y *= 1 - 0.85 * fit; // squeezed shut
+      },
+    },
+    dance: {
+      length: 2,
+      pose: (t) => {
+        // Four beats a loop: a bouncing groove, hips swaying, a twist, and the disco point swapping arms.
+        const beat = t * 4;
+        const bounce = Math.abs(Math.sin(beat * Math.PI));
+        const sway = Math.sin(beat * Math.PI);
+        // Up on his hind legs (like the victory pose), so the arms show.
+        frame.position.y += 4 + bounce * 3.5;
+        body.rotation.x += -0.75 + bounce * 0.1;
+        head.rotation.x += 0.4 - bounce * 0.14;
+        body.rotation.z += sway * 0.22;
+        body.rotation.y += Math.sin(t * Math.PI * 2) * 0.4;
+        head.rotation.z += -sway * 0.18;
+        const up = Math.floor(beat / 2) % 2 ? 1 : -1;
+        moveArms(-0.5, 1.3 + 0.12 * bounce, [up]); // pointing at the sky
+        moveArms(0.5, -0.2 + bounce * 0.15, [-up]); // the other hand low, swinging
+        for (const { side, thigh, shin } of hindLegs) {
+          const step = Math.max(0, Math.sin(beat * Math.PI + (side > 0 ? 0 : Math.PI)));
+          thigh.rotation.x += step * 0.55;
+          thigh.rotation.z += side * step * 0.25;
+          shin.rotation.x += -step * 0.3;
+        }
+        jaw.rotation.x += 0.12 + bounce * 0.18; // singing along
+      },
+    },
+    nap: {
+      length: 4,
+      centered: true,
+      pose: (t) => {
+        // Curled up asleep on his side: slow breaths, a puffing throat, a twitching foot now and then.
+        const breath = Math.sin(t * Math.PI * 2);
+        frame.rotation.z += 1.4;
+        frame.position.x += 8.5;
+        frame.position.y += 5.5;
+        body.rotation.x += 0.15;
+        head.rotation.x += 0.12;
+        head.rotation.z += -0.2;
+        body.scale.y *= 1 + breath * 0.05;
+        throat.scale.setScalar(1 + (breath * 0.5 + 0.5) * 0.7);
+        jaw.rotation.x += 0.06;
+        for (const eye of eyes) eye.scale.y *= 0.08;
+        handSign(0.45); // hands tucked under the chin
+        for (const { side, thigh, shin, foot } of hindLegs) {
+          thigh.rotation.x += 0.5;
+          shin.rotation.x += -0.3;
+          if (side > 0) foot.rotation.x += bump(t, 0.7, 0.78) * 0.6;
+        }
+      },
+    },
+    bow: {
+      length: 3.4,
+      pose: (t) => {
+        // A courtly bow: one arm sweeps across the chest, the other out wide, deep down… then up, chest out.
+        const sweep = ramp(t, 0, 0.18) - ramp(t, 0.78, 0.92);
+        const down = bump(t, 0.16, 0.66);
+        const proud = bump(t, 0.6, 1);
+        for (const { side, arm, forearm } of arms) {
+          if (side === 1) {
+            arm.rotation.x += -sweep * 1.25;
+            arm.rotation.z += -sweep * 0.9;
+            forearm.rotation.z += sweep * 0.9;
+          } else {
+            arm.rotation.z += -sweep * 1.5;
+            arm.rotation.x += sweep * 0.25;
+            forearm.rotation.z += sweep * 0.4;
+          }
+        }
+        body.rotation.x += down * 0.8 - proud * 0.3;
+        head.rotation.x += down * 0.4 - proud * 0.35;
+        frame.position.y += proud * 2;
+        for (const eye of eyes) eye.scale.y *= 1 - down * 0.75;
+      },
+    },
+    power: {
+      length: 6.5,
+      pose: (t) => {
+        // Powering up: a wide straining crouch, fists clenched, trembling, building to a roar (the first 23%)…
+        const charge = ramp(t, 0, 0.06) * (1 - ramp(t, 0.22, 0.25));
+        body.rotation.x += charge * 0.28;
+        frame.rotation.z += Math.sin(time * 70) * 0.035 * charge;
+        frame.position.y += -charge * 1.5;
+        for (const { side, arm, forearm, hand } of arms) {
+          arm.rotation.x += charge * 0.75;
+          arm.rotation.z += side * charge * 0.45;
+          forearm.rotation.x += -charge * 1;
+          hand.rotation.x += charge * 0.6;
+        }
+        stretchLegs(-charge * 0.05, charge * 0.4);
+        head.rotation.x += charge * 0.12;
+        jaw.rotation.x += charge * (0.15 + 0.5 * ramp(t, 0.1, 0.23));
+        // …the burst: arms flung out, head back, a roar, and he floats in his new form.
+        const burst = ramp(t, 0.23, 0.27) * (1 - ramp(t, 0.92, 1));
+        const roar = bump(t, 0.23, 0.42);
+        moveArms(-burst * 0.2, burst * (0.7 + roar * 0.25));
+        body.rotation.x += -burst * (0.35 + roar * 0.3);
+        head.rotation.x += -roar * 0.35;
+        jaw.rotation.x += roar * 0.9 + burst * 0.1;
+        frame.position.y += burst * (7 + Math.sin(time * 2.4) * 1.6);
+        stretchLegs(burst * 0.45, burst * 0.15);
+        throat.scale.setScalar(1 + roar * 0.8);
+      },
+    },
+  });
+
   /**
    * Starts a move ('idle', 'hop', 'attack', 'dash', 'victory' or 'signature'). `once`: back to idle afterwards;
    * `length`: play it in this many seconds instead.
@@ -919,7 +1070,8 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
       tongue.rotation.x += -f * 0.3;
     }
     // In play the game moves the frog; a move only bends it (and lifts it), it doesn't walk it off.
-    if (rig.inPlace) {
+    // (A `centered` move, like lying down, puts the frog back over his spot itself.)
+    if (rig.inPlace && !current.centered) {
       frame.position.x = 0;
       frame.position.z = 0;
     }

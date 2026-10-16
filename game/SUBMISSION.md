@@ -99,7 +99,8 @@ Attach `todeity-trailer-discord.mp4` (or `todeity.gif`). Discord unfurls the gam
 - **Community:** leaderboards (score, deepest run, fastest Bee-zebub, Daily Brew, co-op), a seeded **Daily Brew** with
   daily twists (13 trials, 12 boons), **co-op for 2–4** with public rooms and Quick play, and **gardens**: decorate yours with 27
   trinkets in 8 sets, visit other players' gardens, hop on each other's heads, kick the Tea Ball, fire the Teapot
-  Cannon, use 16 emotes, and form a party that sets off on a co-op run together.
+  Cannon, boop frogs and trinkets, show off your level's aura, use 17 emotes (Power Up shows your highest divine form
+  with a sonic boom), and form a party that sets off on a co-op run together.
 - **Juice:** slow-motion finishers, hit-stop, kill-streak callouts, a procedural orchestral soundtrack, synthesized
   voices for spirits and bosses.
 - **Plays anywhere:** keyboard and mouse, or twin-stick touch controls; installable to the Home Screen; adapts its
