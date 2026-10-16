@@ -806,7 +806,9 @@ function randomEliteMod() {
 const ENEMY_TYPES_BOSS = new Set(['queen', 'shogun', 'seraph', 'empress', 'beezebub']);
 
 function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
-  const enemy = new Enemy(kind, { hpScale: config.hpScale, speedScale: config.speedScale, elite });
+  const adapts = !ENEMY_TYPES_BOSS.has(kind) && !['nest', 'ward', 'guardian', 'nurse'].includes(kind); // (see HIVE)
+  const hp = config.hpScale * (adapts ? hive.adapt : 1);
+  const enemy = new Enemy(kind, { hpScale: hp, speedScale: config.speedScale, elite });
   enemy.netId = nextNetId++;
   // More frogs, mightier bosses.
   if (enemy.type.boss && coop) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (1 + COOP_BOSS_HP * (coop.size - 1)));
@@ -901,7 +903,52 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   }
 }
 
+// --- The hive adapts ----------------------------------------------------------------------------------------
+// A strong account (a level-10 save at Steep 18 with a full Pantry and ~200 charms) killed bees half a second after
+// they spawned: never overrun, only the stray bullet ever hurt. Health alone didn't fix that (at ×15 they still died
+// in a second: that build out-kills the spawn rate), so an adapted hive also sends its bees in packs (`hivePack`). The host keeps the lifetimes of the last bees that
+// died (`hiveDeath`); while the median is under `fast` seconds the next bees come `up` times tougher, and above
+// `slow` it eases off again (never below the wave's normal health). Measured with the bot: a weak build's bees live
+// 2–5 s, a maxed build without charms 1–3 s, that charm-heavy one 0.4–0.6 s. Only bees that chase (not stingers,
+// bosses, hives, wards, guardians or nurses), not in boss waves (summons die fast anyway), from wave HIVE.from on.
+const HIVE = { from: 3, window: 30, every: 3, min: 15, fast: 1.2, slow: 2.5, up: 1.2, down: 0.93, max: 15, callouts: [1.5, 2, 3, 5, 8, 12] };
+const hive = { adapt: 1, lifetimes: [], timer: HIVE.every, announced: 1 };
+/** Bees per spawn: tougher bees alone still died one by one as they came (a strong build out-killed the spawn rate). */
+const hivePack = () => Math.min(4, Math.round(Math.sqrt(hive.adapt)));
+
+function resetHive() {
+  Object.assign(hive, { adapt: 1, lifetimes: [], timer: HIVE.every, announced: 1 });
+}
+
+const hiveTracks = (enemy) => !enemy.type.boss && !enemy.type.structure && !enemy.type.ranged && !enemy.type.label;
+
+function hiveDeath(enemy) {
+  if (isGuest() || !hiveTracks(enemy) || config?.isBoss) return;
+  hive.lifetimes.push(enemy.age);
+  if (hive.lifetimes.length > HIVE.window) hive.lifetimes.shift();
+}
+
+/** Host: every few seconds of fighting, the hive weighs how its bees are doing. */
+function updateHive(delta) {
+  if (isGuest() || wave < HIVE.from || config?.isBoss || phase !== 'fighting' || (hive.timer -= delta) > 0) return;
+  hive.timer = HIVE.every;
+  if (hive.lifetimes.length < HIVE.min) return;
+  const sorted = [...hive.lifetimes].sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1];
+  if (median < HIVE.fast) hive.adapt = Math.min(HIVE.max, hive.adapt * HIVE.up);
+  else if (median > HIVE.slow) hive.adapt = Math.max(1, hive.adapt * HIVE.down);
+  else return;
+  hive.lifetimes.splice(0, hive.lifetimes.length >> 1); // judge the next bees mostly on their own
+  const next = HIVE.callouts.filter((at) => at > hive.announced && hive.adapt >= at).pop();
+  if (next) {
+    hive.announced = next;
+    hud.showCallout(`🐝 The hive adapts: bees ×${next} tougher`);
+    share({ k: 'say', t: '🐝 The hive adapts', s: `Bees ×${next} tougher` });
+  }
+}
+
 function onEnemyKilled(enemy) {
+  hiveDeath(enemy);
   dropLeaves(enemy);
   dropCharms(enemy);
   if (enemy.kind === 'nest') objectiveDone();
@@ -1528,7 +1575,7 @@ function stingerRain(boss) {
 const BOSS_SCRIPTS = {
   queen: { enrage: 210, hp: 2.2, stages: [[0.8, 'wards', 3], [0.6, 'nurses'], [0.4, 'interrupt'], [0.2, 'guardians', 2]] },
   shogun: { enrage: 240, hp: 2.8, stages: [[0.85, 'interrupt'], [0.68, 'wards', 4], [0.5, 'blades'], [0.32, 'mark'], [0.15, 'guardians', 2]] },
-  seraph: { enrage: 250, hp: 4, stages: [[0.82, 'lights', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
+  seraph: { enrage: 250, hp: 4, stages: [[0.82, 'orbit', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
   empress: { enrage: 270, hp: 9, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'orbit', 4]] },
   beezebub: { enrage: 300, hp: 12, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'orbit', 4]] },
 };
@@ -1540,8 +1587,8 @@ const TRUE_FORM_TAUNTS = ['You only woke me.', 'Now see what I truly am!', 'Burn
 /** The stages a boss is fighting through right now (Bee-zebub's change in his true form). */
 const bossScript = (boss) => (boss.ai.trueForm ? TRUE_FORM : BOSS_SCRIPTS[boss.kind]);
 // A shield task like the wards, but the crystals circle the arena: chase them down (it replaced the circles of light
-// of the last two bosses, which players found slow).
-const ORBIT_TITLES = { empress: 'Crown Jewels', beezebub: 'Seals of Hellfire' };
+// of the Seraph, the Empress and Bee-zebub: standing in circles while a shielded boss chased you wasn't fun).
+const ORBIT_TITLES = { seraph: 'Halo Crystals', empress: 'Crown Jewels', beezebub: 'Seals of Hellfire' };
 const ORBIT = { radius: 0.6, speed: 0.22 }; // share of the arena, radians a second
 // Titles for the stage banners; `every`: seconds between casts of a repeating mechanic.
 const MECHANICS = {
@@ -3045,6 +3092,7 @@ function updateEnemies(delta) {
   }
   buildBeeGrid();
   updateTactics(delta);
+  updateHive(delta);
   for (const enemy of [...enemies]) {
     enemy.update(delta);
     if (enemy.dying) {
@@ -5789,7 +5837,12 @@ function updateWave(delta) {
     // Bigger swarms in every arena: a bullet hell needs a horde.
     const maxAlive = Math.min(130, MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + 2 * Math.max(0, wave - 12) + (coop ? 12 * (coop.size - 1) : 0));
     if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < maxAlive) {
-      if (spawnEnemy(spawnQueue[0])) spawnQueue.shift();
+      // An adapted hive sends its bees in packs (see HIVE), or a strong build waits for every single one.
+      const pack = hivePack();
+      for (let i = 0; i < pack && spawnQueue.length && aliveEnemies().length < maxAlive; i++) {
+        if (spawnEnemy(spawnQueue[0])) spawnQueue.shift();
+        else break;
+      }
       spawnTimer = config.spawnInterval;
     }
     const beesLeft = spawnQueue.length + aliveEnemies().filter((enemy) => !enemy.type.structure).length;
@@ -7222,6 +7275,7 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   Object.assign(feats, { cleanWaves: 0, tileWave: 0, legendaries: 0, shrines: 0, bitterWave: 0, bossHurt: false, fusions: 0 });
   timeAlive = 0;
   beezebubTime = 0;
+  resetHive();
   kills = 0;
   bossKills = 0;
   points = 0;
@@ -8402,6 +8456,9 @@ if (import.meta.env.DEV) {
     brewLevels,
     get phase() {
       return phase;
+    },
+    get hive() {
+      return hive; // the adapting hive: { adapt, lifetimes } (see HIVE)
     },
     get wave() {
       return wave;

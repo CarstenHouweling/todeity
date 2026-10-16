@@ -127,6 +127,7 @@ const CROWN_LIFT = 7.5; // world units above the head bone
 
 const loader = new GLTFLoader();
 const radiusByType = {};
+const SHIELDED_SPEED = 0.55; // a boss's speed while its shield is up
 const HITBOX_PER_SCALE = 2.56; // the garden bee's footprint radius per unit of `scale`
 
 function createCrown() {
@@ -404,7 +405,8 @@ export class Enemy {
 
   /** Movement multiplier from chill/freeze. */
   get speedFactor() {
-    return this.slowLeft > 0 ? 1 - this.slow : 1;
+    // A shielded boss is heavy with it: it can't be hurt, so it shouldn't run you down at full speed either.
+    return (this.slowLeft > 0 ? 1 - this.slow : 1) * (this.shielded && this.type.boss ? SHIELDED_SPEED : 1);
   }
 
   get isFrozen() {

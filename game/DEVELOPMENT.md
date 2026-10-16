@@ -266,7 +266,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
     tethered) are smashed, 3 circles of light are held, or its **Hive Guardians** (`guardian` bees) fall.
     **Circling crystals** (`orbit`, v0.27): wards that circle the arena (`ORBIT`, the host moves them in
     `updateRaid`), titled per boss (`ORBIT_TITLES`: Crown Jewels, Seals of Hellfire); they replaced the circles of
-    light of the Empress and Bee-zebub, which players found slow (the Seraph keeps hers). Guards
+    light of the Seraph, the Empress and Bee-zebub, which players found slow (the circles still exist, unused).
+    A shielded boss moves at 55% speed (`SHIELDED_SPEED` in Enemy.js): it can't be hurt, so it shouldn't run you
+    down at full speed either. Guards
     come meanwhile; when the timer (30/40 s) runs out the shield overloads (everyone hit, boss heals 10%). Broken:
     the boss is **staggered** 4 s (×1.5 damage).
   - **Interrupt** (`startInterrupt`, `ritual`): it channels for 8 s; deal 18% of its health (more in co-op) to break
@@ -314,6 +316,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Difficulty curve** (`waveConfig`): past wave 10 swarms grow quadratically and more of them are stingers; from
   wave 16 bees hit for an extra heart; hazards fall in growing numbers (up to 8 at once) and arena events come more
   and more often.
+  **The hive adapts** (v0.27.1, `HIVE`, `updateHive` in main.js): a level-10 save at Steep 18 with a full Pantry and
+  ~200 charms killed bees half a second after they spawned and was never overrun. The host keeps the lifetimes of
+  the last 30 chasing bees (not stingers, bosses, hives, wards, guardians or nurses; not in boss waves; from wave 3);
+  while the median is under 1.2 s the next bees spawn ×1.2 tougher (`hive.adapt`, up to ×15, in `spawnEnemy`) and
+  come in packs (`hivePack`: up to 4 a spawn, since health alone didn't help: that build out-killed the spawn rate);
+  above 2.5 s it eases off, never below ×1. Callouts at ×1.5, 2, 3, 5, 8, 12. Measured with the bot: a weak build's
+  bees live 2–6 s and the hive stays at ×1; the charm-heavy build settles at ×6–7, bees living ~2 s, 17–30 alive at
+  once (was ~10). `game.hive` shows it.
   **Endless** (waves past 21, retuned in v0.27: a level-46 Steep 18 build couldn't die by wave 31 and 160 bees
   lagged): bees +18% health per wave, at most `ENDLESS_SWARM` (120) bees, each a third tougher; bees and stingers
   hit for +1 heart every 4 endless waves from the 2nd (`contactBonus`, `bulletBonus`); healing fades 6% per wave,
@@ -432,7 +442,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
-  👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a profile on the title (`accountLevel`: level, rank, runs,
+  👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a profile on the title (`accountLevel`, shared with the server, curve retuned in v0.27.1 so playing again counts: runs ×60, boss kills ×50, victories ×200, achievements ×15, best wave ×5 xp, level n at 150·(n−1)^1.4 xp, a first full run ~4, 19 runs ~14: level, rank, runs,
   best wave, achievements, streak) instead of the story and controls.
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its

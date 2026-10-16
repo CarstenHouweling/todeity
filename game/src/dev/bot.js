@@ -44,6 +44,13 @@ export function makeBot(game) {
         document.querySelector('[data-action="retire"]').click();
         break;
       }
+      if (game.phase === 'chest') {
+        // The Royal Tea Chest after a boss: collect once its reel has stopped.
+        document.querySelector('[data-action="chest-collect"]:not([disabled])')?.click();
+        game.step(0.1);
+        bot.time += 0.1;
+        continue;
+      }
       if (['choosing', 'ultimate', 'skill'].includes(game.phase)) {
         const cards = [...document.querySelectorAll('.card')];
         const card = cards[Math.floor(Math.random() * cards.length)];

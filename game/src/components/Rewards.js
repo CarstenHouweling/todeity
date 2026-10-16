@@ -177,23 +177,28 @@ export function songUnlocked(id, progress) {
 /** How a song unlocks, for the song list. */
 export const songHint = (song) => (song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`);
 
+const LEVEL_XP = 150;
+const LEVEL_CURVE = 1.4;
+
 /** A level's rank as a number, 0 (Tadpole) to 6 (Todeity): garden auras grow with it (GardenAuras.js). */
 export const rankTier = (level) => Math.max(0, RANKS.findLastIndex(([at]) => level >= at));
 
 /** How much someone has played: { level, rank, progress (0–1 to the next level), xp }. */
 export function accountLevel(progress) {
+  // Playing again counts most (runs, bosses, victories); one-off milestones (achievements, the best wave) a little.
+  // Until v0.27.1 one full run reached level 5–6 and 19 runs only level 10–11: it barely moved after the first.
   const xp =
-    (progress.runs ?? 0) * 20 +
-    (progress.bossKills ?? 0) * 30 +
-    (progress.victories ?? 0) * 250 +
-    (progress.achievements?.length ?? 0) * 40 +
-    (progress.bestWave ?? 0) * 10 +
-    (progress.streak?.count ?? 0) * 15 +
+    (progress.runs ?? 0) * 60 +
+    (progress.bossKills ?? 0) * 50 +
+    (progress.victories ?? 0) * 200 +
+    (progress.achievements?.length ?? 0) * 15 +
+    (progress.bestWave ?? 0) * 5 +
+    (progress.streak?.count ?? 0) * 10 +
     (progress.kettles ?? 0) * 5;
-  // Level n needs 50·n² xp.
-  const level = Math.floor(Math.sqrt(xp / 50)) + 1;
-  const from = 50 * (level - 1) ** 2;
-  const to = 50 * level ** 2;
+  // Level n needs LEVEL_XP·(n−1)^LEVEL_CURVE xp: a first full run ~4, 19 runs ~14, 40 runs ~24, Todeity ~55 runs.
+  const level = Math.floor((xp / LEVEL_XP) ** (1 / LEVEL_CURVE)) + 1;
+  const from = LEVEL_XP * (level - 1) ** LEVEL_CURVE;
+  const to = LEVEL_XP * level ** LEVEL_CURVE;
   const rank = RANKS.filter(([at]) => level >= at).pop()[1];
   return { level, rank, xp, progress: (xp - from) / (to - from) };
 }

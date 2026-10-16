@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.27.1',
+    date: '2026-10-16',
+    title: 'The hive adapts',
+    changes: [
+      '🐝 The hive adapts: when your build melts bees the moment they arrive, the next ones come tougher and in packs, until you are properly swarmed again (it eases off when they reach you)',
+      '💎 The Seraph Queen guards her Halo Crystals instead of circles of light: chase them down and smash them',
+      '🛡 A shielded boss moves at half speed, so it no longer runs you down while you can\'t hurt it',
+      '📈 Your account level grows with every run you play: runs, bosses and victories count much more, one-off milestones less (a first full run reaches about level 4, nineteen runs about 14)',
+    ],
+  },
+  {
     version: '0.27.0',
     date: '2026-10-16',
     title: 'His true form',
