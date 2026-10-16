@@ -246,6 +246,11 @@ export async function setGardenPublic(on) {
   return code ? cloud.gardenPublic : null;
 }
 
+/** Your garden's look for visitors: { night, song }. Resolves with true when the server took it. */
+export async function setGardenLook(look) {
+  return Boolean(await gardenCode(null, { night: Boolean(look.night), song: look.song }));
+}
+
 /** Someone's garden by its public garden code: { name, decor, level, rank, trinkets, beauty } or { error }. */
 export async function fetchGarden(code) {
   try {

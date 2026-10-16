@@ -85,6 +85,127 @@ const SONGS = {
   },
 };
 
+// --- Garden songs (Rewards.js GARDEN_SONGS: the owner picks one, everyone in the garden hears it) -------------
+// Each has its own calm arrangement (`calm`, called every 16th step instead of the layered score).
+Object.assign(SONGS, {
+  // Lanterns by night: a music box over soft strings, a bell now and then.
+  lantern: {
+    bpm: 70,
+    chords: [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 55, 59]],
+    roots: [45, 41, 43, 40],
+    melody: melody([
+      [[0, 76, 4], [4, 74, 2], [6, 72, 2], [8, 69, 8]],
+      [[0, 72, 4], [4, 74, 4], [8, 76, 6], [14, 74, 2]],
+      [[0, 79, 4], [4, 76, 4], [8, 74, 4], [12, 72, 4]],
+      [[0, 71, 6], [6, 72, 2], [8, 69, 8]],
+    ]),
+    calm: ({ at, s, bar, chord, note, barTime }) => {
+      if (s === 0) instruments.sustain(at, chord, barTime, 0.026);
+      if (s % 4 === 2) instruments.musicBox(at, chord[(s >> 2) % 3] + 24, 0.035);
+      if (note) instruments.musicBox(at, note.note + 12, 0.08);
+      if (s === 8 && bar % 2) instruments.bell(at, chord[2] + 24, 0.05);
+    },
+  },
+  // Koi in the pond: koto plucks over a pentatonic line, drops falling into the water.
+  koi: {
+    bpm: 84,
+    chords: [[60, 64, 67], [57, 60, 64], [62, 65, 69], [55, 59, 62]],
+    roots: [48, 45, 50, 43],
+    melody: melody([
+      [[0, 72, 2], [2, 74, 2], [4, 76, 4], [8, 79, 4], [12, 76, 4]],
+      [[0, 81, 4], [4, 79, 2], [6, 76, 2], [8, 74, 8]],
+      [[0, 76, 2], [2, 79, 2], [4, 81, 4], [8, 84, 4], [12, 81, 4]],
+      [[0, 79, 4], [4, 76, 4], [8, 72, 8]],
+    ]),
+    calm: ({ at, s, bar, chord, note, barTime }) => {
+      if (s === 0) instruments.sustain(at, chord, barTime, 0.02);
+      if (s % 2 === 0) instruments.pluck(at, chord[(s >> 1) % 3] + (s >= 8 ? 12 : 0), 0.05);
+      if (note) instruments.pluck(at, note.note, 0.11);
+      if ((s === 6 && bar % 2 === 0) || (s === 13 && bar === 3)) instruments.drop(at, 84 + ((bar * 5) % 7));
+    },
+  },
+  // The tea ceremony: a drone, a bamboo flute and the tick of a wood block.
+  ceremony: {
+    bpm: 60,
+    chords: [[50, 57, 62], [50, 57, 64], [50, 55, 62], [50, 57, 62]],
+    roots: [38, 38, 38, 38],
+    melody: melody([
+      [[0, 74, 8], [8, 77, 8]],
+      [[0, 79, 6], [6, 77, 2], [8, 74, 8]],
+      [[0, 81, 8], [8, 84, 4], [12, 81, 4]],
+      [[0, 79, 8], [8, 74, 8]],
+    ]),
+    calm: ({ at, s, bar, chord, note, stepTime, barTime }) => {
+      if (s === 0) instruments.sustain(at, chord, barTime, 0.03);
+      if (s === 0 || s === 10) instruments.woodblock(at, s === 0 ? 1 : 1.25);
+      if (s === 0 && bar === 0) instruments.bell(at, 62, 0.06);
+      if (note) instruments.flute(at, note.note, stepTime * note.length * 0.95);
+    },
+  },
+  // A little funk for the dance floor.
+  groove: {
+    bpm: 104,
+    chords: [[62, 65, 69], [55, 59, 62], [60, 64, 67], [57, 60, 64]],
+    roots: [50, 43, 48, 45],
+    melody: melody([
+      [[0, 74, 1], [2, 77, 1], [3, 79, 2], [6, 77, 1], [8, 74, 2], [12, 72, 2]],
+      [[0, 71, 2], [3, 74, 1], [4, 77, 2], [8, 79, 4], [14, 77, 2]],
+      [[0, 76, 2], [2, 79, 1], [4, 84, 2], [8, 83, 2], [10, 79, 2], [12, 76, 2]],
+      [[0, 76, 2], [3, 72, 1], [4, 69, 4], [10, 72, 2], [12, 76, 4]],
+    ]),
+    calm: ({ at, s, chord, root, note, stepTime }) => {
+      if (s % 4 === 0) instruments.kick(at);
+      if (s % 2 === 1) instruments.shaker(at, s % 4 === 3);
+      if (s === 4 || s === 12) noise({ duration: 0.1, volume: 0.06, frequency: 1800, q: 0.9, at, bus: into() });
+      if ([0, 3, 6, 10].includes(s)) instruments.bass(at, root + (s === 10 ? 12 : 0), stepTime * 1.4);
+      if (s === 4 || s === 12) chord.forEach((n) => instruments.harp(at, n + 12, 0.04));
+      if (note) instruments.pluck(at, note.note, 0.1);
+    },
+  },
+  // Among the stars: a choir, shimmering arpeggios and bells.
+  celestial: {
+    bpm: 76,
+    chords: [[64, 68, 71], [61, 64, 68], [57, 61, 64], [59, 63, 66]],
+    roots: [52, 49, 45, 47],
+    melody: melody([
+      [[0, 80, 4], [4, 83, 4], [8, 85, 8]],
+      [[0, 83, 4], [4, 80, 4], [8, 76, 8]],
+      [[0, 81, 4], [4, 85, 4], [8, 88, 6], [14, 87, 2]],
+      [[0, 85, 4], [4, 83, 4], [8, 82, 8]],
+    ]),
+    calm: ({ at, s, chord, note, barTime }) => {
+      if (s === 0) {
+        instruments.choir(at, chord, barTime);
+        instruments.sustain(at, chord, barTime, 0.018);
+      }
+      instruments.harp(at, chord[s % 3] + 24 + (s >= 8 ? 12 : 0), 0.03);
+      if (note) instruments.bell(at, note.note, 0.07);
+    },
+  },
+  // Bee-zebub's waltz: one-two-three in the dark, low strings and a music box gone sour.
+  infernal: {
+    bpm: 84,
+    chords: [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]],
+    roots: [45, 41, 38, 40],
+    melody: melody([
+      [[0, 69, 4], [4, 72, 2], [6, 71, 2], [8, 69, 8]],
+      [[0, 77, 4], [4, 76, 2], [6, 74, 2], [8, 72, 8]],
+      [[0, 74, 4], [4, 77, 2], [6, 76, 2], [8, 74, 4], [12, 72, 4]],
+      [[0, 71, 4], [4, 68, 4], [8, 69, 8]],
+    ]),
+    calm: ({ at, s, bar, chord, root, note, stepTime, barTime }) => {
+      if (s === 0) {
+        instruments.sustain(at, chord.map((n) => n - 12), barTime, 0.024);
+        instruments.subBass(at, root, stepTime * 5);
+      }
+      // Three beats in a bar of sixteenths: 0, 5, 10.
+      if (s === 5 || s === 10) chord.forEach((n) => instruments.harp(at, n, 0.035));
+      if (s === 0 && bar === 0) instruments.timpani(at, root);
+      if (note) instruments.musicBox(at, note.note, 0.08, 0.993);
+    },
+  },
+});
+
 // A minor scale, for harmonising the melody a third below.
 const SCALE = new Set([9, 11, 0, 2, 4, 5, 7]);
 function thirdBelow(note) {
@@ -262,6 +383,38 @@ const instruments = {
     ),
   harp: (at, note, volume = 0.07) =>
     voice({ type: 'triangle', frequency: midi(note), at, duration: 0.04, volume, release: 0.6, pan: (Math.random() - 0.5) * 0.6 }),
+  // The garden songs' own instruments.
+  /** A small bell: a pure tone and an inharmonic partial, ringing out. */
+  bell: (at, note, volume = 0.06) => {
+    voice({ type: 'sine', frequency: midi(note), at, duration: 0.02, volume, release: 1.4 });
+    voice({ type: 'sine', frequency: midi(note) * 2.76, at, duration: 0.02, volume: volume * 0.35, release: 0.6 });
+  },
+  /** A music box tine (`detune` < 1: slightly sour). */
+  musicBox: (at, note, volume = 0.07, detune = 1) => {
+    voice({ type: 'triangle', frequency: midi(note) * detune, at, duration: 0.02, volume, release: 0.9, pan: (Math.random() - 0.5) * 0.4 });
+    voice({ type: 'sine', frequency: midi(note + 12) * detune, at, duration: 0.02, volume: volume * 0.3, release: 0.4 });
+  },
+  /** A koto-like pluck. */
+  pluck: (at, note, volume = 0.08) => {
+    voice({ type: 'triangle', frequency: midi(note), at, duration: 0.03, volume, release: 0.35, pan: (Math.random() - 0.5) * 0.5 });
+    voice({ type: 'sawtooth', frequency: midi(note), at, duration: 0.02, volume: volume * 0.25, release: 0.12, cutoff: 1800 });
+  },
+  /** A bamboo flute: breathy, with a slow attack and a vibrato. */
+  flute: (at, note, duration, volume = 0.06) => {
+    voice({ type: 'sine', frequency: midi(note), at, duration, volume, attack: 0.12, release: 0.3, vibrato: 0.006 });
+    voice({ type: 'triangle', frequency: midi(note), at, duration, volume: volume * 0.25, attack: 0.15, release: 0.3, vibrato: 0.006 });
+    noise({ duration: Math.min(duration, 0.4), volume: 0.015, frequency: 2400, q: 1.5, at, bus: into() });
+  },
+  woodblock: (at, pitch = 1) => {
+    tone({ type: 'sine', frequency: 820 * pitch, to: 700 * pitch, duration: 0.07, volume: 0.09, at, bus: into(), attack: 0.002 });
+    noise({ duration: 0.015, volume: 0.05, frequency: 2600, q: 2, at, bus: into() });
+  },
+  /** A drop falling into the pond: a quick upward sweep. */
+  drop: (at, note) => tone({ type: 'sine', frequency: midi(note) * 0.6, to: midi(note) * 1.4, duration: 0.12, volume: 0.06, at, bus: into(), attack: 0.004 }),
+  kick: (at) => {
+    tone({ frequency: 140, to: 50, duration: 0.22, volume: 0.35, at, bus: into(), attack: 0.002 });
+    noise({ duration: 0.02, volume: 0.05, frequency: 3000, q: 1, at, bus: into() });
+  },
 };
 
 // --- Sequencer ---------------------------------------------------------------------
@@ -314,8 +467,12 @@ class MusicPlayer {
     const chord = song.chords[bar];
     const root = song.roots[bar];
     const barTime = stepTime * 16;
-    const level = this.song === 'garden' ? 0 : Math.max(this.intensity, song.boss || this.song === 'divine' ? 4 : 1);
+    const level = this.song === 'garden' || song.calm ? 0 : Math.max(this.intensity, song.boss || this.song === 'divine' ? 4 : 1);
     const note = song.melody[step];
+    if (song.calm) {
+      song.calm({ at, s, bar, chord, root, note, stepTime, barTime });
+      return;
+    }
 
     if (level === 0) {
       // Calm: soft strings, harp arpeggio and the melody on harp.

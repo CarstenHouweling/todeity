@@ -14,7 +14,7 @@ import { circlesOverlap, circleIntersectsRect } from './components/collision.js'
 import { ALL_BREWS, BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
 import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
-import { babble, hush, meter, muffleMusic, play, setSound, soundSettings, unlockAudio } from './components/Sound.js';
+import { babble, hush, meter, muffleMusic, play, setMusicScene, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
 import { PostFX } from './components/PostFX.js';
 import { Effects, markEffect } from './components/Effects.js';
@@ -32,7 +32,7 @@ import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { canLockLandscape, isFullscreen, landscapeFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile, setGardenPublic } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile, setGardenLook, setGardenPublic } from './components/CloudSave.js';
 import { randomName } from './components/PlayerTag.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
@@ -48,7 +48,7 @@ import { batteryCharge, chance, charmById, CharmDrops, CHARM_RARITIES, DICE_MAX,
 import { CHANCE_TRIES, createShrine, disposeShrine, SHRINE_HOLD, SHRINE_RADIUS, SHRINES, updateShrine } from './components/Shrines.js';
 import { BOSS_VOICES, bossTaunt } from './components/Spirits.js';
 import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
-import { accountLevel, ownedTrinkets } from './components/Rewards.js';
+import { GARDEN_SONGS, accountLevel, ownedTrinkets, songHint, songUnlocked } from './components/Rewards.js';
 import { TitleGarden } from './components/TitleGarden.js';
 import { GardenHub } from './components/GardenHub.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
@@ -887,6 +887,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   if (isGuest()) queueHit(enemy.netId, damage, direction, force);
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
+  if (enemy.reviving && !isGuest()) riseAgain(enemy); // Bee-zebub's first fall
   if (source !== 'burn' && !fromTeammate) play('hit');
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate && !steady) hitStop(0.045);
   // (a teammate's hits show as numbers on their own screen)
@@ -951,6 +952,38 @@ function onEnemyKilled(enemy) {
     bossDefeated(enemy.type.name, enemy.type.score, enemy.kind, enemy.position);
     share({ k: 'bossDown', n: enemy.type.name, s: enemy.type.score, kd: enemy.kind, p: [Math.round(enemy.position.x), Math.round(enemy.position.y)] });
   }
+}
+
+/** Host: Bee-zebub falls… and rises in his true form (TRUE_FORM), with a cut-scene of its own. */
+function riseAgain(boss) {
+  boss.reviving = false;
+  clearBossMechanics();
+  bulletsToLeaves();
+  Object.assign(boss.ai, { trueForm: true, stage: 0, fightTime: 0, stageSpeed: 0.85, mode: 'chase', staggerLeft: 0 });
+  boss.hp = Math.round(boss.maxHp * TRUE_FORM.hp);
+  boss.speed *= TRUE_FORM.speed;
+  boss.damage += 1;
+  share({ k: 'reborn', id: boss.netId });
+  trueFormEffects(boss);
+  startBossIntro(boss);
+}
+
+/** Everyone: he grows, burns brighter, and the Underworld shakes. */
+function trueFormEffects(boss) {
+  boss.ai.trueForm = true;
+  boss.trueFormAt = boss.age;
+  boss.group.scale.multiplyScalar(TRUE_FORM.grow);
+  for (const material of boss.materials) material.userData.baseEmissive?.set('#6a1000');
+  play('roar');
+  play('boom');
+  shake = Math.max(shake, 26);
+  postfx.flash('#ff3b1f', 0.8);
+  postfx.pulse({ warp: 1.4, aberration: 1.4, bloom: 1.2 });
+  postfx.shatter?.(0.5, 0.3);
+  particles.burst(boss.position, { count: 140, colors: FIRE, speed: 360, up: 260, size: 3.4, glow: true, height: boss.height * 0.5 });
+  effects.ring(boss.position, { radius: 520, color: '#ff6a00', duration: 1.1, thickness: 0.18 });
+  effects.ring(boss.position, { radius: 300, color: '#ffd36b', duration: 0.8, thickness: 0.22 });
+  hud.showBanner(`${boss.type.name} rises again!`, 'His true form awakens', 3);
 }
 
 let beezebubTime = 0; // play time when Bee-zebub fell (the speed leaderboard)
@@ -1047,6 +1080,10 @@ function updateHealth() {
 
 function healPlayer(amount) {
   if (twist('bitter')) return; // Bitter Tea: no healing at all
+  // Endless mode: the Underworld drinks your tea (a fraction of a heart heals by chance).
+  const scale = config?.healScale ?? 1;
+  if (scale < 1) amount = Math.floor(amount * scale + Math.random());
+  if (amount <= 0) return;
   const healed = player.heal(amount);
   if (!healed) return;
   play('heal');
@@ -1276,7 +1313,7 @@ function fireStinger(enemy, direction, speed, quiet = false) {
 /** Every player simulates the bullets themselves and only checks hits on their own Tode. */
 function launchStinger(origin, direction, speed, quiet = false, range = STINGER.range * 1.6) {
   speed *= (1 + 0.15 * vow('stingers')) * (gentle ? GENTLE.bullets : 1);
-  bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage, range, color: arena.bullet ?? '#c070ff' });
+  bullets.spawn(origin, direction, { speed, radius: STINGER.radius, damage: STINGER.damage + (config?.bulletBonus ?? 0), range, color: arena.bullet ?? '#c070ff' });
   if (!quiet) play('sting');
 }
 
@@ -1492,13 +1529,25 @@ const BOSS_SCRIPTS = {
   queen: { enrage: 210, hp: 2.2, stages: [[0.8, 'wards', 3], [0.6, 'nurses'], [0.4, 'interrupt'], [0.2, 'guardians', 2]] },
   shogun: { enrage: 240, hp: 2.8, stages: [[0.85, 'interrupt'], [0.68, 'wards', 4], [0.5, 'blades'], [0.32, 'mark'], [0.15, 'guardians', 2]] },
   seraph: { enrage: 250, hp: 4, stages: [[0.82, 'lights', 3], [0.64, 'mark'], [0.46, 'guardians', 2], [0.28, 'soak'], [0.12, 'blades']] },
-  empress: { enrage: 270, hp: 9, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'lights', 3]] },
-  beezebub: { enrage: 300, hp: 12, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'lights', 3]] },
+  empress: { enrage: 270, hp: 9, stages: [[0.85, 'wards', 4], [0.68, 'soak'], [0.5, 'guardians', 3], [0.32, 'mark'], [0.15, 'orbit', 4]] },
+  beezebub: { enrage: 300, hp: 12, stages: [[0.85, 'wards', 4], [0.7, 'interrupt'], [0.55, 'guardians', 3], [0.4, 'blades'], [0.25, 'firering'], [0.1, 'orbit', 4]] },
 };
+// Bee-zebub doesn't stay down: at his first fall he rises in his true form (see riseAgain), bigger and faster, heals
+// to `hp` of his health and fights through these stages with a fresh enrage timer. A strong build used to burst the
+// final boss faster than the Empress before him.
+const TRUE_FORM = { hp: 0.7, grow: 1.2, speed: 1.12, enrage: 200, stages: [[0.56, 'guardians', 3], [0.4, 'interrupt'], [0.22, 'orbit', 5]] };
+const TRUE_FORM_TAUNTS = ['You only woke me.', 'Now see what I truly am!', 'Burn, little frog. Burn!', 'The Underworld is ME.'];
+/** The stages a boss is fighting through right now (Bee-zebub's change in his true form). */
+const bossScript = (boss) => (boss.ai.trueForm ? TRUE_FORM : BOSS_SCRIPTS[boss.kind]);
+// A shield task like the wards, but the crystals circle the arena: chase them down (it replaced the circles of light
+// of the last two bosses, which players found slow).
+const ORBIT_TITLES = { empress: 'Crown Jewels', beezebub: 'Seals of Hellfire' };
+const ORBIT = { radius: 0.6, speed: 0.22 }; // share of the arena, radians a second
 // Titles for the stage banners; `every`: seconds between casts of a repeating mechanic.
 const MECHANICS = {
   wards: { title: 'Shield of Wards' },
   lights: { title: 'Veil of Light' },
+  orbit: { title: 'Circling Crystals' },
   guardians: { title: 'The Royal Guard' },
   interrupt: { title: 'Dark Ritual' },
   nurses: { title: 'Royal Nurses', every: 20 },
@@ -1515,7 +1564,7 @@ const INTERRUPT = { time: 8, share: 0.18, heal: 0.15, stagger: 4 };
 // `time`: seconds before the shield overloads (everyone takes a hit, the boss heals); the lights take longer, as
 // they mean running between them. `stagger`: seconds the boss is dazed after its shield breaks, taking
 // `staggerBonus` × damage. `lightTime`: seconds to hold a circle of light.
-const WARD = { time: { wards: 30, lights: 40, guardians: 40 }, overloadHeal: 0.1, stagger: 4, staggerBonus: 1.5, guardEvery: 6, lightTime: 3.5 };
+const WARD = { time: { wards: 30, lights: 40, guardians: 40, orbit: 35 }, overloadHeal: 0.1, stagger: 4, staggerBonus: 1.5, guardEvery: 6, lightTime: 3.5 };
 // The cataclysm: the boss channels, then everything outside the circles of light is hit for `damage` hearts.
 const CATACLYSM = { channel: 3.4, damage: 2, cooldown: 20 };
 const SHIELD_COLOR = '#7fd8ff';
@@ -1530,12 +1579,13 @@ function startWard(boss, [, task, count]) {
   const turn = Math.random() * Math.PI * 2;
   const spots = Array.from({ length: count }, (_, i) => {
     const angle = turn + (i / count) * Math.PI * 2;
-    return new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(MAP_HALF_SIZE * (task === 'lights' ? 0.42 : 0.55));
+    return new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(MAP_HALF_SIZE * ({ lights: 0.42, orbit: ORBIT.radius }[task] ?? 0.55));
   });
   // Wards spawn first: a spot can be blocked, and the task counts only the ones that made it.
-  const placed = task === 'wards' ? spawnLinked('ward', spots) : spots;
+  const smash = task === 'wards' || task === 'orbit';
+  const placed = smash ? spawnLinked('ward', spots) : spots;
   beginRaid(boss, task, placed);
-  share({ k: 'ward', id: boss.netId, t: task, p: placed.map((p) => [Math.round(p.x), Math.round(p.y)]), o: task === 'wards' ? linkedOwners : [] });
+  share({ k: 'ward', id: boss.netId, t: task, p: placed.map((p) => [Math.round(p.x), Math.round(p.y)]), o: smash ? linkedOwners : [] });
 }
 
 /**
@@ -1610,7 +1660,12 @@ function beginRaid(boss, task, spots) {
   shake = Math.max(shake, 12);
   effects.ring(boss.position, { radius: 280, color: SHIELD_COLOR, duration: 0.8, thickness: 0.2 });
   const each = coop && task !== 'lights' ? ' Each frog has their own: find YOUR pillar of light!' : '';
-  const job = { wards: `Smash the ${spots.length} shield wards!${each}`, lights: `Hold the ${spots.length} circles of light!`, guardians: `Defeat the ${spots.length} Hive Guardians!${each}` }[task];
+  const job = {
+    wards: `Smash the ${spots.length} shield wards!${each}`,
+    orbit: `Chase down and smash the ${spots.length} crystals circling the arena!${each}`,
+    lights: `Hold the ${spots.length} circles of light!`,
+    guardians: `Defeat the ${spots.length} Hive Guardians!${each}`,
+  }[task];
   hud.showBanner(`🛡 ${boss.type.name} is shielded!`, job, 2.6);
 }
 
@@ -1656,9 +1711,16 @@ function updateRaid(delta) {
   }
   const done = raid.task === 'lights' ? raid.zones.filter((zone) => zone.done).length : raid.count - wards.length;
   raid.timer -= delta;
-  const what = { wards: 'wards smashed', lights: 'lights held', guardians: 'guardians down' }[raid.task];
+  const what = { wards: 'wards smashed', orbit: 'crystals smashed', lights: 'lights held', guardians: 'guardians down' }[raid.task];
   hud.setRaid(`🛡 Break the shield: ${Math.max(0, done)}/${raid.count} ${what} · ${Math.max(0, Math.ceil(raid.timer))}s`, raid.timer < 8);
-  if (isGuest()) return; // the host decides when the shield breaks or overloads
+  if (isGuest()) return; // the host decides when the shield breaks or overloads (and moves circling crystals)
+  if (raid.task === 'orbit') {
+    for (const ward of wards) {
+      const angle = Math.atan2(ward.position.y, ward.position.x) + ORBIT.speed * delta;
+      const r = Math.hypot(ward.position.x, ward.position.y);
+      ward.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
+    }
+  }
   if (done >= raid.count) {
     share({ k: 'wardOff' });
     breakShield();
@@ -1835,10 +1897,11 @@ function startStage(boss, [, mechanic, count]) {
   const { ai } = boss;
   ai.stage = (ai.stage ?? 0) + 1;
   ai.stageSpeed = (ai.stageSpeed ?? 1) * 0.92; // every stage attacks a little faster
-  const title = mechanic === 'interrupt' ? RITUALS[boss.kind] ?? MECHANICS.interrupt.title : MECHANICS[mechanic].title;
+  const title =
+    mechanic === 'interrupt' ? RITUALS[boss.kind] ?? MECHANICS.interrupt.title : mechanic === 'orbit' ? ORBIT_TITLES[boss.kind] ?? MECHANICS.orbit.title : MECHANICS[mechanic].title;
   stageEffects(boss, ai.stage, title);
   share({ k: 'stage', id: boss.netId, n: ai.stage, t: title });
-  if (mechanic === 'wards' || mechanic === 'lights') startWard(boss, [0, mechanic, count]);
+  if (mechanic === 'wards' || mechanic === 'lights' || mechanic === 'orbit') startWard(boss, [0, mechanic, count]);
   else if (mechanic === 'guardians') startGuardians(boss, count);
   else if (mechanic === 'interrupt') startInterrupt(boss, title);
   else if (mechanic === 'firering') {
@@ -2559,7 +2622,7 @@ function hellfireAura(boss) {
 function updateQueen(boss, delta) {
   const { ai } = boss;
   // The enrage timer runs through everything (shields and staggers too): a race against the clock.
-  const script = BOSS_SCRIPTS[boss.kind];
+  const script = bossScript(boss);
   ai.fightTime = (ai.fightTime ?? 0) + delta;
   if (script && !boss.enraged && ai.fightTime > script.enrage) enrageBoss(boss);
   hud.setBossTimer(script && !boss.enraged ? script.enrage - ai.fightTime : null);
@@ -4196,10 +4259,26 @@ hud.menu.addEventListener('pointerdown', (event) => {
   garden.beginTray(button.dataset.trinket, event);
 });
 
-/** The title screen by day or by night (a garden setting, kept in this browser). */
+// A garden's look, chosen by its owner: day or night, and a song (GARDEN_SONGS). Your own is kept in `meta` (and in
+// the cloud save for visitors, setGardenLook); in someone else's garden theirs applies (`visitLook`, from the server
+// when you arrive and from their 'look' events while you're there).
+let visitLook = null;
+const cleanLook = (look) => ({ night: Boolean(look?.night), song: GARDEN_SONGS.some((song) => song.id === look?.song) ? look.song : 'garden' });
+const myLook = () => ({ night: Boolean(meta.gardenNight), song: songUnlocked(meta.gardenSong, meta) ? meta.gardenSong : 'garden' });
+const gardenLook = () => (decorating && gardenVisit && !gardenVisit.own && visitLook ? visitLook : myLook());
+
+/** Owner: tell the frogs in my garden, and the server for those who come later. */
+function shareLook() {
+  const look = myLook();
+  hub.setLook(look);
+  if (cloud.status === 'online') setGardenLook(look);
+}
+
+/** The title screen and gardens by day or by night (in someone else's garden, as its owner set it). */
 function applyTitleSky() {
-  weather.set(meta.gardenNight ? 'night' : 'morning', 'clear');
-  garden.setNight(Boolean(meta.gardenNight));
+  const { night } = gardenLook();
+  weather.set(night ? 'night' : 'morning', 'clear');
+  garden.setNight(night);
 }
 
 /** Trinkets earned since this browser last looked find a spot in the garden by themselves. */
@@ -4221,6 +4300,13 @@ const hub = new GardenHub(
     onGo: (code) => joinParty(code),
     onSetOff: (party) => setOffWithParty(party),
     onDecor: (decor) => !garden.editing && garden.load(decor),
+    onLook: (look) => {
+      // The owner switched day or night, or the song.
+      if (!gardenVisit || gardenVisit.own) return;
+      visitLook = cleanLook(look);
+      applyTitleSky();
+      refreshGardenWalk();
+    },
     onAchieve: (id) => achieve(id),
     onFull: () => {
       closeGarden();
@@ -4272,7 +4358,8 @@ const walkInfo = () => {
     countdown: settingOff ? '🐸 Off we go!' : countdown,
     leaderName: leader?.name ?? null,
     ready: hub.ready,
-    night: Boolean(meta.gardenNight),
+    night: gardenLook().night,
+    song: GARDEN_SONGS.find((song) => song.id === gardenLook().song),
     touch: touch.enabled,
     public: Boolean(cloud.gardenPublic),
     emotes: showEmotes
@@ -4294,6 +4381,7 @@ function enterGarden({ code, own, owner = null }) {
   settingOff = false;
   player.rig?.play('idle'); // a title-screen move still playing (a thrown vial, a summoned toad) ends here
   hub.enter({ code, own, ...gardenIdentity() });
+  if (own) hub.look = myLook(); // sent to visitors as they come in
   garden.walk(player.group.position);
   refreshGardenWalk();
 }
@@ -4322,7 +4410,9 @@ async function visitGarden(code) {
   if (phase !== 'title') return;
   const own = result.garden === ownGardenCode;
   garden.load(own ? meta.decor : result.decor);
+  visitLook = own ? null : cleanLook(result);
   enterGarden({ code: result.garden, own, owner: result.name });
+  applyTitleSky();
   play('pick');
 }
 
@@ -4344,6 +4434,8 @@ function leaveGardenView() {
   garden.exit();
   decorating = false;
   gardenVisit = null;
+  visitLook = null;
+  applyTitleSky();
   settingOff = false;
   camera.up.set(0, 0, 1);
 }
@@ -4354,6 +4446,16 @@ function closeGarden() {
   // The title orbit carries on from wherever the garden camera was.
   titleOrbit = Math.atan2(world.y, world.x);
   hud.showTitle(bestScore);
+}
+
+/** The garden songs: yours to pick from (locked ones say how they unlock), or what's playing in someone's garden. */
+function showSongs() {
+  const visiting = decorating && gardenVisit && !gardenVisit.own;
+  const playing = gardenLook().song;
+  hud.showGardenSongs({
+    owner: visiting ? gardenVisit.owner ?? 'The owner' : null,
+    songs: GARDEN_SONGS.map((song) => ({ ...song, playing: song.id === playing, locked: !songUnlocked(song.id, meta), hint: songHint(song) })),
+  });
 }
 
 /** Your own garden: from hopping around into the editor and back. */
@@ -4432,6 +4534,7 @@ function gardenPhoto() {
 // Hopping in a garden keeps its pace on a slow phone: the frame's real time (up to a quarter of a second) in small
 // steps. The game's 0.1 s cap made a frog at 5 fps hop at half speed (visitors in a busy garden said so).
 const WALK_FRAME_MAX = 0.25;
+const GARDEN_MUSIC = 0.45; // the music's level while hopping around a garden (emote sounds come first there)
 const WALK_STEP = 1 / 30;
 
 function gardenKeys(delta, elapsed = delta) {
@@ -4910,7 +5013,10 @@ function beginWave(number, weatherKind, mods = []) {
   if (number === HELL_WAVE) hud.showBanner('The Final Battle', 'Bee-zebub awakens!', WAVE_INTRO_TIME + 0.6);
   else if (number === FINAL_WAVE) hud.showBanner(`Wave ${wave}`, 'The Empress of the hive descends!', WAVE_INTRO_TIME + 0.6);
   else if (config.isBoss) hud.showBanner(`Wave ${wave}`, `${bossName} approaches!`, WAVE_INTRO_TIME + 0.4);
-  else if (config.endless) hud.showBanner(`Endless ${config.endless}`, `Bees ×${config.hpScale.toFixed(0)} tougher · ${mods.map((id) => MODIFIERS[id].icon).join(' ')}`, WAVE_INTRO_TIME + 0.4);
+  else if (config.endless) {
+    const hits = config.bulletBonus ? ` · hits +${config.bulletBonus}♥` : '';
+    hud.showBanner(`Endless ${config.endless}`, `Bees ×${config.hpScale.toFixed(0)} tougher${hits} · healing ${Math.round(config.healScale * 100)}% · ${mods.map((id) => MODIFIERS[id].icon).join(' ')}`, WAVE_INTRO_TIME + 0.4);
+  }
   else if (mods.length) hud.showBanner(`Wave ${wave}`, mods.map((id) => `${MODIFIERS[id].icon} ${MODIFIERS[id].name}`).join(' + '), WAVE_INTRO_TIME + 0.4);
   else hud.showBanner(`Wave ${wave}`, `${config.count} bees incoming`, WAVE_INTRO_TIME);
 }
@@ -6057,33 +6163,46 @@ function updateEnding(delta) {
 }
 
 // --- Boss entrance ---
+/** How long a boss's entrance lasts: the final boss takes his time (and longer again for his true form). */
+const introTimeFor = (boss) => (boss.ai.trueForm ? 5 : boss.type.hellfire ? 4.4 : BOSS_INTRO_TIME);
+let introLength = BOSS_INTRO_TIME;
+
 function startBossIntro(boss) {
   if (coop?.host) share({ k: 'bossIntro', id: boss.netId });
   introBoss = boss;
-  setPhase('bossIntro', BOSS_INTRO_TIME);
+  introLength = introTimeFor(boss);
+  setPhase('bossIntro', introLength);
   music.play('boss', 4);
+  const again = boss.ai.trueForm;
   // Bosses remember Tode: who won last time, and how often.
   const memory = bossMemory(boss.kind);
-  const taunt = bossTaunt(boss.kind, memory);
-  memory.met++;
-  saveMeta();
-  hud.showBossIntro(boss.type.name, BOSS_EPITHETS[boss.kind] ?? '', taunt);
+  const taunt = again ? TRUE_FORM_TAUNTS[Math.floor(Math.random() * TRUE_FORM_TAUNTS.length)] : bossTaunt(boss.kind, memory);
+  if (!again) {
+    memory.met++;
+    saveMeta();
+  }
+  hud.showBossIntro(boss.type.name, again ? 'True Form' : BOSS_EPITHETS[boss.kind] ?? '', taunt);
   // It speaks once its roar has died down, as the line appears on its card (see .boss-card-taunt).
   babble(BOSS_VOICES[boss.kind], taunt, BOSS_SPEAKS_AT, 32);
   hud.setBoss(boss);
 }
 
 function updateBossIntro(delta) {
-  const elapsed = BOSS_INTRO_TIME - phaseTimer;
+  const elapsed = introLength - phaseTimer;
   phaseTimer -= delta;
   introBoss.update(delta);
   introBoss.faceTowards(player.position);
 
-  // Pan over to the boss, hold, then swing back.
+  // Pan over to the boss, hold, then swing back. A tall boss is framed by his middle, not his feet (the camera looks
+  // down at ~35°, so a point h up shows where the ground 1.41 h further up the screen does), from a little further
+  // back, or a final boss at the top of the screen lost his head.
+  const tall = introBoss.type.hellfire;
   const toBoss = introBoss.position.clone().sub(player.position).setZ(0);
-  const pan = elapsed < 0.8 ? elapsed / 0.8 : phaseTimer < 0.6 ? Math.max(0, phaseTimer / 0.6) : 1;
+  if (tall) toBoss.addScaledVector(SCREEN_UP, introBoss.height * introBoss.group.scale.x * 0.55 * 1.41);
+  const pan = elapsed < 0.9 ? elapsed / 0.9 : phaseTimer < 0.7 ? Math.max(0, phaseTimer / 0.7) : 1;
   cameraPan.copy(toBoss).multiplyScalar(0.5 - 0.5 * Math.cos(pan * Math.PI));
-  cameraZoom = 1 - 0.25 * Math.sin(Math.min(1, elapsed / BOSS_INTRO_TIME) * Math.PI);
+  const swell = Math.sin(Math.min(1, elapsed / introLength) * Math.PI);
+  cameraZoom = tall ? 1 + 0.12 * swell : 1 - 0.25 * swell;
 
   if (elapsed >= BOSS_ROARS_AT && !introBoss.ai.roared) {
     introBoss.ai.roared = true;
@@ -6333,6 +6452,7 @@ function createMirror(id, kind, elite, x, y) {
   scene.add(enemy.group);
   if (!enemy.type.boss) hud.attachHealthBar(enemy);
   if (enemy.type.ward || kind === 'guardian') claimOwner(enemy);
+  if (enemy.type.revives) enemy.lives = Infinity; // only the host's word ('reborn', then 'bossDown') ends a life
   if (pendingIntro === id) guestBossIntro(id);
   return enemy;
 }
@@ -6386,8 +6506,10 @@ function applySnapshot(snap) {
     }
     if (enemy.type.boss && !enemy.dying) {
       hud.setBoss(enemy);
-      const enrage = BOSS_SCRIPTS[enemy.kind]?.enrage;
-      hud.setBossTimer(enrage && !enemy.enraged ? enrage - enemy.age + BOSS_INTRO_TIME : null);
+      const enrage = bossScript(enemy)?.enrage;
+      // (the host's timer starts after the entrance; a true form starts its own)
+      const fought = enemy.ai.trueForm ? enemy.age - enemy.trueFormAt - 5 : enemy.age - introTimeFor(enemy);
+      hud.setBossTimer(enrage && !enemy.enraged ? enrage - fought : null);
     }
   }
   for (const [id, enemy] of mirrors) {
@@ -6514,6 +6636,15 @@ function handleNet(from, message) {
     case 'bossIntro':
       guestBossIntro(message.id);
       break;
+    case 'reborn': {
+      const boss = mirror();
+      if (!boss) break;
+      boss.lives = 0;
+      boss.reviving = false;
+      clearBossMechanics();
+      trueFormEffects(boss);
+      break;
+    }
     case 'fin':
       finisher(message.big);
       break;
@@ -7602,12 +7733,26 @@ const MENU_ACTIONS = {
     refreshGardenTray();
   },
   'garden-night': () => {
+    if (decorating && gardenVisit && !gardenVisit.own) {
+      hud.showCallout(`${gardenVisit.owner ?? 'The owner'} decides day or night here`);
+      return;
+    }
     meta.gardenNight = !meta.gardenNight;
     saveMeta();
     applyTitleSky();
+    if (decorating) shareLook();
     play('click');
     refreshGardenTray();
     refreshGardenWalk();
+  },
+  'garden-music': () => showSongs(),
+  'garden-song': ({ song }) => {
+    if (!songUnlocked(song, meta) || (decorating && gardenVisit && !gardenVisit.own)) return;
+    meta.gardenSong = song;
+    saveMeta();
+    if (decorating) shareLook();
+    play('pick');
+    showSongs();
   },
   'garden-reset': () => garden.resetView(),
   'garden-plan': () => garden.planView(),
@@ -8005,6 +8150,9 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   if (input.wasPressed('KeyC')) (decorating ? gardenPhoto() : takePhoto());
   lap('phase: play, cut-scenes, garden frogs');
   updateGarden(realDelta);
+  const inGarden = phase === 'title' && decorating && hub.active;
+  setMusicScene(inGarden ? GARDEN_MUSIC : 1);
+  if (phase === 'title') music.play(inGarden ? gardenLook().song : 'garden', 0);
   lap('garden: trinkets, title');
 
   // The world keeps living while menus are open (except when paused).

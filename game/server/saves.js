@@ -24,7 +24,7 @@ import { PANTRY, harvestBonus, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
-import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, withRewards } from '../src/components/Rewards.js';
+import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, songUnlocked, withRewards } from '../src/components/Rewards.js';
 import { randomInt } from 'node:crypto';
 import { TAG_COLORS, cleanName, nameProblem, newTag, publicName } from '../src/components/PlayerTag.js';
 
@@ -304,10 +304,13 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     gardens.set(save.garden.code, normalizeCode(save.code));
     save.garden.name = save.profile.name ?? publicName(body.name, null);
     if (typeof body.public === 'boolean') save.garden.public = body.public; // listed for everyone, or code only
+    // Its look for visitors: day or night, and a song the save has unlocked.
+    if (typeof body.night === 'boolean') save.garden.night = body.night;
+    if (typeof body.song === 'string' && songUnlocked(body.song, save.progress)) save.garden.song = body.song;
     gardensChanged();
     save.updated = now;
     await persist();
-    return send(res, 200, { garden: save.garden.code, public: Boolean(save.garden.public) });
+    return send(res, 200, { garden: save.garden.code, public: Boolean(save.garden.public), night: Boolean(save.garden.night), song: save.garden.song ?? 'garden' });
   }
   if (action === 'buy') {
     const error = applyBuy(save, String(body.id));
@@ -350,6 +353,8 @@ export async function handleGarden(req, res, url, { send, ip }) {
     trinkets: ownedTrinkets(progress).length,
     beauty: gardenBeauty(progress.decor ?? []),
     public: Boolean(save.garden.public),
+    night: Boolean(save.garden.night),
+    song: save.garden.song ?? 'garden',
   });
 }
 

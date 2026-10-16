@@ -221,6 +221,12 @@ function buildGeometry(seg) {
     head.push(horn([[side * 1.3, 3.8, 0.4], [side * 3, 4.7, 0], [side * 4.7, 5.4, -0.5], [side * 5.8, 7.4, -0.1], [side * 5.6, 9.7, 0.9], [side * 4.6, 11, 2.1]], 1.05, 0.08, Math.max(6, half)));
   }
   head.push(piece(new THREE.BoxGeometry(2.3, 0.35, 0.5), COLORS.black, { position: [0, 0.95, 3] })); // the grin
+  // His true form's crown of hellfire (hidden until then).
+  const crown = [];
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2;
+    crown.push(piece(new THREE.ConeGeometry(0.55, 2.6 + (i % 2) * 1.4, half), i % 2 ? COLORS.eye : COLORS.fire, { position: [Math.cos(angle) * 2, 6 + (i % 2) * 0.6, 0.5 + Math.sin(angle) * 2] }));
+  }
   head.push(piece(new THREE.ConeGeometry(0.6, 2.4, half), COLORS.black, { position: [0, -0.5, 2.3], rotation: [Math.PI + 0.35, 0, 0] })); // goatee
 
   // Arms: upper arm on the shoulder pivot, forearm on the elbow pivot. Banded bracers, clawed hands.
@@ -289,6 +295,7 @@ function buildGeometry(seg) {
     torsoGlow: merge(torsoGlow),
     head: merge(head),
     headGlow: merge(headGlow),
+    crown: merge(crown),
     upperArm,
     forearm,
     legs,
@@ -343,6 +350,9 @@ export function buildDevil(level) {
   const head = new THREE.Group();
   head.position.set(0, 19.8, 0.3);
   head.add(mesh(parts.head, surface, true), mesh(parts.headGlow, glowMaterial));
+  const crown = mesh(parts.crown, glowMaterial);
+  crown.visible = false;
+  head.add(crown);
   inner.add(head);
 
   const arms = {};
@@ -418,6 +428,13 @@ export function buildDevil(level) {
       pose.lean = ease(pose.lean, enemy.ai?.mode === 'charge' ? 1 : 0, 6, delta);
       pose.slump = ease(pose.slump, enemy.ai?.staggerLeft > 0 ? 1 : 0, 5, delta);
       const { raise, lean, slump } = pose;
+      // The true form (see riseAgain in main.js): a crown of hellfire, bigger wings, a bigger fireball.
+      const blazing = Boolean(enemy.ai?.trueForm);
+      crown.visible = blazing;
+      if (blazing) {
+        crown.rotation.y = t * 1.5;
+        crown.scale.set(1, 1 + Math.sin(t * 11) * 0.12, 1);
+      }
 
       inner.position.y = 1.6 + Math.sin(t * 2.2) * 1.3 - slump * 1.4;
       inner.rotation.x = lean * 0.5 + slump * 0.3 - raise * 0.12;
@@ -435,7 +452,7 @@ export function buildDevil(level) {
       left.shoulder.rotation.x = THREE.MathUtils.lerp(-0.45 + Math.sin(t * 2.2 + 1) * 0.06, -1.35, raise) + slump * 0.5;
       left.shoulder.rotation.z = -0.22;
       left.elbow.rotation.x = THREE.MathUtils.lerp(-1.25, -0.5, raise) + slump * 0.6;
-      fireball.scale.setScalar((1 + Math.sin(t * 9) * 0.12 + raise * 0.7) * (1 - slump * 0.6));
+      fireball.scale.setScalar((1 + Math.sin(t * 9) * 0.12 + raise * 0.7) * (1 - slump * 0.6) * (blazing ? 1.3 : 1));
       fireball.rotation.y += delta * 3;
 
       // Goat legs dangle and kick while he hovers; they trail behind in a charge.
@@ -450,6 +467,7 @@ export function buildDevil(level) {
       // Slow, heavy wingbeats; swept back in a charge, drooping when staggered.
       const flap = Math.sin(t * 4.5);
       for (const { pivot, side } of wings) {
+        pivot.scale.setScalar(blazing ? 1.25 : 1);
         pivot.rotation.z = side * (0.2 + flap * 0.42 - slump * 0.5);
         pivot.rotation.y = side * (0.35 + lean * 0.55 + flap * 0.12);
       }

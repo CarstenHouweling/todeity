@@ -3376,10 +3376,7 @@ body.touch .steep-badge {
 }
 
 .touch-button.boop {
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: 0.5px;
-  color: #fff3c4;
+  font-size: 26px;
   border-color: rgba(255, 211, 107, 0.75);
   background: rgba(120, 60, 110, 0.55);
 }
@@ -3666,4 +3663,60 @@ body:has(.menu:not([hidden])) .rotate-hint {
   0% { opacity: 0; transform: translate(-50%, -8px); }
   8%, 85% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+
+/* Garden music: the song list (Hud.showGardenSongs). */
+.garden-songs .song-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  max-height: 50dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+.song-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.song-row:not([disabled]):hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.song-row[disabled] {
+  cursor: default;
+}
+
+.song-row.playing {
+  border-color: #ffd36b;
+  background: rgba(255, 211, 107, 0.14);
+}
+
+.song-row.locked {
+  opacity: 0.55;
+}
+
+.song-icon {
+  font-size: 22px;
+}
+
+.song-name {
+  flex: 1;
+  font-weight: 700;
+}
+
+.song-state {
+  color: #ffe9a0;
+  font-size: 12px;
 }

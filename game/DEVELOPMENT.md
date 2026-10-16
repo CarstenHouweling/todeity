@@ -239,7 +239,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `components/DevilModel.js`, v0.26.2, built at every graphics level since the old bee model with horns read as
   "very simple") adds
   Brimstone Rings (walls of fire spreading from him: only a hop-dash gets you through), chasing Hellfire Pillars,
-  hellfire rain and an Infernal Spiral, with two rage phases where he grows. Beating him plays the ending
+  hellfire rain and an Infernal Spiral, with two rage phases where he grows. **True form** (v0.27, `riseAgain`,
+  `TRUE_FORM`): his first killing blow leaves him at 1 hp (`Enemy.lives`, from `revives` in ENEMY_TYPES, sets
+  `reviving`); he rises again in a cut-scene of his own, 20% bigger and faster with a crown of hellfire, heals to
+  70% and fights through new stages (guardians, a ritual, Seals of Hellfire) with a fresh enrage timer
+  (`bossScript(boss)`). He used to fall faster than the Empress. Co-op: the host sends `reborn`; mirrors of a boss
+  with `revives` never die locally before it (`lives = Infinity`). His entrance lasts 4.4 s (5 s for the true
+  form, `introTimeFor`) and frames his middle from further back (`updateBossIntro`: the camera looks down at ~35°,
+  so a point h up shows where the ground 1.41 h further up the screen does). Beating him plays the ending
   cut-scene back home in the garden, and credits.
 - **Raid bosses** (`BOSS_SCRIPTS`, `MECHANICS` and the "Raid bosses" / "Boss stages" sections in main.js): every
   boss fights in stages. At each health fraction it roars, attacks 8% faster and starts a mechanic. **Apart from its
@@ -256,7 +263,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Mechanics:
   - Shields (`startWard`, `startGuardians`, `updateRaid`): the boss is immune (`Enemy.setShield`; `damageEnemy`
     ignores it, `targetable()` hides it from aiming, skills and bombs) until its **Shield Wards** (`ward` bees,
-    tethered) are smashed, 3 circles of light are held, or its **Hive Guardians** (`guardian` bees) fall. Guards
+    tethered) are smashed, 3 circles of light are held, or its **Hive Guardians** (`guardian` bees) fall.
+    **Circling crystals** (`orbit`, v0.27): wards that circle the arena (`ORBIT`, the host moves them in
+    `updateRaid`), titled per boss (`ORBIT_TITLES`: Crown Jewels, Seals of Hellfire); they replaced the circles of
+    light of the Empress and Bee-zebub, which players found slow (the Seraph keeps hers). Guards
     come meanwhile; when the timer (30/40 s) runs out the shield overloads (everyone hit, boss heals 10%). Broken:
     the boss is **staggered** 4 s (×1.5 damage).
   - **Interrupt** (`startInterrupt`, `ritual`): it channels for 8 s; deal 18% of its health (more in co-op) to break
@@ -304,8 +314,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Difficulty curve** (`waveConfig`): past wave 10 swarms grow quadratically and more of them are stingers; from
   wave 16 bees hit for an extra heart; hazards fall in growing numbers (up to 8 at once) and arena events come more
   and more often.
-  **Endless** (waves past 21): bees +10% health per wave, always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`),
-  +1 contact damage every 10 waves.
+  **Endless** (waves past 21, retuned in v0.27: a level-46 Steep 18 build couldn't die by wave 31 and 160 bees
+  lagged): bees +18% health per wave, at most `ENDLESS_SWARM` (120) bees, each a third tougher; bees and stingers
+  hit for +1 heart every 4 endless waves from the 2nd (`contactBonus`, `bulletBonus`); healing fades 6% per wave,
+  down to 30% (`healScale`, applied in `healPlayer`); always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`).
+  The wave banner says all of it.
 - **Co-op classes:** every player plays their own class; the state message carries it (`c`) and `RemoteTode`
   rebuilds the puppet; spits carry their style (`st`), a Ninja's decoy is a `decoy` message (the host's bees chase it).
   The Summoner's pond toads are local only (their spits show as his).
@@ -340,7 +353,15 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   next tap) or on the lawn; R / wheel turns, Delete puts away, G grid snap, Ctrl+Z `undo()` (decor snapshots).
   The tray keeps its trinket buttons between updates (`hud.refreshGarden`), since one may be under a finger mid-drag.
   Tray pictures are rendered once (`TrinketPortraits.js`). Trinkets animate (`userData.anim(t, night)` in
-  `TrinketModels.js`); 🌙 night (`meta.gardenNight`, local) switches the title sky and the soft ground glows.
+  `TrinketModels.js`); 🌙 night switches the title sky and the soft ground glows.
+  **A garden's look** (v0.27): the owner's day or night (`meta.gardenNight`) and **garden song** (`meta.gardenSong`,
+  `GARDEN_SONGS` in Rewards.js, unlocked by level or the Bee-zebub achievement, `songUnlocked`; the songs and
+  their calm arrangements are in Music.js) apply for everyone in the garden. The owner's client saves them with
+  the garden (`setGardenLook`, `POST …/garden { night, song }`; the server only takes unlocked songs) and sends a
+  `look` event (`hub.setLook`, again to every frog that joins). Visitors get it from `GET /api/garden` and the
+  events (`visitLook`, `gardenLook()`); their 🌙 says the owner decides. 🎵 opens the song list
+  (`hud.showGardenSongs`). In a garden the music plays at `GARDEN_MUSIC` (45%, `setMusicScene` in Sound.js) and
+  dips under emote, boop and dance sounds (`duckMusicFor`), which it used to drown out. The phone BOOP button is 🥊.
   **Sets** (`SETS`, `gardenSets`, `gardenBeauty` in Rewards.js): all parts within `SET_RADIUS` of their middle show
   a ring and particles (`SET_EFFECTS`) and add beauty (shown on the profile).
 - **Gardens as a meeting place** (v0.22, `GardenHub.js`): 🏡 My garden puts Tode in his garden as a hopping frog

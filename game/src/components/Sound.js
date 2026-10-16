@@ -10,6 +10,8 @@ let sfxBus = null;
 let musicBus = null;
 let musicFilter = null;
 let musicDuck = null; // dips the music while someone talks
+let musicScene = null; // the music's level for where we are (quieter in a garden, see setMusicScene)
+let sceneLevel = 1;
 let voiceBus = null; // voices have their own level and a limiter, so they can be loud without distorting
 let master = null;
 const settings = { sfx: true, music: true };
@@ -50,7 +52,9 @@ export function unlockAudio() {
     musicBus = context.createGain();
     musicBus.gain.value = settings.music ? MUSIC_VOLUME : 0;
     musicDuck = context.createGain();
-    musicBus.connect(musicFilter).connect(musicDuck).connect(master);
+    musicScene = context.createGain();
+    musicScene.gain.value = sceneLevel;
+    musicBus.connect(musicFilter).connect(musicDuck).connect(musicScene).connect(master);
 
     voiceBus = context.createGain();
     voiceBus.gain.value = settings.sfx ? VOICE_VOLUME : 0;
@@ -331,6 +335,7 @@ const GROOVE_BASS = [220, 0, 220, 262, 196, 0, 196, 247, 175, 0, 175, 220, 196, 
 const GROOVE_HOOK = [880, 0, 0, 784, 0, 659, 0, 0, 698, 0, 0, 659, 0, 587, 659, 0];
 export function groove(step) {
   if (!context || !settings.sfx || context.state !== 'running') return;
+  duckMusicFor(0.5); // the groove is the music while someone dances
   const i = step % 16;
   if (i % 2 === 0) {
     tone({ type: 'sine', frequency: 180, to: 60, duration: 0.16, volume: 0.22 });
@@ -382,6 +387,21 @@ function duckMusic(start, seconds) {
   gain.cancelScheduledValues(now);
   gain.setTargetAtTime(MUSIC_DUCK, duckFrom, 0.08);
   gain.setTargetAtTime(1, duckTo, 0.4);
+}
+
+/**
+ * The music's level for the place we're in: 1 on the title screen and in a run, lower in a garden, where the emotes'
+ * and boops' sounds are the show (the garden theme drowned them out).
+ */
+export function setMusicScene(level) {
+  if (level === sceneLevel) return;
+  sceneLevel = level;
+  if (musicScene) musicScene.gain.setTargetAtTime(level, context.currentTime, 0.3);
+}
+
+/** Dips the music for `seconds` from now (an emote or a boop playing in a garden). */
+export function duckMusicFor(seconds) {
+  if (context && settings.music) duckMusic(context.currentTime, seconds);
 }
 
 /** Stops every babble that is still scheduled (a menu closed before the line was done). */

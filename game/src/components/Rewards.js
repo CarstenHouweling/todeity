@@ -153,6 +153,30 @@ const RANKS = [
   [30, 'Todeity'],
 ];
 
+// --- Garden music: the owner picks a song for their garden, and everyone in it hears it ------------------------
+// `level`: the account level that unlocks it; `achievement`: an achievement that does. The songs are in Music.js.
+export const GARDEN_SONGS = [
+  { id: 'garden', name: 'Morning Brew', icon: '🌅' },
+  { id: 'lantern', name: 'Lantern Night', icon: '🏮', level: 3 },
+  { id: 'koi', name: 'Koi Pond', icon: '🎏', level: 6 },
+  { id: 'ceremony', name: 'Tea Ceremony', icon: '🍵', level: 10 },
+  { id: 'groove', name: 'Garden Groove', icon: '🕺', level: 15 },
+  { id: 'celestial', name: 'Celestial Steep', icon: '🌌', level: 20 },
+  { id: 'infernal', name: 'Infernal Waltz', icon: '😈', achievement: 'beezebub' },
+];
+export const gardenSong = (id) => GARDEN_SONGS.find((song) => song.id === id) ?? GARDEN_SONGS[0];
+
+/** Whether a save's progress has unlocked garden song `id`. */
+export function songUnlocked(id, progress) {
+  const song = GARDEN_SONGS.find((s) => s.id === id);
+  if (!song) return false;
+  if (song.achievement) return Boolean(progress.achievements?.includes(song.achievement));
+  return accountLevel(progress).level >= (song.level ?? 1);
+}
+
+/** How a song unlocks, for the song list. */
+export const songHint = (song) => (song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`);
+
 /** A level's rank as a number, 0 (Tadpole) to 6 (Todeity): garden auras grow with it (GardenAuras.js). */
 export const rankTier = (level) => Math.max(0, RANKS.findLastIndex(([at]) => level >= at));
 

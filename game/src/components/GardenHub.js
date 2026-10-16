@@ -3,7 +3,7 @@ import { Player } from './Player.js';
 import { Ascension } from './Ascension.js';
 import { emoteById } from './Emotes.js';
 import { GardenFx } from './GardenFx.js';
-import { groove } from './Sound.js';
+import { duckMusicFor, groove } from './Sound.js';
 
 /**
  * Gardens as a meeting place. In a garden (your own or someone else's) Tode hops around slowly, jumps with Space
@@ -329,6 +329,7 @@ export class GardenHub {
       this.hooks.onChange?.();
     } else if (message.t === 'gjoin') {
       this.addFrog(message.frog);
+      if (this.own && this.look) this.setLook(this.look); // the newcomer sees my garden as I set it
       this.play?.('pop');
       this.hooks.onChange?.();
     } else if (message.t === 'gpart') {
@@ -381,6 +382,8 @@ export class GardenHub {
       this.hooks.onGo?.(data.code, from);
     } else if (data.k === 'decor' && !this.own) {
       this.hooks.onDecor?.(data.decor); // the owner is redecorating
+    } else if (data.k === 'look' && !this.own) {
+      this.hooks.onLook?.(data); // the owner switched day or night, or the song
     } else if (data.k === 'wave') {
       this.frogs.get(from)?.puppet.rig.play('victory', { once: true });
     } else if (data.k === 'emote') {
@@ -484,6 +487,12 @@ export class GardenHub {
     if (this.own) this.send('gevent', { k: 'decor', decor });
   }
 
+  /** Owner: my garden's look ({ night, song }); everyone here gets it now, and whoever comes in later on arrival. */
+  setLook(look) {
+    this.look = look;
+    if (this.own) this.send('gevent', { k: 'look', night: look.night, song: look.song });
+  }
+
   // --- Emotes, the ball and boops ------------------------------------------------------------------------
 
   /** Plays one of my emotes (if unlocked: the caller checks) and shows it to everybody. */
@@ -560,7 +569,9 @@ export class GardenHub {
 
   /** A sound from an actor: mine always, other frogs' when they're close. */
   sound(actor, name) {
-    if (actor.own || this.distanceTo(actor) < HEAR) this.play?.(name);
+    if (!actor.own && this.distanceTo(actor) >= HEAR) return;
+    this.play?.(name);
+    duckMusicFor(1.2); // emotes and boops are heard over the garden's music
   }
 
   /** The top of an actor's head above its feet (in its group, so it hops along). */
@@ -615,6 +626,7 @@ export class GardenHub {
         const away = d > 1 ? [(me.x - at.x) / d, (me.y - at.y) / d] : [0, 0];
         this.shove(away[0], away[1], 120, POUND.bounce * (1 - (d / POUND.reach) * 0.5));
         this.play?.('boing');
+        duckMusicFor(1);
       }
     }
   }
@@ -630,6 +642,7 @@ export class GardenHub {
     this.fx.float('✋', middle, { size: 12, rise: 14, life: 1 });
     this.fx.starBurst(middle, ['#ffe680', '#ffffff', '#ff9ec7'], 0.45);
     this.play?.('clap');
+    duckMusicFor(1);
     if (mine) this.send('gevent', { k: 'five', to: frog.id });
   }
 
@@ -640,7 +653,10 @@ export class GardenHub {
     const at = new THREE.Vector3(item.x, item.y, 0);
     const top = new THREE.Vector3(item.x, item.y, 34);
     const me = this.player.group.position;
-    if (mine || Math.hypot(item.x - me.x, item.y - me.y) < HEAR) this.play?.(poke.sound);
+    if (mine || Math.hypot(item.x - me.x, item.y - me.y) < HEAR) {
+      this.play?.(poke.sound);
+      duckMusicFor(1.2);
+    }
     if (poke.word) this.fx.float(poke.word, top, { size: 7, rise: 18, life: 1.2, color: '#fff3c4' });
     for (const emoji of poke.emoji ?? []) this.fx.float(emoji, top.clone().add(new THREE.Vector3((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16, -6)), { size: 7, rise: 24, drift: 10, life: 1.4 });
     if (poke.colors) this.particles?.burst(at, { count: 24, colors: poke.colors, speed: 80, up: 140, size: 1.9, height: 18, glow: true, life: 0.9 });

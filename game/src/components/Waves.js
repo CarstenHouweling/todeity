@@ -7,6 +7,8 @@ export const FINAL_WAVE = 20; // the Empress
 export const HELL_WAVE = 21; // Bee-zebub: beating him wins the run
 
 // Endless mode: after Bee-zebub every boss comes back in turn, and everything keeps growing.
+const ENDLESS_SWARM = 120; // at most this many bees in an endless wave (each tougher instead)
+const endlessHit = (endless) => (endless ? Math.floor((endless + 2) / 4) : 0);
 const ENDLESS_BOSSES = ['queen', 'shogun', 'seraph', 'empress', 'beezebub'];
 
 export function waveConfig(wave) {
@@ -22,13 +24,18 @@ export function waveConfig(wave) {
       ? ENDLESS_BOSSES[Math.floor(wave / BOSS_EVERY) % ENDLESS_BOSSES.length]
       : wave >= HELL_WAVE ? 'beezebub' : wave >= FINAL_WAVE ? 'empress' : wave === 15 ? 'seraph' : wave === 10 ? 'shogun' : 'queen',
     // The first waves get a few extra bees, spawning quickly, so the run gets going right away.
-    count: isBoss ? 4 + wave : Math.min(160, Math.round(6 + wave * 3 + Math.max(0, 4 - wave) * 2 + late * late * 0.3 + endless * 4)),
-    // Bees toughen up faster later on, to keep pace with a powered-up Tode; in endless mode 10% more every wave.
-    hpScale: (1 + 0.2 * (wave - 1) + 0.024 * (wave - 1) ** 2) * 1.1 ** endless,
+    count: isBoss ? 4 + wave : Math.min(endless ? ENDLESS_SWARM : 160, Math.round(6 + wave * 3 + Math.max(0, 4 - wave) * 2 + late * late * 0.3 + endless * 2)),
+    // Bees toughen up faster later on, to keep pace with a powered-up Tode. Endless mode: 18% more every wave, and
+    // fewer but tougher bees (a level-46 build at Steep 18 couldn't die by wave 31 with +10%, and 160 bees lagged).
+    hpScale: (1 + 0.2 * (wave - 1) + 0.024 * (wave - 1) ** 2) * 1.18 ** endless * (endless ? 160 / ENDLESS_SWARM : 1),
     speedScale: Math.min(1.45 + endless * 0.02, 1 + 0.035 * (wave - 1)),
     spawnInterval: Math.max(0.16, Math.min(0.6, 1.5 - wave * 0.09 - endless * 0.01)),
-    // From the Tournament on, bees hit for an extra heart (and another every 10 endless waves).
-    contactBonus: (wave >= 16 ? 1 : 0) + Math.floor(endless / 10),
+    // From the Tournament on, bees hit for an extra heart; in endless mode bees and stingers hit for one more every 4
+    // waves (from the 2nd).
+    contactBonus: (wave >= 16 ? 1 : 0) + endlessHit(endless),
+    bulletBonus: endlessHit(endless),
+    // Endless mode: healing fades, 6% less every wave (never below 30%).
+    healScale: endless ? Math.max(0.3, 1 - 0.06 * endless) : 1,
     weights: {
       drone: 1,
       zipper: wave >= 2 ? 0.6 : 0,

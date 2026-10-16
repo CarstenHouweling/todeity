@@ -1147,7 +1147,7 @@ ${ meta.runs > 0 ? '' :
           ? `Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
           : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
         : info.touch
-          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), BOOP a frog or a trinket, drag the right side to look around.'
+          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), 🥊 to boop a frog or a trinket, drag the right side to look around.'
           : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), B to boop frogs and trinkets, 1–9 to emote. 🚩 Invite others to play together.';
     const buttons = [
       info.own ? tool('garden-edit', '✏️ Edit garden') : '',
@@ -1159,6 +1159,7 @@ ${ meta.runs > 0 ? '' :
       tool('garden-visit', '👀 Visit'),
       info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
       tool('garden-night', info.night ? '🌙' : '☀️'),
+      tool('garden-music', `🎵 ${info.song?.icon ?? ''}`),
       tool('garden-photo', '📸'),
       tool('garden-leave', '✓ Leave', 'primary'),
     ].join('');
@@ -1209,6 +1210,26 @@ ${ meta.runs > 0 ? '' :
   }
 
   /** Asks for a garden code to visit; `gardens`: the public gardens, liveliest first. */
+  /** The garden songs (Rewards.js GARDEN_SONGS): pick yours, or (`owner`) see what plays in someone's garden. */
+  showGardenSongs({ owner, songs }) {
+    const rows = songs
+      .map((song) => {
+        // (a visitor sees what's playing, not their own locks)
+        const state = song.playing ? '<b class="song-state">▶ Playing</b>' : song.locked && !owner ? `<small class="song-state">🔒 ${escapeHtml(song.hint)}</small>` : '';
+        const disabled = owner || song.locked || song.playing ? 'disabled' : '';
+        return `<button type="button" class="song-row${song.playing ? ' playing' : ''}${song.locked && !owner ? ' locked' : ''}" data-action="garden-song" data-song="${song.id}" ${disabled}>
+          <span class="song-icon">${song.icon}</span><span class="song-name">${escapeHtml(song.name)}</span>${state}</button>`;
+      })
+      .join('');
+    this.showModal(
+      'garden-songs',
+      `<h2>🎵 Garden music</h2>
+      <p class="sub">${owner ? `${escapeHtml(owner)} chose the song in this garden.` : 'Everyone in your garden hears the song you pick. More unlock as you level up.'}</p>
+      <div class="song-list">${rows}</div>
+      <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Close</button></div>`
+    );
+  }
+
   showGardenVisitForm(error = null, gardens = null) {
     const lively = `<h3>🌍 Public gardens</h3><div class="lively-gardens">${this.gardenRows(gardens)}</div>`;
     this.showModal(

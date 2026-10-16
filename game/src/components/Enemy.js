@@ -101,6 +101,7 @@ export const ENEMY_TYPES = {
     attackDelayScale: 0.6,
     hellfire: true,
     devil: true, // his own model at every graphics level (DevilModel.js)
+    revives: 1, // he rises once more, in his true form (riseAgain in main.js)
   },
 };
 
@@ -323,6 +324,8 @@ export class Enemy {
       this.group.add(this.eliteRing);
     }
     this.damage = type.damage;
+    this.lives = type.revives ?? 0; // spare lives: a killing blow leaves it at 1 hp and sets `reviving` instead
+    this.reviving = false;
     this.knockback = new THREE.Vector3();
     this.flashLeft = 0;
     this.glow = 0; // 0..1 wind-up glow before an attack
@@ -431,6 +434,12 @@ export class Enemy {
     this.hp -= amount;
     this.flashLeft = HIT_FLASH_DURATION;
     if (direction) this.knockback.addScaledVector(direction, force * (this.type.knockback ?? 1));
+    if (this.hp <= 0 && this.lives > 0) {
+      this.hp = 1;
+      this.lives--;
+      this.reviving = true;
+      return false;
+    }
     if (this.hp > 0) return false;
     this.die();
     return true;

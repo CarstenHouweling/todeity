@@ -142,7 +142,7 @@ export class TouchControls {
     buttons.innerHTML = `
       <button class="touch-button" data-code="KeyE" data-role="ultimate">✨</button>
       <button class="touch-button big" data-code="ShiftLeft" data-role="dash">💨</button>
-      <button class="touch-button boop" data-code="KeyB" data-role="boop" hidden>BOOP</button>`;
+      <button class="touch-button boop" data-code="KeyB" data-role="boop" aria-label="Boop" hidden>🥊</button>`;
     this.root.append(buttons);
     this.ultimateButton = buttons.querySelector('[data-role="ultimate"]');
     this.dashButton = buttons.querySelector('[data-role="dash"]');

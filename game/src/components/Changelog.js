@@ -3,6 +3,20 @@
 
 export const CHANGELOG = [
   {
+    version: '0.27.0',
+    date: '2026-10-16',
+    title: 'His true form',
+    changes: [
+      '😈 Bee-zebub doesn\'t stay down: at his first fall he rises in his true form, bigger, faster and crowned in hellfire, with new stages and a fresh enrage timer. His entrance is longer and shows all of him',
+      '💎 No more standing in circles at the end: the Empress guards her Crown Jewels and Bee-zebub his Seals of Hellfire, crystals that circle the arena until you smash them',
+      '♾ Endless mode bites back: bees get tougher faster and hit harder every few waves, healing fades, and swarms are smaller but tougher (smoother on phones)',
+      '🎵 Garden music: pick a song for your garden, and everyone there hears it. Six more songs unlock as you level up, one by beating Bee-zebub',
+      '🌙 Your garden\'s night mode now shows for your visitors too',
+      '🔊 Garden music is softer and dips under emotes and boops, so you can hear them',
+      '🥊 The garden\'s boop button on phones is a boxing glove',
+    ],
+  },
+  {
     version: '0.26.2',
     date: '2026-10-16',
     title: 'The Devil himself',
