@@ -38,7 +38,7 @@ the way down to **Bee-zebub**, a **Royal Tea Chest** from every boss, and a Stee
 Solo, on your phone, or in **co-op with up to 4 friends**.
 
 ▶ Play free in your browser: https://todeity.azurewebsites.net
-🎬 Trailer: attached (or <YouTube link>)
+🎬 Trailer: <YouTube link> (or attach `todeity-trailer-discord.mp4`)
 
 Built from the "Build a Game with an AI Coding Agent" course with Claude Code as my AI pair: Three.js, procedural
 world, all music and sound generated in code.
@@ -62,7 +62,7 @@ Post your run card below (📤 Share run → Copy image on the game-over screen)
 Made from the "Build a Game with an AI Coding Agent" course with Claude Code: Three.js, procedural world, all music and sound generated in code.
 ```
 
-Attach the trailer (or a GIF). Discord unfurls the link with the banner by itself.
+Attach `todeity-trailer-discord.mp4` (or `todeity.gif`). Discord unfurls the game link with the banner by itself.
 
 ## Feature highlights (for the longer post or the video captions)
 
@@ -74,8 +74,8 @@ Attach the trailer (or a GIF). Discord unfurls the link with the banner by itsel
   last run; bosses taunt you about theirs.
 - **24 auto-casting skills, 13 fusions:** level a skill up, and when two partners are trained up they fuse into one
   (a rainbow card). Mastered skills cast twice. Six at once, so the action never stops.
-- **14 charms** that stack without a cap and chain into each other (lightning, homing biscuits, firecrackers), dropped
-  by elites and bosses.
+- **14 charms** that stack (with diminishing returns, so builds stay sane) and chain into each other (lightning, homing
+  biscuits, firecrackers), dropped by elites, hives, shrines and bosses.
 - **Royal Tea Chest:** every boss leaves one. A reel spins and lands on 1, 3 or 5 rewards.
 - **Ascension:** five transformations with cut-scenes (golden flame aura, lightning, a halo, a crimson vortex, a galaxy
   underfoot), and the garden transforms with Tode: blossoms, lanterns, crystals, floating islands, a marble heaven.
@@ -94,9 +94,10 @@ Attach the trailer (or a GIF). Discord unfurls the link with the banner by itsel
   cursed tiles.
 - **Difficulty for everyone:** Gentle Brew (extra hearts and an extra life) after an early fall, and 10 Steeping
   vows (up to Steep 25) for more score and Golden Leaves.
-- **Meta progression:** Golden Leaves for Tode's Pantry, 17 keepsakes, 39 achievements, cloud saves with a save code.
+- **Meta progression:** Golden Leaves for Tode's Pantry (13 permanent upgrades), 17 keepsakes, 39 achievements, cloud
+  saves with a save code, a daily gift and a kettle that brews rewards every 4 hours.
 - **Community:** leaderboards (score, deepest run, fastest Bee-zebub, Daily Brew, co-op), a seeded **Daily Brew** with
-  daily trials and boons, **co-op for 2–4** with public rooms and Quick play, and **gardens**: decorate yours with 27
+  daily twists (13 trials, 12 boons), **co-op for 2–4** with public rooms and Quick play, and **gardens**: decorate yours with 27
   trinkets in 8 sets, visit other players' gardens, hop on each other's heads, kick the Tea Ball, fire the Teapot
   Cannon, use 16 emotes, and form a party that sets off on a co-op run together.
 - **Juice:** slow-motion finishers, hit-stop, kill-streak callouts, a procedural orchestral soundtrack, synthesized
@@ -106,36 +107,62 @@ Attach the trailer (or a GIF). Discord unfurls the link with the banner by itsel
 
 ## Promo assets (`game/promo/`)
 
+Made on Oct 16 from v0.25.2 (how: DEVELOPMENT.md, Promo material). The MP4s and GIFs are not in git (too big); they
+are in `game/promo/` on the machine that made them.
+
 | File | Use |
 | --- | --- |
+| `todeity-trailer-1080p.mp4` | The trailer, 58 s with the game's own music: upload to YouTube, link it in the post |
+| `todeity-trailer-720p.mp4` | X / LinkedIn / anywhere that wants a smaller file |
+| `todeity-trailer-discord.mp4` | 960×540, 9.4 MB: attach to the Discord post, plays inline (muted until clicked) |
+| `todeity.gif` | 12 s highlights, 480 px, 7 MB: for places that don't play video |
+| `todeity-chest.gif`, `todeity-ascension.gif`, `todeity-bosses.gif`, `todeity-garden.gif` | Short loops for replies and comments |
 | `todeity-banner-1200x630.jpg` | Link preview / social card (also `public/og-image.jpg`) |
-| `todeity-banner-1920x1080.png`, `todeity-banner-2400x1260.png` | Hi-res banner for posts, X header art, slides |
+| `todeity-banner-1920x1080.png`, `todeity-banner-2400x1260.png` | Hi-res banner for posts and slides |
+| `todeity-header-1500x500.png` | X / profile header |
 
-**The trailer still has to be made** (the earlier `todeity-trailer-*.mp4` and `todeity.gif` are not in the
-folder, and they predate the chest, graze, the new beam, Gentle Brew and gardens). Targets: a 50–60 s trailer under
-10 MB for Discord (960×540, plays inline, muted) and a 1280×720 version for YouTube; optionally a 10–15 s GIF.
-Record the screen with OBS while playing (with the game's music), then add short captions.
+## The trailer (58 s)
 
-## Gameplay video shot list (60–90 s)
+Cut on the beat of the soundtrack (garden theme → battle → divine → boss → garden). Timestamps for YouTube chapters:
 
-1. **0:00** Title screen orbiting plain Tode (3 s), Start run, the story cut-scene's "Not. On. My. Watch." (4 s).
-2. **0:07** Wave 1–2: spit, tea bombs, a skill pick, then the first volley: red lanes, a hop-dash through, "Nimble!".
-3. **0:17** Grazing a dense fan (✦ sparkles), a kill-streak callout.
-4. **0:24** Brew screen with a Duo exchange between two spirits; a rainbow fusion card.
-5. **0:32** Ascension cut-scene to Golden Tode; the garden bursts into blossom.
-6. **0:40** Queen Buzzbelle's entrance; her stage break turns every bullet into tea leaves; the slow-motion kill.
-7. **0:50** The **Royal Tea Chest**: the reel lands on ×3 or ×5.
-8. **0:58** Steeping Beam held on a boss: the health bar melts. Then the Great Tode summon.
-9. **1:08** God of Tea / Omnitode in a later arena (Sky Citadel or the Underworld), Bee-zebub.
-10. **1:18** Gardens: two frogs hopping on each other's heads, the Teapot Cannon; a co-op clip.
-11. **1:26** End card: title + "Play free in your browser" + link.
+```
+0:00 Tode just wanted his morning tea
+0:05 Then the bees came
+0:08 Dodge, dash, graze
+0:12 Skills that fuse
+0:16 Brews from talking tea spirits
+0:19 Seven frogs
+0:23 The Royal Tea Chest
+0:27 Ascend: Golden Tode, God of Tea
+0:33 Ultimates: the Steeping Beam
+0:37 Summon the Great Tode
+0:40 Down to the Underworld
+0:44 Bee-zebub
+0:47 Your garden
+0:52 Play free in your browser
+```
 
-Tips: record at 1920×1080 in a desktop browser; 📸 (or **C**) takes clean, watermarked screenshots. For fast footage
-use the dev build's `game.*` helpers (see DEVELOPMENT.md: `startWave`, `setTier`, `ultimate`, `charm`); never in the
-public build.
+**YouTube title:** Todeity: Rise of the Tea God · trailer (#JetBrainsGameChallenge)
+
+**YouTube description:**
+
+```
+#JetBrainsGameChallenge
+Tode just wanted his morning tea. Then the bees came.
+A 3D roguelite bullet hell in your browser: pick one of seven frogs, brew powers from talking tea spirits, fuse your skills and ascend from garden frog to God of Tea, all the way down to Bee-zebub in the Underworld. Solo, on your phone, or in co-op for up to 4.
+
+▶ Play free: https://todeity.azurewebsites.net
+
+Made from the JetBrains Academy course "Build a Game with an AI Coding Agent" with Claude Code. Everything you hear and see is generated in code: Three.js, procedural world, synthesized music.
+```
+
+Re-record by hand (OBS, 1920×1080, desktop browser) only for footage the capture kit can't make, like real co-op
+or several players in one garden. 📸 (or **C**) in the game takes clean, watermarked screenshots.
 
 ## Launch-day checklist (Oct 19, 10:00 CEST)
 
+- **Before Monday:** upload `todeity-trailer-1080p.mp4` to YouTube (public or unlisted) with the title, description
+  and chapters above, and put its link in both post drafts.
 - **Sunday evening:** stop adding features. Deploy the latest build, then **restart the app** so the server code is
   fresh too (`az webapp restart --name todeity --resource-group carsten --subscription "Carsten DVK"`). Check that
   `https://todeity.azurewebsites.net/api/health` reports the version in `Changelog.js`.

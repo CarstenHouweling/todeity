@@ -1,4 +1,4 @@
-// Dev-only look test for the frog classes (open /classes.html while `npm run dev` runs). Five procedural frogs
+// Dev-only look test for the frog classes (open /classes.html while `npm run dev` runs). Seven procedural frogs
 // side by side on a lawn, cycling through their moves; buttons pick a move or a camera.
 import * as THREE from 'three';
 import { buildFrog, FROG_CLASSES } from '../components/FrogModels.js';

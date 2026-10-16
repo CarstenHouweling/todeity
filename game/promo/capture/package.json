@@ -1,0 +1,9 @@
+{
+  "name": "todeity-promo-capture",
+  "private": true,
+  "type": "module",
+  "description": "Frame-exact trailer, GIF and banner capture for Todeity (see game/DEVELOPMENT.md, Promo material)",
+  "devDependencies": {
+    "playwright-core": "1.48.2"
+  }
+}

@@ -157,7 +157,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Experience:** kills drop tea-leaf orbs (`components/Leaves.js`) that fly to Tode within his magnet range;
   every level is a pick of 3 **skills**, new ones or upgrades (24 skills, up to 6 slots, level 5 each). A mastered
   skill (level 5) casts twice (`MASTERY_ECHO`), or cools down 30% faster if it lasts a while (`ECHOLESS`).
-  **Fusions** (`FUSIONS` in Skills.js, 13 of them): when both skills of a pair reach `FUSE_LEVEL` (4), a rainbow
+  **Fusions** (`FUSIONS` in Skills.js, 13 of them): when both skills of a pair reach `FUSE_LEVEL` (3; 4 until v0.24), a rainbow
   fusion card takes the first offer; picking it replaces the two slots with one fused skill (levels 1–3, `vlevel`
   maps a fusion level onto the old classes' levels). Fusions live in `SKILLS` too (`fusion: true`), so co-op replays
   and the HUD treat them like any skill; `power()` counts a fusion as the two skills it came from. Offers carry a
@@ -316,7 +316,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
-  23): milestones unlock by themselves from the progress (`unlock`), gift and kettle ones are stored in
+  27): milestones unlock by themselves from the progress (`unlock`), gift and kettle ones are stored in
   `progress.trinkets`. They stand around Tode on the title screen (`TitleGarden.js`, models in `TrinketModels.js`,
   placements in `progress.decor`, saved with `POST …/decor` via `saveDecor`). New ones place themselves
   (`syncTrinkets`, `meta.trinketsSeen` is local).
@@ -374,8 +374,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
   the Daily Brew and co-op. The level is sent to the leaderboard (`steep`) and shown there, in the HUD and on shares.
 - **Keepsakes** (`components/Keepsakes.js`, title screen): one trinket per run (`meta.keepsake`). The teacup is free,
-  the other 10 unlock with the harder achievements (`unlock`: Shogun, Mastery, Untouchable, Tea Scholar, Boiling
-  Over, Elite Hunter, Living Legend, Flawless, Empress, Bee-zebub), and the achievement toast says so. `apply({ stats, player,
+  the other 16 unlock with achievements (`unlock`: Shogun, Mastery, Untouchable, Living Legend, Boiling Over, Elite
+  Hunter, two Legendaries, Flawless, Empress, Bee-zebub, co-op, Whisker, six skills, the Daily Brew, and the garden's
+  tower and party), and the achievement toast says so. `apply({ stats, player,
   grant })`: `grant` holds the hooks for effects that aren't stats (a skill pick, a charm, starting Awakened…).
 - **Charms** (`components/Charms.js`): stacking trinkets, dropped by elites (35%, less after each drop in a wave), hives and held
   shrines (always), bosses (3, at least Uncommon) and plain bees (0.4%). They lie on the ground (`CharmDrops`, emoji
@@ -481,16 +482,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   shows the lobby with the code filled in (`openInvite()` at boot, which also strips the parameter). `index.html`
   has Open Graph / Twitter tags pointing at `public/og-image.jpg` (1200×630) with the absolute Azure URL, so a
   pasted link unfurls in Discord. Change those URLs if the game moves.
-- **Promo material:** `game/promo/` holds the trailer (MP4 for YouTube/X and a <10 MB one for Discord), a GIF and
-  banners. They were made by stepping the dev build frame by frame (`game.step(1/30)`), copying
-  `renderer.domElement` into a 2D canvas (cropped around Tode) and posting each JPEG to a small local receiver,
-  then adding captions and encoding with Pillow + ffmpeg. The DOM HUD isn't in those frames.
+- **Promo material:** `game/promo/` holds the trailer, GIFs and banners; see Promo material below for how they are
+  made.
 - **Versions:** `components/Changelog.js` lists every release, newest first; its first entry is the version shown
   on the title screen and in the 📜 What's new popup (title and pause menus). **Add an entry and bump
   `package.json` for every major change.** Popups use `hud.showModal()` over the current menu; while one is open
   Esc closes it and no other key reaches the game.
 - **Meta progression:** each run earns Golden Leaves (`leavesForRun`: mostly waves, bosses and victory; a wave-10
-  run pays ~35, a wave-20 run ~85, the whole Pantry of 8 upgrades costs ~6,000) for permanent upgrades in Tode's
+  run pays ~35, a wave-20 run ~85, the whole Pantry of 13 upgrades costs ~10,350) for permanent upgrades in Tode's
   Pantry (title screen),
   and Tode says a story line after each run. **Cloud saves** (`components/CloudSave.js`, `server/saves.js`): the
   server owns leaves, Pantry levels, achievements and run stats. Every browser gets a save code (`MINT-FROG-42`,
@@ -510,6 +509,51 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   level), fastest Bee-zebub (clear time; any run with a `clear`, also one that died later in endless) and a seeded
   **Daily Brew**. The run timer (top right) only counts
   fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`.
+
+## Promo material
+
+`game/promo/` (v0.25.2 footage, made Oct 16): `todeity-trailer-1080p.mp4` (58 s, YouTube), `-720p.mp4` (X, posts) and
+`-discord.mp4` (960×540, under 10 MB, plays inline); `todeity.gif` (12 s highlights, 7 MB) plus short GIFs of the
+chest, the ascension, the bosses and the garden; banners `todeity-banner-1200x630.jpg` (also `public/og-image.jpg`),
+`-1920x1080.png`, `-2400x1260.png` and the X header `todeity-header-1500x500.png`. MP4s and GIFs are gitignored (too
+big for the repo and the deploy); only the banners are committed.
+
+Everything is made by `promo/capture/` from the dev build, not by screen recording:
+
+- **Virtual time** (`vtime.js`, injected before the page loads): `setTimeout`, `setInterval`, `requestAnimationFrame`,
+  `performance.now` and `Date.now` follow a clock the harness advances, and `document.getAnimations()` is pinned to it,
+  so the game, the HUD's timers (dialogue typing, the chest reel) and the CSS animations all step exactly 1/30 s per
+  captured frame, however slow the capture. Frames include the DOM HUD.
+- **Harness** (`harness.mjs`, headless Chrome through `playwright-core`, port 9330; drive it with `node c.mjs`):
+  `reload` seeds `localStorage` (`meta-vet.json`: a veteran save with every achievement, so the garden is full and the
+  title shows the profile) and injects `pilot.js` (an autopilot adapted from `dev/bot.js`, one decision per frame,
+  keeps Tode at full health), `overlay.js` (trailer captions `__cap(title, sub, mode)`, the end card, hides toasts and
+  "LEVEL UP!") and `lib.js` (`ff(s)` fast-forward, `boss()`, `below`/`right` keep Tode beside the boss). `record` runs
+  a per-frame snippet, advances and screenshots. Viewport 1280×720 at 1.5× gives 1080p frames with a readable HUD.
+- **Scenes** (`scenes/NN-*.sh`, `scenes/render.sh` renders them all into `work/frames/`): each sets up a moment with
+  the dev helpers (`startWave`, `learn`, `setTier`, `ascend`, `levelUp`, `ultimate`, `spawn`, `event`…) and records a
+  fixed number of frames. Shot lengths are whole bars of the music: garden 2 bars (157 frames), battle 4 + 8 bars,
+  divine 4, boss 8, garden 2 + 2. `STILLS=1` renders clean 2560×1440 stills (no HUD or captions) for banners.
+- **Music** (`music.mjs`): the game's own sequencer (`Music.js`) rendered offline: `AudioContext` is swapped for an
+  `OfflineAudioContext` with a fake `currentTime`, and `music.play(song, intensity)` is switched at bar boundaries
+  (garden → battle 2 → battle 3 → divine → boss → garden). Peak-normalised; the trailer measures about -13 LUFS.
+- **Encoding** (`assemble.py` links the frames in order into `work/seq/`, `encode.sh` makes the three MP4s, `gifs.sh`
+  the GIFs with a per-GIF palette). Needs `ffmpeg`.
+- **Banners** (`banner.html`, rendered at any size by `banners.mjs`): three slanted gameplay panels (Ascend, Summon,
+  Bullet hell; stills copied into `work/banner/` as `ascend.jpg`, `summon.jpg`, `bullets.jpg`) and the seven frogs from
+  `lineup.sh`, which renders `/classes.html` on black and on white and takes the difference as alpha.
+
+```bash
+cd game/promo/capture && npm install                      # playwright-core; uses the installed Google Chrome
+npm run dev --prefix ../..                                  # the game on port 5179 (or set GAME_URL)
+node harness.mjs &                                          # then:
+bash scenes/render.sh && python3 assemble.py && node music.mjs '' work/trailer.wav && ./encode.sh && ./gifs.sh
+STILLS=1 bash scenes/render.sh 07 09 03 && bash lineup.sh   # pick stills, copy them into work/banner/
+node banners.mjs "$PWD/work/banner" '[["todeity-banner-1200x630.jpg",1200,630,"full"],["todeity-header-1500x500.png",1500,500,"header"]]'
+```
+
+Python needs Pillow and numpy for `lineup.sh` (`PYTHON=…`), ffmpeg can be given as `FFMPEG=…`. Scenes are written
+against the game as it is: when a wave, boss or menu changes, check the contact sheets before trusting a re-render.
 
 ## Graphics levels
 
@@ -595,7 +639,7 @@ server proxies `/ws` and `/api`).
 | `components/Leaves.js` | Tea-leaf experience orbs and the level curve (`leavesForLevel`). |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
 | `components/Ultimates.js` | Steeping Beam, Thunder Tea Storm, Summoning: Great Tode (and the teapot model). |
-| `components/Skills.js` | 14 skills (`SKILLS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting). |
+| `components/Skills.js` | 24 skills and 13 fusions (`SKILLS`, `FUSIONS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting). |
 | `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges, memories of past runs, voices) and the bosses' taunts. |
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
@@ -634,12 +678,12 @@ server proxies `/ws` and `/api`).
 | `components/Classes.js` | The frog classes: stats, starting kits, the chosen class and the class of the day. |
 | `components/DailyTwists.js` | The Daily Brew's trials and boons per day (no three.js: the server imports it). |
 | `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
-| `components/TrinketModels.js` | Procedural models of the 23 trinkets. |
+| `components/TrinketModels.js` | Procedural models of the 27 trinkets. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
 | `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
-| `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the five frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |
+| `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the seven frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |
 | `../server/server.js` | Node server: static hosting of `dist/`, `/api/scores` leaderboards (score, depth, speed, daily) and the co-op relay. |
 | `../server/saves.js` | `/api/save` cloud saves (`saves.json` in `DATA_DIR`): codes, run rewards, Pantry purchases, rate limits. |
 | `../server/store.js` | Safe JSON files: atomic writes, `.bak` and daily backups, refuses to start over a broken file. |
@@ -719,6 +763,9 @@ game.autoPause = false    // stop auto-pausing on window blur (needed for backgr
 game.persist = false      // don't save progress or the best score this session (use it before bot runs)
 game.meta.trinkets.push('duck'); game.syncGarden()  // test trinkets and rewards with changed progress
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
+game.levelUp(), game.offerBrews()  // open a skill pick or a brew offer now
+game.ascend(4)            // play the ascension cut-scene to a tier (game.setTier skips it)
+game.holdLevelUps = true  // level-ups wait for the wave's end, as in co-op (footage without pick screens)
 ```
 
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game
@@ -745,9 +792,11 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 
 ## Ideas / roadmap
 
-- Readability seen while making the trailer: the Sky Citadel at golden hour plus a high ascension form washes out
-  to near white (the Steeping Beam's white-out was toned down in v0.24.9). Tode himself is hard to spot inside the
-  God of Tea aura.
+- Readability seen while making the trailers (Oct 14 and Oct 16): the Sky Citadel at golden hour plus a high
+  ascension form washes out to near white, and so do the God of Tea cut-scene's burst in the garden and a Steeping
+  Beam in a bright arena (toned down in v0.24.9, still a haze). Tode himself is hard to spot inside the Golden and God
+  of Tea auras. The Underworld's bullets bloom into big white blobs. Kill-combo callouts ("Steeped!") sit right over
+  Tode in the middle of the screen.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant

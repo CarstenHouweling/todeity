@@ -4557,8 +4557,10 @@ function updateLeaves(delta) {
   }
   hud.setXp(leafXp / leavesForLevel(playerLevel), playerLevel, pendingLevels);
   // Solo: the game pauses for the pick right away. Co-op: the picks wait until the wave is cleared.
-  if (pendingLevels > 0 && !coop && phase === 'fighting' && fightTime > LEVEL_UP_DELAY && !player.downed) openLevelUp({ phase, timer: phaseTimer });
+  if (pendingLevels > 0 && !coop && !holdLevelUps && phase === 'fighting' && fightTime > LEVEL_UP_DELAY && !player.downed) openLevelUp({ phase, timer: phaseTimer });
 }
+
+let holdLevelUps = false; // dev: level-ups wait for the end of the wave, as in co-op (game.holdLevelUps, for footage)
 
 function levelUpEffects() {
   play('legendary');
@@ -8110,6 +8112,13 @@ if (import.meta.env.DEV) {
       player.ultimate = id;
       player.gauge = 100;
     },
+    // Menus and cut-scenes on demand (used for the promo footage): a skill pick, a brew offer, an ascension.
+    levelUp: () => openLevelUp(),
+    set holdLevelUps(value) {
+      holdLevelUps = value;
+    },
+    offerBrews: () => offerBrews(),
+    ascend: (tier) => startAscension(tier),
     // Advances the game without relying on requestAnimationFrame (paused in hidden tabs).
     step: (seconds, dt = 1 / 60) => {
       for (let t = 0; t < seconds; t += dt) frame(dt, t + dt >= seconds);
