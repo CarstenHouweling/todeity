@@ -676,7 +676,7 @@ export class Hud {
   }
 
   damageNumber(position, amount, height = 20, className = '') {
-    if (this.damageNumbers.length > 80) return;
+    if (this.damageNumbers.length > (isTouch() ? 40 : 80)) return; // each one is a DOM node moved every frame
     const node = element(`damage-number ${className}`, this.worldLayer);
     node.textContent = amount;
     this.damageNumbers.push({ node, position: position.clone().setZ(height), age: 0 });
@@ -1766,11 +1766,13 @@ ${ meta.runs > 0 ? '' :
   // --- World-anchored labels ----------------------------------------------
 
   /** Places a DOM node over a world position. Returns false when it is off screen. */
-  place(node, position, height) {
+  /** `cull`: false (and nothing written) when the spot is off the screen. */
+  place(node, position, height, cull = false) {
     const p = this.projected.set(position.x, position.y, height).project(this.camera);
     if (p.z > 1) return false;
     const x = ((p.x + 1) / 2) * viewWidth();
     const y = ((1 - p.y) / 2) * viewHeight();
+    if (cull && (x < -80 || y < -40 || x > viewWidth() + 80 || y > viewHeight() + 120)) return false;
     node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     return true;
   }
@@ -1780,7 +1782,7 @@ ${ meta.runs > 0 ? '' :
     for (const enemy of enemies) {
       if (!enemy.healthBar) continue;
       const { bar, fill } = enemy.healthBar;
-      const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite || enemy.type.label || enemy.labelText) && this.place(bar, enemy.position, enemy.height + 8);
+      const visible = !enemy.dying && (enemy.hp < enemy.maxHp || enemy.elite || enemy.type.label || enemy.labelText) && this.place(bar, enemy.position, enemy.height + 8, true); // a big swarm: most bars are off screen
       setStyle(bar, 'display', visible ? '' : 'none');
       if (visible) setStyle(fill, 'width', `${((Math.max(0, enemy.hp) / enemy.maxHp) * 100).toFixed(1)}%`);
     }

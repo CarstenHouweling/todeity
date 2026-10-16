@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { GardenAura } from './GardenAuras.js';
+import { rankTier } from './Rewards.js';
 
 /**
  * The garden's own effects (GardenHub.js): what emotes, trinkets and the level aura show. Short-lived things live in
@@ -441,97 +443,37 @@ export class GardenFx {
     });
   }
 
-  // --- The level aura: how far a frog has come, always on, quietly ---------------------------------------------
+  // --- The level aura: how far a frog has come, always on -------------------------------------------------------
   /**
-   * A frog's account level as a permanent aura (`parent`: the frog's group, so it follows him): stages at the
-   * ranks' levels (3, 6, 10, 15, 20, 30). Returns { group, update(delta, position) } or null below level 3.
+   * A frog's account level as a permanent aura (`parent`: the frog's group, so it follows him; `height`: the frog's,
+   * for the halo). The looks are a GardenAura (GardenAuras.js), one more layer per rank; a Todeity also gets the
+   * turning rune circle. Returns { group, stage, update(delta, position, { moving, hop }), dispose } or null below
+   * level 3.
    */
-  levelAura(level, parent) {
-    const stage = auraStage(level);
-    if (!stage) return null;
-    const look = AURA_LOOKS[stage];
-    const group = new THREE.Group();
-    group.userData.levelAura = stage;
-    parent.add(group);
-    const parts = { motes: [] };
-    if (look.ring) {
-      parts.ring = new THREE.Mesh(new THREE.RingGeometry(14, 16.5, 48), additive(look.ring, look.ringOpacity));
-      parts.ring.position.z = 0.6;
-      group.add(parts.ring);
-    }
-    if (look.dashes) {
-      // A turning ring of short dashes just outside it.
-      const dashes = new THREE.Group();
-      for (let i = 0; i < 14; i++) {
-        const dash = new THREE.Mesh(new THREE.RingGeometry(19, 20.4, 3, 1, (i / 14) * Math.PI * 2, 0.22), additive(look.dashes, 0.32));
-        dashes.add(dash);
-      }
-      dashes.position.z = 0.65;
-      parts.dashes = dashes;
-      group.add(dashes);
-    }
-    if (look.runes) {
-      parts.runes = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), additive(look.runes, 0.24, { map: runes() }));
-      parts.runes.position.z = 0.55;
-      group.add(parts.runes);
-    }
-    if (look.halo) {
-      parts.halo = new THREE.Mesh(new THREE.TorusGeometry(6.5, 0.32, 8, 40), additive(look.halo, 0.6));
-      parts.halo.position.z = 34;
-      group.add(parts.halo);
-    }
-    for (let i = 0; i < look.motes; i++) {
-      const mote = spriteOf(glow(), look.moteColors[i % look.moteColors.length], true);
-      mote.userData = { angle: (i / look.motes) * Math.PI * 2, radius: 13 + Math.random() * 10, height: 6 + Math.random() * 24, speed: 0.5 + Math.random() * 0.5, phase: Math.random() * 10, size: 2.2 + Math.random() * 1.6 };
-      group.add(mote);
-      parts.motes.push(mote);
+  levelAura(level, parent, height = 30) {
+    const aura = new GardenAura(rankTier(level), { height, particles: this.particles });
+    if (!aura.look) return null;
+    aura.group.userData.levelAura = aura.tier;
+    parent.add(aura.group);
+    let circle = null;
+    if (aura.tier >= 6) {
+      circle = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), additive('#ffe9a0', 0.22, { map: runes() }));
+      circle.position.z = 0.5;
+      aura.group.add(circle);
     }
     let time = Math.random() * 10;
-    let emit = 0;
     return {
-      group,
-      stage,
-      update: (delta, position) => {
+      group: aura.group,
+      stage: aura.tier,
+      update: (delta, position, state) => {
         time += delta;
-        if (parts.ring) parts.ring.material.opacity = look.ringOpacity * (0.75 + 0.25 * Math.sin(time * 1.6));
-        if (parts.dashes) parts.dashes.rotation.z = time * 0.35;
-        if (parts.runes) parts.runes.rotation.z = -time * 0.15;
-        if (parts.halo) {
-          parts.halo.position.z = 34 + Math.sin(time * 1.8) * 0.8;
-          parts.halo.rotation.z = time * 0.5;
-        }
-        for (const mote of parts.motes) {
-          const d = mote.userData;
-          const a = d.angle + time * d.speed;
-          mote.position.set(Math.cos(a) * d.radius, Math.sin(a) * d.radius, d.height + Math.sin(time * 1.3 + d.phase) * 4);
-          mote.scale.setScalar(d.size * (0.6 + 0.4 * Math.sin(time * 3 + d.phase) ** 2));
-        }
-        // Now and then a tea leaf or a spark drifts up.
-        if (look.rise && (emit -= delta) <= 0) {
-          emit = look.rise[0] * (0.7 + Math.random() * 0.6);
-          this.particles?.burst(position, { count: 1, colors: look.rise[1], speed: 8, up: 26, gravity: -6, size: 1.5, height: 4, ring: 14, life: 1.8, glow: true });
-        }
+        aura.update(time, delta, position, state);
+        if (circle) circle.rotation.z = -time * 0.15;
       },
-      dispose: () => dispose(group),
+      dispose: () => {
+        if (circle) dispose(circle); // (its texture is shared and stays)
+        aura.dispose();
+      },
     };
   }
 }
-
-/** Which aura stage a level gets (0: none). */
-export const auraStage = (level) => [3, 6, 10, 15, 20, 30].filter((at) => level >= at).length;
-
-const AURA_LOOKS = [
-  null,
-  // 3+ Pond Hopper: a few fireflies.
-  { motes: 3, moteColors: ['#d8ff8a'] },
-  // 6+ Leaf Brewer: a soft green ring, tea leaves drifting up.
-  { motes: 4, moteColors: ['#d8ff8a', '#9be86a'], ring: '#7ed957', ringOpacity: 0.2, rise: [1.6, ['#9be86a', '#c8f77a']] },
-  // 10+ Tea Adept: golden, with a turning ring of dashes.
-  { motes: 6, moteColors: ['#ffe680', '#fff3c4'], ring: '#ffd36b', ringOpacity: 0.22, dashes: '#ffd36b', rise: [1.1, ['#ffe680', '#ffffff']] },
-  // 15+ Kettle Master: jade and gold, more sparks.
-  { motes: 8, moteColors: ['#7ff0d0', '#ffe680'], ring: '#7ff0d0', ringOpacity: 0.24, dashes: '#ffe680', rise: [0.7, ['#7ff0d0', '#ffffff']] },
-  // 20+ Tea Sage: a little halo.
-  { motes: 9, moteColors: ['#fff2c0', '#ffffff'], ring: '#ffe9a0', ringOpacity: 0.26, dashes: '#ffffff', halo: '#ffe9a0', rise: [0.55, ['#fff2c0', '#ffffff']] },
-  // 30+ Todeity: violet starlight and a rune circle.
-  { motes: 12, moteColors: ['#c8b0ff', '#ffffff', '#9fd8ff'], ring: '#c8b0ff', ringOpacity: 0.26, dashes: '#ffffff', halo: '#e0d0ff', runes: '#c8b0ff', rise: [0.4, ['#c8b0ff', '#ffffff']] },
-];

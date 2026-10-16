@@ -46,15 +46,20 @@ export class Leaves {
         phase: Math.random() * 10,
         pulled: false,
         speed: 0,
+        age: 0,
       });
     }
   }
 
-  /** Bobs, magnetises and collects; returns the value Tode picked up this frame. */
-  update(delta, target, magnet, pickup = 14) {
+  /**
+   * Bobs, magnetises and collects; returns the value Tode picked up this frame. Leaves older than `pullAfter`
+   * seconds fly to Tode wherever they lie (co-op: teammates' kills drop leaves all over the arena).
+   */
+  update(delta, target, magnet, pickup = 14, pullAfter = Infinity) {
     this.time += delta;
     let collected = 0;
     for (const leaf of this.list) {
+      if ((leaf.age += delta) > pullAfter) leaf.pulled = true;
       // Pop out, then settle just above the ground.
       if (leaf.z > 6 || leaf.vz > 0) {
         leaf.vz -= 260 * delta;

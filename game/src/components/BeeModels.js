@@ -58,7 +58,7 @@ const quaternion = new THREE.Quaternion();
 const matrix = new THREE.Matrix4();
 
 /** A coloured, transformed, non-indexed piece, ready to merge. */
-function piece(geometry, color, { position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1] } = {}) {
+export function piece(geometry, color, { position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1] } = {}) {
   const g = geometry.index ? geometry.toNonIndexed() : geometry;
   if (g !== geometry) geometry.dispose();
   g.deleteAttribute('uv');
@@ -72,7 +72,7 @@ function piece(geometry, color, { position = [0, 0, 0], rotation = [0, 0, 0], sc
   return g;
 }
 
-const merge = (pieces) => (pieces.length ? mergeGeometries(pieces) : null);
+export const merge = (pieces) => (pieces.length ? mergeGeometries(pieces) : null);
 const mix = (a, b, t) => `#${tmpColor.set(a).lerp(new THREE.Color(b), t).getHexString()}`;
 
 /** Leg: upper and lower segment from the thorax down to the ground. */

@@ -4,6 +4,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
 import { buildBee, buildNest, buildWard } from './BeeModels.js';
+import { buildDevil } from './DevilModel.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
@@ -99,6 +100,7 @@ export const ENEMY_TYPES = {
     boss: true,
     attackDelayScale: 0.6,
     hellfire: true,
+    devil: true, // his own model at every graphics level (DevilModel.js)
   },
 };
 
@@ -261,6 +263,11 @@ export class Enemy {
       model = this.rig.root;
       model.scale.setScalar(type.scale / ENEMY_TYPES.drone.scale);
       this.materials.push(...this.rig.materials);
+    } else if (type.devil) {
+      this.rig = buildDevil(graphicsLevel);
+      model = this.rig.root;
+      model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
+      this.materials.push(...this.rig.materials);
     } else if (graphicsLevel > 0) {
       // A new species for every arena after the garden (see BeeModels.js).
       this.rig = buildBee(type.model ?? kind, graphicsLevel);
@@ -290,7 +297,8 @@ export class Enemy {
     model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(model, true);
     model.position.z = -box.min.z;
-    this.height = box.max.z - box.min.z;
+    // (a rig may name its body's height, so a raised weapon doesn't puff up the shield bubble and lift the bars)
+    this.height = this.rig?.height ? this.rig.height * model.scale.x : box.max.z - box.min.z;
 
     this.model = model;
     this.group.add(model);

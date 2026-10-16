@@ -2265,6 +2265,12 @@ body.touch .menu .prompt {
   opacity: 0.9;
 }
 
+/* A garden frog's account level, under its name (its rank also shows as an aura, see GardenAuras.js). */
+.world-label .frog-level {
+  color: #ffe9a0;
+  font-weight: 600;
+}
+
 .keepsakes,
 .steeping {
   cursor: default;

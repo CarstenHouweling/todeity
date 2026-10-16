@@ -13,7 +13,7 @@ export class Bullets {
   constructor(scene, max = 900) {
     this.max = max;
     this.list = [];
-    const sphere = new THREE.SphereGeometry(1, 14, 10);
+    const sphere = new THREE.SphereGeometry(1, 10, 7); // a dot a few pixels wide: 126 triangles, three layers of hundreds
     this.core = new THREE.InstancedMesh(sphere, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.2, 2.2) }), max);
     this.halo = new THREE.InstancedMesh(
       sphere,

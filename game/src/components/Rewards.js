@@ -153,6 +153,9 @@ const RANKS = [
   [30, 'Todeity'],
 ];
 
+/** A level's rank as a number, 0 (Tadpole) to 6 (Todeity): garden auras grow with it (GardenAuras.js). */
+export const rankTier = (level) => Math.max(0, RANKS.findLastIndex(([at]) => level >= at));
+
 /** How much someone has played: { level, rank, progress (0–1 to the next level), xp }. */
 export function accountLevel(progress) {
   const xp =

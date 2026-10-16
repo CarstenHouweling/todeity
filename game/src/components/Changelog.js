@@ -3,6 +3,20 @@
 
 export const CHANGELOG = [
   {
+    version: '0.26.2',
+    date: '2026-10-16',
+    title: 'The Devil himself',
+    changes: [
+      '😈 Bee-zebub shows his true form: a winged devil with curling horns, a hellfire trident, goat legs and a spade-tipped tail. He raises the trident before he strikes, leans into his charges and slumps when you stagger him',
+      '🌟 Bolder level auras in the gardens: a glowing ring, circling tea leaves and a puff of leaves where you land, fireflies, rising steam and golden sparks, a halo, and for a Todeity a crown of light, a golden pillar and the rune circle',
+      '🐸 Hopping around a busy garden keeps its pace on slower phones',
+      '👥 Smoother co-op on phones: about 70% less network traffic (fewer, merged and rounded messages for hits and spits), bees and spits only check their neighbours, the host no longer draws numbers for everyone\'s hits, and phones start a co-op run on lighter graphics',
+      '🔥 Co-op: a teammate whose fall into the Underworld ends a moment after the host\'s no longer gets stuck in the old arena when Bee-zebub appears',
+      '🍃 Co-op: tea leaves from your teammates\' kills fly to you after a moment instead of piling up all over the arena, and leaves no longer freeze in mid-air while you are down',
+      '⏸ Phones: the pause menu\'s buttons work in co-op (the thumbsticks no longer catch the taps)',
+    ],
+  },
+  {
     version: '0.26.1',
     date: '2026-10-16',
     title: 'Sideways is better',

@@ -438,6 +438,9 @@ const mirrors = new Map(); // guest: netId → mirrored Enemy
 const isGuest = () => Boolean(coop && !coop.host);
 /** Shares a message with every other player (no-op when playing alone). */
 const share = (message) => coop && net.queue('all', message);
+// Network messages carry rounded numbers: a full double is 18 characters of JSON.
+const round2 = (v) => Math.round(v * 100) / 100;
+const round3 = (v) => Math.round(v * 1000) / 1000;
 let ascendingTo = 0;
 
 function safeStorage(op, key, value) {
@@ -677,16 +680,62 @@ function targetTodeFor(position, lured = true) {
   return best;
 }
 
-function enemyBlocker(enemy) {
+/** `nearby`: only ask the bees in the grid around the spot (moving bees; see buildBeeGrid), not every bee. */
+function enemyBlocker(enemy, nearby = false) {
   const todes = standingTodes();
-  return (position) =>
-    !isInsideMap(position, enemy.radius) ||
-    todes.some((tode) => closingIn(enemy.position, position, enemy.radius, tode.position, player.radius)) ||
-    enemies.some(
-      (other) =>
-        other !== enemy && !other.dying && closingIn(enemy.position, position, enemy.radius, other.position, other.radius)
+  let to = null;
+  const blocks = (other) => other !== enemy && !other.dying && closingIn(enemy.position, to, enemy.radius, other.position, other.radius);
+  return (position) => {
+    to = position;
+    return (
+      !isInsideMap(position, enemy.radius) ||
+      todes.some((tode) => closingIn(enemy.position, position, enemy.radius, tode.position, player.radius)) ||
+      (nearby ? beesNear(position, blocks) : enemies.some(blocks))
     );
+  };
 }
+
+// A grid of the bees, rebuilt every frame before they move, so a step only checks its neighbours: every bee asking
+// every other bee (up to 9 tries a step) cost the host 3.3 ms a frame with 180 bees on a Mac, several times that on
+// a phone. A cell is wider than any two grid bees' radii, so the 3×3 cells around a spot hold every bee it could
+// touch; bigger ones (bosses) are always asked.
+const BEE_CELL = 160;
+const BIG_BEE = 60;
+const beeGrid = new Map();
+const bigBees = [];
+const beeCell = (x, y) => (Math.floor(x / BEE_CELL) + 1024) * 2048 + Math.floor(y / BEE_CELL) + 1024;
+
+function buildBeeGrid() {
+  beeGrid.clear();
+  bigBees.length = 0;
+  for (const enemy of enemies) {
+    if (enemy.dying) continue;
+    if (enemy.radius > BIG_BEE) {
+      bigBees.push(enemy);
+      continue;
+    }
+    const key = beeCell(enemy.position.x, enemy.position.y);
+    const cell = beeGrid.get(key);
+    if (cell) cell.push(enemy);
+    else beeGrid.set(key, [enemy]);
+  }
+}
+
+/** The first bee that could touch `position` and passes `test` (or undefined). */
+function beeNear(position, test) {
+  let found = bigBees.find(test);
+  if (found) return found;
+  const key = beeCell(position.x, position.y);
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      found = beeGrid.get(key + dx * 2048 + dy)?.find(test);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+const beesNear = (position, test) => beeNear(position, test) !== undefined;
 
 // When the way ahead is blocked, bees try turning by these angles (radians) to get around it.
 const STEER_ANGLES = [0, 0.5, -0.5, 1, -1, 1.5, -1.5];
@@ -697,7 +746,7 @@ const push = new THREE.Vector3();
  * Knockback and wind are applied separately, so they never get steered.
  */
 function moveEnemy(enemy, vx, vy, delta) {
-  const isBlocked = enemyBlocker(enemy);
+  const isBlocked = enemyBlocker(enemy, true);
   const { position } = enemy;
   push.copy(enemy.knockback).addScaledVector(weather.wind, WIND_PUSH);
   if (push.lengthSq() > 1) slide(position, push.x * delta, push.y * delta, isBlocked);
@@ -835,14 +884,13 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   damage = Math.max(1, Math.round(damage));
   const procs = !fromTeammate && charmCounts.size > 0 && PROC_SOURCES.has(source) && procScale > 0.15;
 
-  if (isGuest()) {
-    net.queue('host', { k: 'hit', id: enemy.netId, dm: damage, kx: direction ? direction.x * force : 0, ky: direction ? direction.y * force : 0 });
-  }
+  if (isGuest()) queueHit(enemy.netId, damage, direction, force);
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
   if (source !== 'burn' && !fromTeammate) play('hit');
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate && !steady) hitStop(0.045);
-  hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
+  // (a teammate's hits show as numbers on their own screen)
+  if (!fromTeammate) hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
   // The gauge fills per bee's worth of health, not per raw damage: late-game hits are huge, bees too.
   if (source !== 'ultimate' && !fromTeammate) addGauge((landed * GAUGE_PER_DAMAGE) / (config?.hpScale ?? 1));
   if (procs) charmHit(enemy, amount, crit);
@@ -1235,7 +1283,7 @@ function launchStinger(origin, direction, speed, quiet = false, range = STINGER.
 /** A stinger that isn't fired by a bee (curtains, curses, arena events), launched for everyone. */
 function sharedStinger(origin, direction, speed, quiet = false, range = STINGER.range * 1.6) {
   launchStinger(origin, direction, speed, quiet, range);
-  share({ k: 'sting', o: [origin.x, origin.y], d: [direction.x, direction.y], s: speed, q: quiet, r: range });
+  share({ k: 'sting', o: [Math.round(origin.x), Math.round(origin.y)], d: [round3(direction.x), round3(direction.y)], s: Math.round(speed), q: quiet, r: Math.round(range) });
 }
 
 const fanDirection = new THREE.Vector3();
@@ -2932,6 +2980,7 @@ function updateEnemies(delta) {
     updateMirrors(delta);
     return;
   }
+  buildBeeGrid();
   updateTactics(delta);
   for (const enemy of [...enemies]) {
     enemy.update(delta);
@@ -3219,7 +3268,12 @@ function fireSpit(origin, direction, damage, { child = false, hits, helper = fal
   if (hits) hits.forEach((enemy) => projectile.hits.add(enemy));
   projectiles.push(projectile);
   scene.add(projectile.mesh);
-  share({ k: 'spit', o: [origin.x, origin.y], d: [direction.x, direction.y], s: projectile.speed, r: projectile.range, rad: projectile.radius, st: style });
+  // Teammates only see our spits (they hit nothing there): split-off children stay home and a fast build is thinned
+  // out (see SPIT_SHARE).
+  if (coop && !child && spitShareBudget >= 1) {
+    spitShareBudget--;
+    share({ k: 'spit', o: [Math.round(origin.x), Math.round(origin.y)], d: [round2(direction.x), round2(direction.y)], s: Math.round(projectile.speed), r: Math.round(projectile.range), rad: round2(projectile.radius), st: style });
+  }
 }
 const BOLT_TRAIL = ['#e0d0ff', '#b48cff', '#ffffff'];
 
@@ -3316,6 +3370,7 @@ function steer(projectile, delta) {
 }
 
 function updateProjectiles(delta) {
+  buildBeeGrid(); // (the host builds it again once the bees have moved)
   for (const projectile of [...projectiles]) {
     if (projectile.homing) steer(projectile, delta);
     projectile.update(delta);
@@ -3340,7 +3395,8 @@ function updateProjectiles(delta) {
       }
       continue;
     }
-    const target = enemies.find(
+    const target = beeNear(
+      projectile.position,
       (enemy) =>
         !enemy.dying &&
         !projectile.hits.has(enemy) &&
@@ -4373,7 +4429,12 @@ function gardenPhoto() {
   helpers.forEach((mesh, i) => (mesh.visible = shown[i]));
 }
 
-function gardenKeys(delta) {
+// Hopping in a garden keeps its pace on a slow phone: the frame's real time (up to a quarter of a second) in small
+// steps. The game's 0.1 s cap made a frog at 5 fps hop at half speed (visitors in a busy garden said so).
+const WALK_FRAME_MAX = 0.25;
+const WALK_STEP = 1 / 30;
+
+function gardenKeys(delta, elapsed = delta) {
   const axis = (plus, minus) => (input.isHeld(...plus) ? 1 : 0) - (input.isHeld(...minus) ? 1 : 0);
   if (garden.walking) {
     // Hop where the stick or WASD points, as seen from the camera.
@@ -4381,7 +4442,11 @@ function gardenKeys(delta) {
     const yaw = garden.view.yaw;
     moveWanted.set(-Math.sin(yaw) * moveAxis.x - Math.cos(yaw) * moveAxis.y, Math.cos(yaw) * moveAxis.x - Math.sin(yaw) * moveAxis.y, 0);
     if (moveWanted.lengthSq() > 1) moveWanted.normalize();
-    hub.update(delta, moveWanted, input.wasPressed('Space', 'ShiftLeft', 'ShiftRight'), !settingOff);
+    let jump = input.wasPressed('Space', 'ShiftLeft', 'ShiftRight');
+    for (let left = Math.min(Math.max(elapsed, delta), WALK_FRAME_MAX); left > 1e-4; left -= WALK_STEP) {
+      hub.update(Math.min(left, WALK_STEP), moveWanted, jump, !settingOff);
+      jump = false;
+    }
     if (input.wasPressed('Escape')) closeGarden();
     if (input.wasPressed('KeyF')) MENU_ACTIONS['garden-invite']();
     if (input.wasPressed('KeyR')) MENU_ACTIONS['garden-ready']();
@@ -4547,8 +4612,11 @@ function dropLeaves(enemy) {
   leaves.drop(enemy.position, value, enemy.type.boss ? 30 : Math.min(5, Math.ceil(value)));
 }
 
+// Co-op: leaves from teammates' kills far away fly over after a while instead of piling up until the wave ends.
+const COOP_LEAF_PULL = 2.5;
+
 function updateLeaves(delta) {
-  const collected = leaves.update(delta, player.position, player.downed ? 0 : player.stats.magnet);
+  const collected = leaves.update(delta, player.position, player.downed ? 0 : player.stats.magnet, 14, coop && !player.downed ? COOP_LEAF_PULL : Infinity);
   if (collected > 0) {
     leafXp += collected * player.stats.leafValue;
     play('pop');
@@ -4730,6 +4798,7 @@ function updateTravel(delta) {
     lift(0);
     hud.hideBossIntro();
     beginWave(travel.wave, travel.weather, travel.mods);
+    if (pendingIntro !== null) guestBossIntro(pendingIntro); // the host's boss came while we were on our way
   }
 }
 
@@ -5260,7 +5329,7 @@ function dropHazard(extraDelay) {
   const kind = plan.kind === 'lightning' ? 'meteor' : plan.kind;
   const options = { kind, radius: plan.radius ?? 60, damage: plan.damage ?? 16, delay: 1.25 + extraDelay };
   effects.meteor(spot, options);
-  share({ k: 'meteor', p: [spot.x, spot.y], o: options });
+  share({ k: 'meteor', p: [Math.round(spot.x), Math.round(spot.y)], o: options });
 }
 
 // --- Arena events: patterns of stingers that sweep the whole field, to dodge or hop-dash through ---------------
@@ -6184,6 +6253,42 @@ function remoteCtx(remote, aim) {
   };
 }
 
+// A guest's hits and statuses wait until the next send, merged per bee: a late-game build lands hundreds of hits a
+// second, and every message is work for the host (3 players on phones lagged).
+const pendingHits = new Map(); // netId → { k: 'hit', id, dm, kx, ky }
+const pendingStatuses = new Map(); // `${netId}:${type}` → the latest status message
+const HIT_RATE = 20; // hit batches per second
+let hitTimer = 0;
+// A late-game build spits 150–250 times a second, and every shared spit is a projectile on each teammate's screen
+// (a 3-player Bee-zebub fight measured ~400 replayed spits a second per screen and 60% of the traffic): at most
+// `rate` a second go out, in bursts of up to `burst` (a fan of spits).
+const SPIT_SHARE = { rate: 40, burst: 12 };
+let spitShareBudget = SPIT_SHARE.burst;
+
+function queueHit(id, damage, direction, force) {
+  const hit = pendingHits.get(id) ?? { k: 'hit', id, dm: 0, kx: 0, ky: 0 };
+  hit.dm += damage;
+  if (direction) {
+    hit.kx += direction.x * force;
+    hit.ky += direction.y * force;
+  }
+  pendingHits.set(id, hit);
+}
+
+function sendPendingHits() {
+  for (const hit of pendingHits.values()) {
+    hit.kx = Math.round(hit.kx);
+    hit.ky = Math.round(hit.ky);
+    net.queue('host', hit);
+  }
+  for (const status of pendingStatuses.values()) net.queue('host', status);
+  pendingHits.clear();
+  pendingStatuses.clear();
+}
+
+/** Host snapshots per second: fewer for a big swarm (the mirrors glide between them anyway). */
+const snapshotRate = () => (enemies.length > 80 ? SNAPSHOT_RATE * 0.67 : SNAPSHOT_RATE);
+
 function snapshot() {
   const flags = (enemy) =>
     (enemy.dying ? 1 : 0) |
@@ -6208,7 +6313,7 @@ function snapshot() {
       Math.round(enemy.position.y),
       Math.round(enemy.model.rotation.y * 100) / 100,
       Math.ceil(enemy.hp),
-      enemy.maxHp,
+      Math.ceil(enemy.maxHp),
       flags(enemy),
     ]),
     z: circleShare(),
@@ -6222,17 +6327,28 @@ function createMirror(id, kind, elite, x, y) {
   enemy.position.set(x, y, 0);
   enemy.glowColor.set(kind === 'stinger' ? 0xd18cff : 0xff3b1f);
   // Burns and chills we cause are the host's business too.
-  enemy.onStatus = (type, a, b) => net.queue('host', { k: 'st', id, t: type, a, b });
+  enemy.onStatus = (type, a, b) => pendingStatuses.set(`${id}:${type}`, { k: 'st', id, t: type, a, b });
   enemies.push(enemy);
   mirrors.set(id, enemy);
   scene.add(enemy.group);
   if (!enemy.type.boss) hud.attachHealthBar(enemy);
   if (enemy.type.ward || kind === 'guardian') claimOwner(enemy);
-  if (pendingIntro === id) {
-    pendingIntro = null;
-    startBossIntro(enemy);
-  }
+  if (pendingIntro === id) guestBossIntro(id);
   return enemy;
+}
+
+/**
+ * Guests: the host's boss intro, once the boss's mirror exists and our own travel has landed. A slow phone's travel
+ * ends after the host's: the intro used to cut it short, and that guest stayed in the old arena on the old wave.
+ */
+function guestBossIntro(id) {
+  const boss = mirrors.get(id);
+  if (!boss || phase === 'travel') {
+    pendingIntro = id;
+    return;
+  }
+  pendingIntro = null;
+  startBossIntro(boss);
 }
 
 function applySnapshot(snap) {
@@ -6396,8 +6512,7 @@ function handleNet(from, message) {
       if (phase === 'waiting') hud.setWaiting(message.r, message.t);
       break;
     case 'bossIntro':
-      if (mirror()) startBossIntro(mirror());
-      else pendingIntro = message.id;
+      guestBossIntro(message.id);
       break;
     case 'fin':
       finisher(message.big);
@@ -6629,6 +6744,11 @@ function hostStartCoop() {
 function startCoopRun(players, sharedVows = {}) {
   leaveCoop({ keepConnection: true });
   coop = { host: net.isHost, remotes: new Map(), ready: new Set(), size: players.length };
+  pendingHits.clear();
+  pendingStatuses.clear();
+  // Phones on Auto graphics: a team's swarm is bigger and every teammate's skills play here too, so start lighter
+  // (no bloom or shadows; Low with 3 or more frogs) instead of stuttering until the frame rate check steps down.
+  if (touch.enabled && settings.graphics === 'auto') stepTo(players.length >= 3 ? LOW_STEP : 3);
   roomPresent = new Set(players.map((p) => p.id));
   lastWaveShare = null;
   waveClearedShared = false;
@@ -6782,13 +6902,18 @@ function updateCoop(realDelta, delta) {
   if (coop.host) {
     snapshotTimer -= realDelta;
     if (snapshotTimer <= 0 && PLAYING.has(phase)) {
-      snapshotTimer = 1 / SNAPSHOT_RATE;
+      snapshotTimer = 1 / snapshotRate();
       share(snapshot());
     }
     if (phase === 'waiting' && coop.ready.size && clock.elapsedTime - readySince > READY_TIMEOUT) {
       coop.ready = new Set([net.id, ...coop.remotes.keys()]);
       markReady(null);
     }
+  }
+  spitShareBudget = Math.min(SPIT_SHARE.burst, spitShareBudget + realDelta * SPIT_SHARE.rate);
+  if (isGuest() && (hitTimer -= realDelta) <= 0) {
+    hitTimer = 1 / HIT_RATE;
+    sendPendingHits();
   }
   net.flush();
 }
@@ -7738,9 +7863,13 @@ function updateGame(delta) {
   // Raid targets first (they matter most), then the arena's objective.
   hud.setObjectiveArrows([...raidTargets(), ...objectiveArrows]);
   for (const charm of charmDrops.update(delta, player.position, !player.downed)) gainCharm(charm);
+  lap('waves, hazards, events, boss mechanics');
   if (player.downed) {
+    updateLeaves(delta); // or they freeze in mid-air
     updateEnemies(delta);
+    lap('bees');
     updateEnemyProjectiles(delta);
+    lap('bullets');
     updateScore();
     return;
   }
@@ -7786,16 +7915,23 @@ function updateGame(delta) {
   comboTimer -= delta;
   if (comboTimer <= 0) combo = 0;
   hud.setCombo(combo);
+  lap('own Tode: aim, spit, dash, bombs');
 
   updatePowers(delta);
   updateDecoys(delta);
   updateCompanions(delta);
+  lap('brews, decoys, companions');
   skills.update(delta);
+  lap('skills');
   updateProjectiles(delta);
   updateBombs(delta);
+  lap('spits (own and teammates\')');
   updateLeaves(delta);
+  lap('leaves');
   updateEnemies(delta);
+  lap('bees');
   if (phase !== 'gameover') updateEnemyProjectiles(delta);
+  lap('bullets');
   if (ultimateEffect && !effects.list.includes(ultimateEffect)) ultimateEffect = null;
   updateScore();
 
@@ -7810,7 +7946,21 @@ function updateGame(delta) {
   updateHealth();
 }
 
-function frame(realDelta, render = true) {
+// Dev: `game.profile()` times the sections of a frame (`lap` marks the end of one; a no-op unless profiling).
+const profiler = { on: false, last: 0, totals: {}, frames: 0 };
+function lap(label) {
+  if (!profiler.on) return;
+  const now = performance.now();
+  profiler.totals[label] = (profiler.totals[label] ?? 0) + now - profiler.last;
+  profiler.last = now;
+}
+
+/** `elapsed`: the real time since the last frame, uncapped (the game itself steps at most 0.1 s at a time). */
+function frame(realDelta, render = true, elapsed = realDelta) {
+  if (profiler.on) {
+    profiler.last = performance.now();
+    profiler.frames++;
+  }
   // Game time can run slower than real time (slow motion, hit-stop); menus and the camera use real time.
   const delta = phase === 'paused' ? realDelta : realDelta * timeScale(realDelta);
   // A popup (changelog, share card) takes the keyboard: Esc closes it, nothing else reaches the game.
@@ -7846,14 +7996,16 @@ function frame(realDelta, render = true) {
     updateStory(realDelta);
     if (storyTime > 0.5 && (input.pressed.size > 0 || input.primaryDown)) endStory();
   } else if (phase === 'title' && decorating) {
-    gardenKeys(realDelta);
+    gardenKeys(realDelta, elapsed);
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
     if (phase === 'title' && !meta.seenStory) startStory();
     else startRun();
   }
   if (input.wasPressed('KeyM')) toggleMute();
   if (input.wasPressed('KeyC')) (decorating ? gardenPhoto() : takePhoto());
+  lap('phase: play, cut-scenes, garden frogs');
   updateGarden(realDelta);
+  lap('garden: trinkets, title');
 
   // The world keeps living while menus are open (except when paused).
   if (phase !== 'paused') {
@@ -7880,8 +8032,11 @@ function frame(realDelta, render = true) {
       player.rig.play(Math.random() < 0.7 ? 'signature' : 'victory', { once: true });
     }
   }
+  lap('effects, particles, weather, arena, animation');
   updateCoop(realDelta, delta);
-  touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
+  lap('co-op: teammates, network');
+  // A menu over play (the co-op pause menu keeps the run going) hides the sticks, or their zones would take its taps.
+  touch.update(PLAYING.has(phase) && !player.downed && !hud.menuOpen && !hud.modalOpen, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
   hud.setPauseShown(PLAYING.has(phase));
   // A run played upright on a phone (a co-op guest, or turned mid-run): once a run, a reminder to turn it.
@@ -7902,11 +8057,14 @@ function frame(realDelta, render = true) {
   particles.density = quality.features.particles * (postfx.calm ? 0.5 : 1);
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
+  lap('hud widgets, camera');
   if (render) {
     postfx.render(realDelta);
     if (cssVignette.hidden === postfx.direct) cssVignette.hidden = !postfx.direct;
   }
+  lap('render (CPU side)');
   hud.update(delta, enemies);
+  lap('health bars, damage numbers');
   input.endFrame();
 }
 
@@ -8024,9 +8182,10 @@ applyGraphicsSetting();
 const loopErrors = new Set();
 renderer.setAnimationLoop(() => {
   try {
-    const delta = Math.min(clock.getDelta(), 0.1);
-    adaptQuality(delta);
-    frame(delta);
+    const elapsed = clock.getDelta();
+    const delta = Math.min(elapsed, 0.1);
+    adaptQuality(Math.min(elapsed, 1)); // real frame times: capped ones made a 5 fps phone look like 10 fps
+    frame(delta, true, elapsed);
   } catch (error) {
     if (!loopErrors.has(String(error))) {
       loopErrors.add(String(error));
@@ -8203,6 +8362,20 @@ if (import.meta.env.DEV) {
     offerBrews: () => offerBrews(),
     ascend: (tier) => startAscension(tier),
     // Advances the game without relying on requestAnimationFrame (paused in hidden tabs).
+    /** Runs `frames` frames (each rendered) and returns ms per frame by section, slowest first. */
+    profile: (frames = 60, dt = 1 / 60) => {
+      profiler.totals = {};
+      profiler.frames = 0;
+      profiler.on = true;
+      const start = performance.now();
+      for (let i = 0; i < frames; i++) frame(dt);
+      profiler.on = false;
+      const per = (ms) => Math.round((ms / frames) * 100) / 100;
+      const sections = Object.entries(profiler.totals).sort((a, b) => b[1] - a[1]);
+      return { total: per(performance.now() - start), ...Object.fromEntries(sections.map(([label, ms]) => [label, per(ms)])) };
+    },
+    /** One frame the way a slow device gets it: `elapsed` real seconds, the game stepping at most 0.1 s. */
+    slowFrame: (elapsed) => frame(Math.min(elapsed, 0.1), true, elapsed),
     step: (seconds, dt = 1 / 60) => {
       for (let t = 0; t < seconds; t += dt) frame(dt, t + dt >= seconds);
     },

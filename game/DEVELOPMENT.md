@@ -235,7 +235,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
   again too); the first run starts with a skippable story
   cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
-- **Finale:** the Empress (wave 20) has a Royal Spiral attack. Bee-zebub (wave 21, horns and a fire aura) adds
+- **Finale:** the Empress (wave 20) has a Royal Spiral attack. Bee-zebub (wave 21, a winged devil with a fire aura:
+  `components/DevilModel.js`, v0.26.2, built at every graphics level since the old bee model with horns read as
+  "very simple") adds
   Brimstone Rings (walls of fire spreading from him: only a hop-dash gets you through), chasing Hellfire Pillars,
   hellfire rain and an Infernal Spiral, with two rage phases where he grows. Beating him plays the ending
   cut-scene back home in the garden, and credits.
@@ -356,6 +358,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   controls have a garden mode (move stick, a jump button in the bottom-right corner with BOOP to its left; the right half turns the
   camera). The garden toolbar (`.menu.garden-walk`, z-index 5) sits above the stick zones (z-index 3) so its
   buttons get taps; the menu itself passes touches through, and the round corner buttons stack above the jump button.
+- **Garden walking keeps its pace** (v0.26.2): the frame loop caps the game's step at 0.1 s, so below 10 fps a frog
+  hopped slower (visitors on weaker phones in a busy garden reported it). `gardenKeys` now runs `hub.update` on the
+  frame's real time (up to `WALK_FRAME_MAX`, 0.25 s) in `WALK_STEP` slices; `frame()` gets that time as `elapsed`.
+  The quality watcher (`adaptQuality`) also counts real frame times now: capped ones made 5 fps look like 10.
 - **Player tag** (v0.23, `components/PlayerTag.js`, shared with the server): name (2–16 characters, `cleanName`), a
   4-digit `#tag` the server gives every save, and a name colour (`TAG_COLORS`). It lives in the cloud save
   (`save.profile`, `POST /api/save/:code/profile`, `saveProfile` in CloudSave.js; `meta.profile` locally) and
@@ -388,10 +394,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4 })`
   and main.js damps the form's screen warp (`soft`): at garden camera distance on a sunny lawn the full form washed
   the screen out white.
-- **Level aura** (v0.26, `GardenFx.levelAura`, `auraStage`): every frog in a garden carries its account level
-  (`accountLevel`, sent as `lv` in `genter`, with `mt` the best form; the server passes both in `frogInfo`) as a
-  quiet aura on its group: stages at the rank levels 3, 6, 10, 15, 20, 30 (fireflies → a green ring and drifting
-  leaves → gold with turning dashes → jade → a halo → violet runes). Other frogs' labels show `Lv N`. Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
+- **Level aura** (v0.26, bolder in v0.26.2: `GardenFx.levelAura` builds a `GardenAura` from
+  `components/GardenAuras.js`): every frog in a garden carries its account level (`accountLevel`, sent as `lv` in
+  `genter`, with `mt` the best form; the server passes both in `frogInfo`; looks only, so the client's word is
+  enough) on its group. One layer per rank (`rankTier(level)` in Rewards.js, 0 Tadpole … 6 Todeity): a glowing
+  ring, circling tea leaves and a puff where it lands, fireflies, rising steam and golden sparks, a halo, then a
+  crown of light, a golden pillar with sparkles and the turning rune circle. v0.26.0's quiet version barely showed
+  in daylight; this one reads across the garden. Shared geometry and materials; trails use the shared particles
+  (Low thins them). Other frogs' labels show `Lv N` (`.frog-level`). Public gardens: `save.garden.public` (`POST …/garden { public }`, `setGardenPublic`);
   `GET /api/gardens` lists only public ones, at most 30: those with frogs in them right now (fullest first), then
   the loveliest empty ones (`listGardens`; `loveliestGardens()` in saves.js is cached until a public garden's decor,
   name or visibility changes; also in the co-op lobby, and in the 👀 Visit popup, which the title
@@ -453,7 +463,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   during play (cut-scenes keep the full show) and drop the spit trails.
 - **Phones and tablets:** twin-stick touch controls (`TouchControls.js`): the left half of the screen is a floating
   move stick, the right half a floating aim stick (both wait faintly in their bottom corners), and dash/bomb/ultimate
-  buttons sit in a row above the aim stick. Tode always spits by himself: where the aim stick points (`input.aiming`,
+  buttons sit in a row above the aim stick. The stick zones (z-index 3) sit above `.menu`, so the controls hide
+  whenever a menu or popup is open during play (the co-op pause menu keeps the phase running). Tode always spits by himself: where the aim stick points (`input.aiming`,
   `input.aimAxis`; spit's aim assist still applies), or at the nearest bee in range when it's let go. Skills always
   auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
   and on the first real touch otherwise (touchscreen laptops). Graphics quality: see Graphics levels.
@@ -665,7 +676,24 @@ server proxies `/ws` and `/api`).
   `coopEarly()`), and the spawn interval is divided by the same factor (`coopShare()`), so bigger swarms don't
   trickle in.
 - **Experience in co-op:** everyone collects their own copy of every bee's leaves (and charm drops), so leaf values
-  and charm odds are divided by the swarm growth (`coopShare()`): each frog levels at about the solo pace.
+  and charm odds are divided by the swarm growth (`coopShare()`): each frog levels at about the solo pace. Leaves
+  older than `COOP_LEAF_PULL` (2.5 s) fly to their frog wherever they lie (`Leaves.update`'s `pullAfter`): teammates'
+  kills used to leave hundreds lying around the arena through a long boss wave. A downed frog's leaves keep updating
+  (they used to freeze in mid-air).
+- **Co-op performance** (v0.26.2, a 3-player run on phones lagged for everyone): a guest's hits and statuses are
+  merged per bee and sent `HIT_RATE` (20) times a second (`queueHit`, `sendPendingHits`); the host draws no damage
+  numbers for teammates' hits (their own screens do); snapshots drop to 10/s above 80 bees (`snapshotRate`); phones
+  on Auto graphics start a co-op run at step 3, or Low with 3+ players (`startCoopRun`); damage numbers are capped
+  at 40 on touch. Measured with three local tabs in a Bee-zebub fight with late-game builds: every player spat
+  150–250 times a second and each spit was a message and a projectile on every other screen (60% of the host's
+  traffic, ~85% of a guest's). Spits are now shared at most `SPIT_SHARE.rate` (40) a second (split-off children
+  never), and spit, stinger and meteor messages carry rounded numbers: guest traffic fell ~70%, the host's ~45%.
+  Bees find their neighbours through a grid rebuilt every frame (`buildBeeGrid`, `beeNear`; moving bees and spit
+  hits use it, spawn placement still checks every bee): host bee AI went from 3.3 to 1.4 ms a frame with ~200 bees on
+  a Mac. Health bars of off-screen bees aren't placed (`place(…, cull)`). Bullet spheres have 126 triangles.
+- **Guests and the boss intro:** a guest whose travel ends after the host's (a slow phone) got the host's boss intro
+  mid-travel, which cut the travel short: that guest stayed in the old arena on the old wave. The intro now waits
+  for the guest's landing (`guestBossIntro`, `pendingIntro`).
 - **Code.** `components/Net.js` (WebSocket client, batched messages), `components/RemoteTode.js` (teammate
   puppets with their own ascension visuals and name tags), the "Co-op" section in `main.js` (snapshots, mirrors,
   message handling, lobby), and the relay in `server/server.js`.
@@ -684,6 +712,7 @@ server proxies `/ws` and `/api`).
 | `components/Player.js` | Tode: movement with acceleration and hop animation, dash charges, shield, revive, gauge, `BASE_STATS` (every stat a brew can change lives here). |
 | `components/Enemy.js` | Bee types (`ENEMY_TYPES`: drone, zipper, brute, stinger, queen, shogun, seraph, empress, beezebub), statuses (burn, chill/freeze), hit flash, death animation, glTF or procedural model. |
 | `components/BeeModels.js` | Procedural bee species per arena and boss regalia, with their flight animation. |
+| `components/DevilModel.js` | Bee-zebub's devil (horns, trident, bat wings, goat legs, spade tail) on pivots: hovers, raises the trident while winding up (`enemy.glow`), leans into charges, slumps when staggered. `height` keeps the shield bubble to his body. |
 | `components/Bullets.js` | Instanced enemy bullets (spawn, update with a hit callback, cancel in a radius). |
 | `components/Leaves.js` | Tea-leaf experience orbs and the level curve (`leavesForLevel`). |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
@@ -729,6 +758,7 @@ server proxies `/ws` and `/api`).
 | `components/DailyTwists.js` | The Daily Brew's trials and boons per day (no three.js: the server imports it). |
 | `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
 | `components/TrinketModels.js` | Procedural models of the 27 trinkets. |
+| `components/GardenAuras.js` | A garden frog's level aura (ring, leaves, fireflies, steam, halo, crown, pillar) and its landing puffs; `GardenFx.levelAura` builds it. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
@@ -789,6 +819,8 @@ While `npm run dev` runs, `window.game` exposes helpers in the browser console (
 
 ```js
 game.step(5)              // advance 5 s of game time without requestAnimationFrame
+game.profile(90)          // run 90 rendered frames; ms per frame by section (bees, spits, render, HUD…), slowest first
+game.slowFrame(0.2)       // one frame as a 5 fps device gets it (the game steps 0.1 s, real time 0.2 s)
 game.startWave(20)        // jump to a wave
 game.spawn('queen', 0, 150), game.killAll(), game.skipSpawns()
 game.give('eye')          // grant a brew by id (also Duo/Legendary)
@@ -819,6 +851,16 @@ game.holdLevelUps = true  // level-ups wait for the wave's end, as in co-op (foo
 game.action('garden')     // press a menu button (hud.onAction); game.action('emote', { id: 'power' }) in a garden
 game.hub.fx.list          // the garden effects in flight; game.hub.myEmote: the emote playing
 ```
+
+Co-op profiling (Oct 16, v0.26.2, three tabs on a Mac, wave 21 with ~200 bees and late-game builds, High): host
+12.5 ms a frame (render CPU 6.2, health bars and damage numbers 1.7, bees 1.4, effects and particles 1.4, spits 1.1,
+network 0.3); a guest 17 ms (render 10.6: its arena bees are 6 meshes and ~7k triangles each, 1,200+ draw calls).
+At Low the garden bee is one skinned mesh of 3,200 triangles. What's left, biggest first: draw calls (bees, 90+
+spits as separate meshes, arena props), the DOM health bars and damage numbers, effects and particles. A phone is
+several times slower. To set it up: `npm run server`, three tabs on the dev server, create a private room in one
+and join with its code in the others (`#coop-code`, `[data-action="coop-join"]`), start, then drive each tab in
+turn with `game.step` (background tabs don't animate) and keep frogs alive with `game.player.hp = 99`. Step the
+guests between the start and a `game.startWave` jump.
 
 Tip for AI agents with an embedded browser: a hidden browser pane pauses `requestAnimationFrame`, so drive the game
 with `game.step()` and take a screenshot to see the result. A hidden pane can also show a stale canvas; for exact

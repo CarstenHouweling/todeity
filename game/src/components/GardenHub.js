@@ -88,6 +88,12 @@ const POKES = {
   bench: { sound: 'click', word: 'Sit?' },
 };
 
+/** A frog's height (feet to the top of its head): where its aura's halo floats. */
+const frogHeight = (player) => {
+  const box = new THREE.Box3().setFromObject(player.model);
+  return box.max.z - box.min.z;
+};
+
 /** Another player's frog in the garden. */
 class GardenFrog {
   constructor({ id, name, cls, color, lv, mt }, { scene, hud, fx }) {
@@ -115,7 +121,7 @@ class GardenFrog {
     this.bubble.classList.add('emote-bubble');
     this.emote = null;
     this.puppet.group.visible = false;
-    this.aura = fx.levelAura(this.level, this.puppet.group);
+    this.aura = fx.levelAura(this.level, this.puppet.group, frogHeight(this.puppet));
     const frog = this;
     // What emote scripts work with (the same shape as my own, see GardenHub.me).
     this.actor = {
@@ -162,7 +168,7 @@ class GardenFrog {
     }
     this.puppet.animate(delta);
     this.ascension?.update(delta); // only while a Power Up shows off a form
-    this.aura?.update(delta, group.position);
+    this.aura?.update(delta, group.position, { moving: this.position.distanceToSquared(this.last) > (8 * delta) ** 2, hop: this.hop, visible: this.seen });
     updateCircle(this.circle, this.position, Boolean(this.state.i), time);
     const html = `${this.state.i ? '🚩 ' : ''}<b style="color:${this.color}">${escape(this.name)}</b> <small class="frog-level">Lv ${this.level}</small>${partyLabel ? ` <small>${partyLabel}</small>` : ''}`;
     this.hud.setWorldLabel(this.label, html);
@@ -270,7 +276,7 @@ export class GardenHub {
     this.myEmote = null;
     this.restFor = 0;
     this.identity = { name, cls, color, lv: level, mt: maxTier };
-    this.myAura = this.fx.levelAura(level, this.player.group);
+    this.myAura = this.fx.levelAura(level, this.player.group, frogHeight(this.player));
     if (!code) return;
     try {
       await this.net.connect();
@@ -905,7 +911,7 @@ export class GardenHub {
     if (this.pounding && this.time - this.pounding > 3) this.pounding = null;
     this.updateEmote(this.myEmote, delta, this.myBubble);
     if (this.myEmote?.over) this.myEmote = null;
-    this.myAura?.update(delta, pos);
+    this.myAura?.update(delta, pos, { moving: speed > 8, hop: this.hop });
     this.fx.update(delta);
 
     // Parties. An inviting Tode waves now and then while he stands still.
