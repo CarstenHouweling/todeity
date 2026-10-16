@@ -3586,3 +3586,78 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
 .menu.garden-walk .garden-flash {
   margin-top: 8px;
 }
+
+/* --- Phones held upright (v0.26.1): turn sideways ---------------------- */
+@keyframes turn-phone {
+  0%, 20% { transform: rotate(0deg); }
+  50%, 75% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.turn-phone {
+  display: inline-block;
+  animation: turn-phone 2.4s ease-in-out infinite;
+}
+
+.menu .portrait-hint {
+  display: none;
+  margin: 2px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff3c4;
+}
+
+/* Only on a phone held upright (touch, taller than wide, narrow). */
+@media (orientation: portrait) and (max-width: 600px) {
+  body.touch .menu .portrait-hint {
+    display: block;
+  }
+}
+
+.modal.rotate-phone .panel {
+  text-align: center;
+}
+
+.rotate-art {
+  margin: 4px 0 2px;
+  font-size: 64px;
+  line-height: 1.3;
+}
+
+.modal.rotate-phone .sub.small {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rotate-hint {
+  position: fixed;
+  top: calc(64px + var(--safe-top));
+  left: 50%;
+  z-index: 4;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(10, 30, 15, 0.82);
+  color: #fff3c4;
+  max-width: calc(100vw - 150px); /* clear of the round corner buttons on the right */
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+}
+
+.rotate-hint.show {
+  animation: rotate-hint 6s ease-in-out forwards;
+}
+
+/* A level-up card or the pause menu may pop up meanwhile: the reminder steps aside. */
+body:has(.menu:not([hidden])) .rotate-hint {
+  display: none;
+}
+
+@keyframes rotate-hint {
+  0% { opacity: 0; transform: translate(-50%, -8px); }
+  8%, 85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}

@@ -771,6 +771,34 @@ export class Hud {
     );
   }
 
+  /**
+   * Phones held upright: before a run, ask to turn the phone sideways (the run starts by itself once it's turned).
+   * `canTurn`: the browser can go fullscreen in landscape itself (Android).
+   */
+  showRotate({ canTurn }) {
+    this.showModal(
+      'rotate-phone',
+      `<div class="rotate-art"><span class="turn-phone big">📱</span></div>
+      <h2>Turn your phone sideways</h2>
+      <p class="sub">Todeity plays best in landscape: you see much more of the arena around Tode, and both thumbs have
+      room for the sticks. The run starts as soon as you turn.</p>
+      <div class="menu-buttons">
+        ${canTurn ? '<button class="menu-button primary" data-action="turn-landscape">↻ Fullscreen, sideways</button>' : ''}
+        <button class="menu-button${canTurn ? '' : ' primary'}" data-action="portrait-anyway">Play upright anyway</button>
+      </div>
+      <p class="sub small">Doesn't turn? Switch off the screen rotation lock (Control Center on iPhone, quick settings on Android).</p>`
+    );
+  }
+
+  /** A run playing upright on a phone: a short reminder at the top that sideways is better. */
+  showRotateHint() {
+    this.rotateHint ??= element('rotate-hint', document.body);
+    this.rotateHint.innerHTML = '<span class="turn-phone">📱</span> Turn sideways to see more of the arena';
+    this.rotateHint.classList.remove('show');
+    void this.rotateHint.offsetWidth; // restart the animation
+    this.rotateHint.classList.add('show');
+  }
+
   showChangelog() {
     const entries = CHANGELOG.map(
       ({ version, date, title, changes }) => `
@@ -862,6 +890,7 @@ ${ meta.runs > 0 ? '' :
         <div class="menu-buttons title-start">
           <button class="menu-button primary" data-action="start">▶ Start run</button>
         </div>
+        <p class="portrait-hint"><span class="turn-phone">📱</span> Turn your phone sideways: Todeity plays best in landscape</p>
         <button class="class-chip" data-action="classes">${this.classFace(chosenClass())}<span><small>Playing as</small><b>${chosenClass().name}</b></span><em>Change ▸</em></button>
         <div class="menu-buttons title-play">
           <button class="menu-button daily-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${dailyTwists(todayKey()).title}</small></button>

@@ -1019,16 +1019,10 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     lengthOverride = length;
   }
 
-  function update(delta) {
-    time += delta;
-    moveTime += delta;
-    const current = MOVES[move] ?? MOVES.idle;
-    resetPose();
+  /** Everything a move may show (a cup, a vial, smoke…) hidden again: only the move playing shows it. */
+  function restGear() {
     frame.visible = true;
-    if (gear.giant) {
-      gear.giant.update(delta); // breathes and blinks; the summon move then raises it
-      gear.giant.root.visible = false;
-    }
+    if (gear.giant) gear.giant.root.visible = false;
     if (gear.log) gear.log.visible = false;
     for (const effect of [gear.smokeA, gear.smokeB, gear.smokeC, gear.smokeIn, gear.smokeOut, gear.burst]) effect?.set(0);
     gear.runes?.set(0);
@@ -1040,6 +1034,15 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
       gear.aimPipe.visible = false;
       gear.pipe.visible = true;
     }
+  }
+
+  function update(delta) {
+    time += delta;
+    moveTime += delta;
+    const current = MOVES[move] ?? MOVES.idle;
+    resetPose();
+    gear.giant?.update(delta); // breathes and blinks; the summon move then raises it
+    restGear();
 
     // Always: breathing, a throat that pulses, blinking, and a glance around now and then.
     const breath = Math.sin(time * 2.4);
@@ -1085,10 +1088,22 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     }
   }
 
+  /**
+   * A copy of the frog standing at rest (the Great Tode ultimate): a copy of the live frog froze whatever it was
+   * doing, like the tongue flicked out mid-spit next to the giant's real tongue. The next update poses it again.
+   */
+  function cloneAtRest() {
+    resetPose();
+    restGear();
+    flickLeft = 0;
+    return root.clone();
+  }
+
   const rig = {
     root,
     play,
     update,
+    cloneAtRest,
     look,
     id,
     inPlace: false,

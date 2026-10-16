@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.26.1',
+    date: '2026-10-16',
+    title: 'Sideways is better',
+    changes: [
+      '📱 Holding your phone upright? Before a run the game asks you to turn it sideways, and starts as soon as you do (or play upright anyway). On Android one tap goes fullscreen in landscape',
+      '🐸 Summoning: Great Tode no longer shows a second, frozen tongue when you cast it mid-spit',
+    ],
+  },
+  {
     version: '0.26.0',
     date: '2026-10-16',
     title: 'Show your power',

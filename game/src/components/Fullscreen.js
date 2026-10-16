@@ -25,6 +25,20 @@ export function toggleFullscreen() {
   request?.catch?.(() => {});
 }
 
+/** Whether the browser can turn the game sideways by itself (Android: fullscreen plus an orientation lock). */
+export const canLockLandscape = () => canFullscreen() && typeof screen.orientation?.lock === 'function' && !/iPhone|iPad|iPod/.test(navigator.userAgent);
+
+/** Fullscreen, turned to landscape (from a tap). Resolves to whether it worked; leaving fullscreen unlocks it. */
+export async function landscapeFullscreen() {
+  try {
+    if (!isFullscreen()) await (root.requestFullscreen ?? root.webkitRequestFullscreen)?.call(root, { navigationUI: 'hide' });
+    await screen.orientation.lock('landscape');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Calls `listener` whenever fullscreen is entered or left (also with Esc or the browser's own controls). */
 export function onFullscreenChange(listener) {
   document.addEventListener('fullscreenchange', listener);

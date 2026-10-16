@@ -286,7 +286,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `ctx.waveScale()`: flat damage took only 11% of the Queen and less of each later boss; measured now ~30–45% of the
   Shogun per beam, shields still block it), Thunder Tea Storm and **Summoning: Great Tode** (a summoning seal, then a giant
   toad that stomps, tongue-lashes the thickest crowds three times and body-slams; the tongue is a Bézier tube from
-  its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame).
+  its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame). The giant is a copy of the caster's frog made with
+  `rig.cloneAtRest()`: a plain `model.clone()` froze the pose of the moment, often a spit with the tongue flicked out
+  (a second, static tongue).
 - **Achievements** (`components/Achievements.js`): 39, each with its own `reward` (3 to 60 Golden Leaves), shown
   in the Pantry. The server checks each against the run report (`earned()` in `server/saves.js`), so a new
   achievement needs a rule there too. Run bookkeeping for them lives in `feats` (main.js).
@@ -455,6 +457,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `input.aimAxis`; spit's aim assist still applies), or at the nearest bee in range when it's let go. Skills always
   auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
   and on the first real touch otherwise (touchscreen laptops). Graphics quality: see Graphics levels.
+- **Phones held upright** (v0.26.1, "Phones held upright" in main.js): portrait works but shows little of the arena.
+  `portraitPhone()` (touch, taller than wide, narrower than `PHONE_WIDTH` 600 px; tablets play fine upright).
+  Start run, the Daily Brew and Play again go through `landscapeFirst(go)`: upright, it shows `hud.showRotate` and
+  keeps `go` in `afterTurning`; the resize of turning the phone (`turnedSideways`) closes it and starts the run.
+  "Play upright anyway" (`portraitChosen`) stops asking for the visit. Where the browser can (`canLockLandscape`:
+  Android, not iOS), "Fullscreen, sideways" calls `landscapeFullscreen()` (fullscreen plus
+  `screen.orientation.lock`). A run that plays upright anyway (a co-op guest, a phone turned mid-run) shows a
+  6-second reminder once (`hud.showRotateHint`, `portraitHinted`), and the title shows `.portrait-hint` (CSS only).
 - **Touch HUD:** the brew and charm rows (`.inventory`) are replaced by a one-line count under the hearts
   (`.inventory-summary`); charm pickups float up from Tode instead of toasts; at most 2 toasts, low on the left;
   weather and modifier lines show only their names; banners and callouts wrap. Narrow screens (`max-width: 600px`)

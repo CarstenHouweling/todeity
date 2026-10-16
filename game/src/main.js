@@ -30,7 +30,7 @@ import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/R
 import { fetchRooms, Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
-import { isFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
+import { canLockLandscape, isFullscreen, landscapeFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
 import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile, setGardenPublic } from './components/CloudSave.js';
 import { randomName } from './components/PlayerTag.js';
@@ -6961,6 +6961,7 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
 
   endless = false;
   endingTier = 0;
+  portraitHinted = false;
   hostCircles = null;
   Object.assign(feats, { cleanWaves: 0, tileWave: 0, legendaries: 0, shrines: 0, bitterWave: 0, bossHurt: false, fusions: 0 });
   timeAlive = 0;
@@ -7365,6 +7366,31 @@ function toggleMute() {
   hud.setMuted(!on);
 }
 
+// --- Phones held upright: the game works, but it plays much better sideways ---
+const PHONE_WIDTH = 600; // narrower than this while taller than wide: a phone in portrait (tablets play fine)
+const portraitPhone = () => touch.enabled && viewHeight() > viewWidth() && viewWidth() < PHONE_WIDTH;
+let portraitChosen = false; // "Play upright anyway": not asked again this visit
+let afterTurning = null; // the run waiting for the phone to turn
+let portraitHinted = false; // this run showed the reminder
+
+/** Starts `go` (a run) at once, or first asks to turn the phone sideways and starts it when it's turned. */
+function landscapeFirst(go) {
+  if (!portraitPhone() || portraitChosen) return go();
+  afterTurning = go;
+  hud.showRotate({ canTurn: canLockLandscape() });
+}
+
+/** On resize: the phone was turned while the question was up, so off we go. */
+function turnedSideways() {
+  if (!afterTurning) return;
+  if (!hud.modalOpen || !hud.modal.classList.contains('rotate-phone')) return void (afterTurning = null); // closed
+  if (portraitPhone()) return;
+  const go = afterTurning;
+  afterTurning = null;
+  hud.hideModal();
+  go();
+}
+
 const MENU_ACTIONS = {
   start: () => {
     if (phase !== 'title' && phase !== 'gameover') return;
@@ -7372,9 +7398,16 @@ const MENU_ACTIONS = {
       if (net.isHost) hostStartCoop(); // everyone plays again
       return;
     }
-    if (!meta.seenStory) startStory();
-    else startRun();
+    landscapeFirst(() => (meta.seenStory ? startRun() : startStory()));
   },
+  'portrait-anyway': () => {
+    portraitChosen = true;
+    const go = afterTurning;
+    afterTurning = null;
+    hud.hideModal();
+    go?.();
+  },
+  'turn-landscape': () => landscapeFullscreen(), // the resize that follows starts the run (turnedSideways)
   coop: () => needName(() => (net.inRoom ? showRoom() : showLobby())),
   'edit-name': () => openProfile(),
   'random-name': () => hud.setProfileName(randomName()),
@@ -7478,7 +7511,7 @@ const MENU_ACTIONS = {
   'daily-go': () => {
     if (phase !== 'title' && phase !== 'gameover') return;
     hud.hideModal();
-    startRun({ daily: true });
+    landscapeFirst(() => startRun({ daily: true }));
   },
   leaderboard: ({ board }) => showLeaderboard(board ?? 'all'),
   submit: ({ name }) => submitRun(name ?? ''),
@@ -7574,7 +7607,7 @@ const MENU_ACTIONS = {
   reroll,
   pause,
   resume,
-  restart: () => startRun(),
+  restart: () => landscapeFirst(() => startRun()),
   mute: toggleMute,
   photo: takePhoto,
   'toggle-music': () => {
@@ -7682,6 +7715,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(viewWidth(), viewHeight(), false);
   postfx.setSize(viewWidth(), viewHeight());
+  turnedSideways();
 });
 
 // --- Animation loop ---
@@ -7850,6 +7884,11 @@ function frame(realDelta, render = true) {
   touch.update(PLAYING.has(phase) && !player.downed, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
   hud.setPauseShown(PLAYING.has(phase));
+  // A run played upright on a phone (a co-op guest, or turned mid-run): once a run, a reminder to turn it.
+  if (phase === 'fighting' && !portraitHinted && !portraitChosen && portraitPhone()) {
+    portraitHinted = true;
+    hud.showRotateHint();
+  }
   const look = ascension.postfxTargets();
   const boost = arena.postfx ?? {};
   const soft = decorating ? 0.35 : 1; // a Power Up in a garden: the camera is close, reality bends less

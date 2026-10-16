@@ -305,7 +305,7 @@ class GreatTodeSummon {
       model.scale.setScalar(ctx.player.model.scale.x * 0.85);
       model.position.z = ctx.player.model.position.z;
     } else {
-      model = ctx.player.model.clone();
+      model = ctx.player.rig?.cloneAtRest() ?? ctx.player.model.clone(); // (at rest: no tongue frozen mid-spit)
     }
     model.traverse((child) => {
       if (!child.isMesh) return;
