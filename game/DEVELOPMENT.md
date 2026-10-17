@@ -293,7 +293,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Beam clash** (solo): when the Empress or Bee-zebub hits a rage phase they fire a beam at Tode, he answers, and
   the player mashes Space/click/tap to push the clash point back (`CLASH` in main.js). Winning deals 10% of the
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
-  inverted flash); losing costs a heart.
+  inverted flash); losing costs a heart. Effects keep running during the clash (a Steeping Beam still burns the
+  boss), so the boss can fall or lose Bee-zebub's first life mid-clash. **Since v0.29.5** `setPhase` calls
+  `closeClash()` (beams, prompt, camera) whenever the game leaves `clash` for anything but `paused`, `updateClash`
+  ends it when its boss is dying, reviving or gone, and `startClash` refuses such a boss. Before, his true-form
+  intro took over the phase and "TAP! TAP! TAP!" and both clash beams (gold and white, like a Steeping Beam) stayed
+  on screen for the rest of the run.
 - **Ultimates** (picked after wave 5, the gauge fills slowly): Steeping Beam (an enormous beam; Tode keeps moving
   at 45% speed and steering it; since v0.24.9 a boss in it loses `BEAM_BOSS_SHARE` (20%) of its max health per second
   as `raw` damage that ignores Tode's multipliers, and bees take `BEAM_DPS` × the wave's `hpScale` via
@@ -608,7 +613,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the buttons float on their own (solid, with a shadow), with no bar behind them.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
   widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
-  screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too.
+  screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too. Two
+  spirits talking at once (a Duo exchange) sit side by side there (`.dialogue:has(.speech + .speech)`, v0.29.5):
+  stacked, they pushed the brew offer's Reroll button off the bottom of the screen.
 - **First impressions (v0.25):** a new player's title shows only Start run, the class and the ways to play (Daily
   Brew, Co-op, Leaderboard) plus Visit garden; the reward chips and the run preparation buttons
   (`hud.prepareButtons`: Pantry, Keepsake, Steeping, My garden) appear after the first run, glowing ✨ New until the

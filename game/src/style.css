@@ -2188,6 +2188,18 @@ body.run-ended .toasts {
     max-height: calc(50vh / 0.68);
   }
 
+  /* Two spirits talking (a Duo exchange) sit side by side: stacked, the second line pushed the Reroll button off
+     the bottom of the screen. */
+  .dialogue:has(.speech + .speech) {
+    flex-direction: row;
+    max-width: min(1100px, calc(94vw / 0.68));
+  }
+
+  .dialogue:has(.speech + .speech) .speech {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   /* Here the whole menu scrolls, the build list with it. */
   .pause .build {
     max-height: none;

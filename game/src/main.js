@@ -1524,6 +1524,8 @@ function placeBeam(beam, from, to, wobble) {
 }
 
 function startClash(boss) {
+  if (boss.dying || boss.reviving || boss.hp <= 0) return;
+  closeClash(); // never two at once: the first one's beams would stay in the scene
   Object.assign(clash, { boss, progress: 0.5, time: 0 });
   clash.beams = {
     tode: clashBeam('#ffd36b', 16),
@@ -1542,6 +1544,11 @@ function startClash(boss) {
 
 function updateClash(delta) {
   const { boss, beams } = clash;
+  // The world keeps living during the clash (a Steeping Beam still burns): if the boss fell meanwhile, it's over.
+  if (boss.dying || boss.reviving || boss.hp <= 0 || !enemies.includes(boss)) {
+    setPhase('fighting'); // closes the clash
+    return;
+  }
   clash.time += delta;
   const mashes = ['Space', 'MouseLeft', 'MouseRight', 'KeyE', 'ShiftLeft', 'ShiftRight'].filter((code) => input.wasPressed(code)).length;
   clash.progress += mashes * CLASH.push - delta * (CLASH.bossPush + 0.05 * (boss.ai.phase ?? 0));
@@ -1575,9 +1582,15 @@ function updateClash(delta) {
   else if (clash.time >= CLASH.time) endClash(clash.progress >= 0.5);
 }
 
-function endClash(won) {
+/**
+ * Takes the clash off the screen (beams, prompt, camera). `setPhase` calls it whenever the game leaves the clash
+ * for anything but a pause: in v0.29.4 a Steeping Beam still burning in the clash took Bee-zebub's first life, his
+ * true-form intro took over, and "TAP! TAP! TAP!" and both clash beams stayed for the rest of the run.
+ */
+function closeClash() {
   const { boss, beams } = clash;
-  for (const mesh of [beams.tode, beams.boss, beams.orb]) {
+  if (!beams) return;
+  for (const mesh of Object.values(beams)) {
     mesh.removeFromParent();
     mesh.traverse((child) => {
       child.geometry?.dispose();
@@ -1588,8 +1601,12 @@ function endClash(won) {
   hud.hideClash();
   cameraPan.set(0, 0, 0);
   cameraZoom = 1;
-  boss.glow = 0;
-  setPhase('fighting');
+  if (boss) boss.glow = 0;
+}
+
+function endClash(won) {
+  const { boss } = clash;
+  setPhase('fighting'); // closes the clash
   if (won) {
     // Tode's beam drives straight through: reality cracks.
     damageEnemy(boss, Math.round(boss.maxHp * CLASH.winDamage), null, 0, 'ultimate');
@@ -5141,6 +5158,7 @@ function land(color, colors, impact) {
 
 // --- Waves ---
 function setPhase(next, duration = 0) {
+  if (phase === 'clash' && next !== 'clash' && next !== 'paused') closeClash();
   phase = next;
   phaseTimer = duration;
   updateMusic();
@@ -7318,11 +7336,7 @@ function clearWorld() {
   for (const telegraph of [...telegraphs]) removeTelegraph(telegraph);
   for (const ring of [...fireRings]) removeFireRing(ring);
   for (const bomb of bombs.splice(0)) bomb.mesh.removeFromParent();
-  if (clash.beams) {
-    for (const mesh of Object.values(clash.beams)) mesh.removeFromParent();
-    clash.beams = null;
-    hud.hideClash();
-  }
+  closeClash();
   for (const leaf of [...orbitLeaves.children]) {
     leaf.removeFromParent();
     leaf.geometry.dispose();

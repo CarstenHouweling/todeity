@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.5',
+    date: '2026-10-17',
+    title: 'Clean clashes',
+    changes: [
+      '⚔️ Finishing a boss off in the middle of a beam clash (a Steeping Beam still burning) no longer leaves "TAP! TAP! TAP!" and the clash\'s beams stuck on the screen for the rest of the run',
+      '📱 When two tea spirits talk at once on a phone held sideways, they sit side by side, so the Reroll button stays on the screen',
+    ],
+  },
+  {
     version: '0.29.4',
     date: '2026-10-17',
     title: 'Where\'s Tode?',
