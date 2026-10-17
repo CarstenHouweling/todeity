@@ -457,7 +457,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   while unchanged) through `shownOutfit(outfit, { tier, run })`: no hat from `CREST_TIER` (2, the form's crest sits on
   the head; also a garden Power Up) and no aura in runs (the forms bring their own). Co-op teammates get the outfit
   with every 40th state (`o` in `sendState`, every 2 s) and `RemoteTode` applies the same rule with their tier; the
-  Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
+  Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. Checked in a
+  2-tab co-op run: each side sees the other's outfit, and a teammate reaching tier 2 loses the hat on both screens. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
   any known items, `cleanOutfit(o)`), a change is an `outfit` event (`hub.setOutfit`; the server remembers it for frogs
   who join later), and puppets twirl when they change. **Models:** voxel boxes like the frogs, hung on the rig's
   head and body joints (`rig.parts`), sized from `rig.fit` (head width, body size) so every class fits; capes sway,
@@ -1059,7 +1060,6 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
   and the transformation burst can still flash white for a frame or two right after a page load.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
-- Wardrobe in co-op runs (v0.29.0) was only checked solo: try a 2-tab co-op run to see teammates' outfits.
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant
   landmark per arena placed toward the camera's view (-x, +y) is what reads best in play.
 - The Divinity world transformations (blossoms, lanterns, heaven) only apply in the garden.
