@@ -3,6 +3,12 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.2',
+    date: '2026-10-17',
+    title: 'Still waters',
+    changes: ['🏊 Swimming in the garden pond is calm again: no more glowing cloud of splashes round your frog, just a splash as you hop in and gentle ripples'],
+  },
+  {
     version: '0.29.1',
     date: '2026-10-17',
     title: 'Fire!',

@@ -22,6 +22,10 @@ import { duckMusicFor } from './Sound.js';
 const SWIM = { speed: 0.55, sink: 7, bob: 0.4, ripple: 0.3, still: 1.4, paddle: [0.28, 0.17, 5.5] };
 const paddling = (time) => SWIM.paddle[0] + SWIM.paddle[1] * Math.sin(time * SWIM.paddle[2]);
 const CANNONBALL = -430; // falling faster than this into the water is a cannonball
+// Slower than this isn't a landing: GardenHub lands a frog standing on the ground every frame (one frame of gravity,
+// ~-25), and until v0.29.2 each of those was a splash: a burst of drops and a bright ring 60 times a second, a
+// glowing cloud round a swimming frog. Walking in splashes once on its own (`updateMe`).
+const LANDING = -120;
 const SOAK = 95; // a cannonball soaks frogs this close
 const SKIP = { first: 14, step: 26, shrink: 0.82, height: 0.28, look: 70 };
 const KOI_EVERY = [6, 14];
@@ -165,7 +169,7 @@ export class GardenPond {
 
   /** My frog landed (`falling`: its speed down). A hard landing in the water is a cannonball for everyone. */
   landed(pos, ground, falling) {
-    if (ground > 0.5 || !inPond(pos.x, pos.y)) return;
+    if (falling > LANDING || ground > 0.5 || !inPond(pos.x, pos.y)) return;
     this.splashedAt = this.hub.time;
     if (falling > CANNONBALL) return this.wade(pos, true);
     const strength = Math.min(1, -falling / 900);

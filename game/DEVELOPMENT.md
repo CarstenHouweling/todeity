@@ -439,7 +439,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Garden games** (v0.28, `components/GardenGames.js`, wired into `GardenHub`): **the pond** (`GardenPond`,
   `POND` in Environment.js, `inPond`): a frog on the lawn's level inside the water swims (`SWIM`: 55% speed, sunk
   in, paddling, ripples). Since v0.29.1 the paddle is calmer (`SWIM.paddle`: the run pose at 0.28 ± 0.17 and 5.5 rad/s,
-  `paddling()`, for my frog and the puppets alike; it was 0.55 ± 0.45 at 9 rad/s) and the bob smaller (`SWIM.bob`). Every screen works that out for every frog from its position, so nothing extra is sent. A
+  `paddling()`, for my frog and the puppets alike; it was 0.55 ± 0.45 at 9 rad/s) and the bob smaller (`SWIM.bob`).
+  **Since v0.29.2** `landed()` ignores anything gentler than `LANDING` (−120): GardenHub "lands" a frog standing on
+  the ground every frame (one frame of gravity), and since v0.28.0 each of those in the pond was a wade (14 drops and
+  a bright ring), 60 a second: a glowing cloud round every swimming frog. Swimming for a second now makes one splash
+  on the way in and about four ripples (it was ~66 rings alive at once). Every screen works that out for every frog from its position, so nothing extra is sent. A
   landing faster than `CANNONBALL` is a `splash` event: a big splash, and frogs within `SOAK` are washed back on
   their own screens. A boop with nothing else in reach and water ahead skips a stone (`skip`); its path
   (`skipPath`) follows from the throw, so the `skip` event replays it exactly. A koi leaps every 6–14 s (each screen
