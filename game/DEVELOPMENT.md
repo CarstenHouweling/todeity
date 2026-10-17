@@ -700,9 +700,28 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   gardens went to Low a few seconds after you came in. Steps 2+ also halve the sun's shadow map (`shadowSize`, 1024).
   Test it by busy-waiting in a `requestAnimationFrame` loop: 17 ms a frame with a 300 ms hitch every 1.5 s keeps step
   0; 30 ms a frame steps down every 4 s. High only lowers the resolution (and shadows below 30 fps). The canvas itself has
-  no antialiasing: the composer's multisampled targets do it. Measured on a Mac at the same resolution in the
-  Tournament: 6.1 ms per frame at step 0, 2.0 ms at Low. 📈 `settings.showFps` shows fps, resolution and the step.
+  no antialiasing: the scene's multisampled target does it (see Post-processing below). Measured on a Mac at the same
+  resolution in the Tournament: 6.1 ms per frame at step 0, 2.0 ms at Low (before v0.28.3's cheaper post-processing). 📈 `settings.showFps` shows fps, resolution and the step.
   In the console: `game.quality`, `game.setQualityStep(n)`.
+- **Post-processing** (v0.28.3, `PostFX.js`): only the scene is drawn multisampled, into `ScenePass`'s own 4×
+  half-float target, which then copies it, sanitized, into the composer's plain buffers. The composer used to
+  multisample both of its ping-pong buffers, so the sanitize pass, the bloom's blend and the reality shader were each
+  drawn 4× multisampled and resolved again. Measured with the GPU timer (`EXT_disjoint_timer_query_webgl2`, ten renders
+  per query so the GPU clocks up) on an M1 Max in a frozen Underworld frame (126 bees, tier 4, 1312×1728): 11.6 → 3.9
+  ms a frame at step 0, 3.7 → 2.1 ms without bloom. What's left: the scene into the multisampled target ~1.8 ms, the
+  copy 0.3, bloom ~1 (half-resolution bloom saved only ~0.4, not worth the softer look), reality 0.15, output 0.07.
+  Without multisampling (step 2+) `plainScene` (a RenderPass) draws straight into the composer, with the separate
+  sanitize pass when bloom is on.
+- **Shadows follow the view** (v0.28.3, `followShadows` in main.js, every frame before rendering): the sun never
+  moves, so the shadow camera's box is fitted by its bounds alone, in the sun's fixed light space, around where the
+  screen's corner rays reach the ground and a height of 120 (tall props), plus a 40 margin. The box keeps its size
+  while the view fits (hysteresis: it grows at once, shrinks below 75%), and its edges sit on whole shadow texels, so
+  walking doesn't shimmer (checked: 120 frames of walking, one size, every edge on a texel). A corner that sees the
+  sky (the title's orbit, parts of the travel cut-scene) or a box as big as the field falls back to the whole field
+  (`fitShadows`, also called when the field changes). Solo, the view covers most of an arena: the Underworld's box
+  goes from 1380² to ~930², with 9% fewer shadow draw calls and texels 0.67 → 0.44 units (sharper). The gain grows with
+  co-op maps (a 4-player Underworld is 57 tiles, a 1860² box). `game.shadowFollow = false` compares with the old box;
+  `game.shadowBox` shows the current one.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
   shader that caps point size and fades points near the camera.
@@ -749,6 +768,12 @@ server proxies `/ws` and `/api`).
   Bees find their neighbours through a grid rebuilt every frame (`buildBeeGrid`, `beeNear`; moving bees and spit
   hits use it, spawn placement still checks every bee): host bee AI went from 3.3 to 1.4 ms a frame with ~200 bees on
   a Mac. Health bars of off-screen bees aren't placed (`place(…, cull)`). Bullet spheres have 126 triangles.
+  **Since v0.28.3** spits are batched: round spits, darts, bolts and throwing stars (`Projectile.js`) are plain
+  `Object3D`s that carry the transform, and `drawProjectiles()` (main.js calls it right before rendering) copies the
+  ones still in the scene into one `InstancedMesh` per geometry and material (radius-1 geometry, the scale carries the
+  size). Axes, potions and fireballs are still meshes of several parts. Two batches (a lit and an unlit spit) stay in
+  the scene while empty so their instanced shaders compile with each arena's lights during the journey, not at the
+  first spit. A late build with ~100 spits in flight: ~580 → ~470 draw calls, render CPU 3.3 → 3.0 ms on a Mac.
 - **Guests and the boss intro:** a guest whose travel ends after the host's (a slow phone) got the host's boss intro
   mid-travel, which cut the travel short: that guest stayed in the old arena on the old wave. The intro now waits
   for the guest's landing (`guestBossIntro`, `pendingIntro`).
@@ -865,6 +890,10 @@ server proxies `/ws` and `/api`).
   wings (a style's `bugWing` tints them); only the boss queens keep the feather or bat wings of their style. Geometry is cached per kind and arena and marked `userData.shared`/`keepGeometry` so
   dispose leaves it alone. Their hitboxes match the glTF bee (`HITBOX_PER_SCALE`), so balance doesn't change. The HUD runs every frame, so it only writes to the DOM when a value changed
   (`setText`/`setStyle` in `Hud.js`). Adaptive resolution won't climb back to a ratio that proved too slow.
+  `viewWidth()`/`viewHeight()` (`Viewport.js`) are cached until a resize: reading `clientWidth` right after the HUD
+  moved a label forces a layout, and `place()` did that for every health bar and damage number, every frame (1.2–1.8
+  ms a frame with ~100 bees on a Mac, ~0.2 ms since v0.28.3). Don't read layout (`clientWidth`, `offsetWidth`,
+  `getBoundingClientRect`) in per-frame code.
 - **Bee draw calls** (v0.28.2, `BeeModels.js`): a regular arena bee is 3 meshes (body, abdomen, wings), was 6. The
   glowing pieces (eyes, veins, crystals, halos) are merged into the body and abdomen with a `glow` vertex attribute;
   `glowShader` (an `onBeforeCompile` on the bee's own surface material) draws them unlit at the old glow material's
@@ -934,7 +963,9 @@ Co-op profiling (Oct 16, v0.26.2, three tabs on a Mac, wave 21 with ~200 bees an
 12.5 ms a frame (render CPU 6.2, health bars and damage numbers 1.7, bees 1.4, effects and particles 1.4, spits 1.1,
 network 0.3); a guest 17 ms (render 10.6: its arena bees are 6 meshes and ~7k triangles each, 1,200+ draw calls).
 At Low the garden bee is one skinned mesh of 3,200 triangles. What's left, biggest first: draw calls (bees, 90+
-spits as separate meshes, arena props), the DOM health bars and damage numbers, effects and particles. A phone is
+spits as separate meshes, arena props), the DOM health bars and damage numbers, effects and particles. (v0.28.3
+batched the spits and stopped the labels' forced layouts; bees are now most of the draw calls, about 4 each with
+the shadow pass. v0.28.3 also fits the sun's shadow box to the view, see Graphics levels. Next candidate: instancing the bees.) A phone is
 several times slower. To set it up: `npm run server`, three tabs on the dev server, create a private room in one
 and join with its code in the others (`#coop-code`, `[data-action="coop-join"]`), start, then drive each tab in
 turn with `game.step` (background tabs don't animate) and keep frogs alive with `game.player.hp = 99`. Step the

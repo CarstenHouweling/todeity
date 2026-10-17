@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.28.3',
+    date: '2026-10-17',
+    title: 'Smoother everywhere',
+    changes: [
+      '🖥 A busy frame takes about a third of the graphics work it did: only the world itself is drawn with smooth edges now, not every screen effect on top of it (glow, ripples, flashes) again. Same picture, so Auto graphics keeps the full look on more devices',
+      '🎯 A storm of spit is much lighter: all spits of one kind are drawn together, so a fast late-game build no longer adds hundreds of pieces to every frame',
+      '❤️ Bee health bars and damage numbers no longer make the browser re-measure the page for every label, every frame',
+      '🌑 Shadows only cover what you can see: sharper shadows, and bees and props far off screen no longer cast shadows nobody sees (most of all on the big co-op maps)',
+    ],
+  },
+  {
     version: '0.28.2',
     date: '2026-10-17',
     title: 'Lighter swarms',

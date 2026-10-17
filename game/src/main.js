@@ -4,7 +4,7 @@ import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { FROG_SCALE, Player } from './components/Player.js';
 import { ELITE_MODS, Enemy, loadEnemyModel, setEnemyGraphics } from './components/Enemy.js';
-import { Projectile, PROJECTILE_HEIGHT } from './components/Projectile.js';
+import { Projectile, PROJECTILE_HEIGHT, initProjectiles, drawProjectiles } from './components/Projectile.js';
 import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
 import { createMap, isInsideMap, MAP_HALF_SIZE, MAP_TILES, setMapTiles, SOLO_TILES, TILE_SIZE } from './components/Map.js';
@@ -232,6 +232,7 @@ sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 scene.add(ambient, hemisphere, sun);
+initProjectiles(scene);
 
 // The world (lawn, garden, divine transformations) is rebuilt when the garden is resized for co-op.
 let map = null;
@@ -240,11 +241,79 @@ let divinity = null;
 
 let worldTiles = SOLO_TILES; // the garden's size (bigger in co-op); later arenas grow from it
 
-/** The sun's shadows cover the current field. */
+// The sun's shadow box covers only what the camera sees (`followShadows`, every frame before rendering): covering
+// the whole field drew every bee and prop off screen into the shadow map too, about half of the casters. The sun
+// never moves, so the box is fitted in its fixed light space by its bounds alone. The box keeps its size while the
+// view's footprint fits (it changes in cut-scenes and with the camera's zoom), and its edges sit on whole shadow
+// texels, so the shadows don't shimmer as Tode walks. A view that reaches the horizon (the title's orbit, some
+// cut-scenes) gets the whole field, as before.
+const SHADOW_FIT = { margin: 40, top: 120, slack: 1.05, shrink: 0.75, step: 16 };
+const shadowFit = { reach: 0, width: 0, height: 0, follow: true };
+const lightView = new THREE.OrthographicCamera();
+const fitNear = new THREE.Vector3();
+const fitFar = new THREE.Vector3();
+const fitPoint = new THREE.Vector3();
+
+/** The sun's shadows cover the current field (until `followShadows` fits them to the view). */
 function fitShadows() {
-  const reach = MAP_HALF_SIZE + 75;
-  Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 1600 });
-  sun.shadow.camera.updateProjectionMatrix();
+  const reach = (shadowFit.reach = MAP_HALF_SIZE + 75);
+  shadowFit.width = shadowFit.height = 0;
+  setShadowBox(-reach, reach, -reach, reach);
+}
+
+function setShadowBox(left, right, bottom, top) {
+  const box = sun.shadow.camera;
+  if (box.left === left && box.right === right && box.bottom === bottom && box.top === top) return;
+  Object.assign(box, { left, right, bottom, top, near: 1, far: 1600 });
+  box.updateProjectionMatrix();
+}
+
+function followShadows() {
+  if (!sun.castShadow) return;
+  const { reach } = shadowFit;
+  if (!shadowFit.follow) return setShadowBox(-reach, reach, -reach, reach);
+  // The light space the shadow camera uses (three aims it from the sun at its target every frame).
+  lightView.up.copy(sun.shadow.camera.up);
+  lightView.position.copy(sun.position);
+  lightView.lookAt(sun.target.position);
+  lightView.updateMatrixWorld();
+  camera.updateWorldMatrix(true, false);
+  // Where the screen's corner rays reach the ground and the height of the tallest props: everything visible that
+  // can catch a shadow lies between them.
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let corner = 0; corner < 4; corner++) {
+    const x = corner & 1 ? 1 : -1;
+    const y = corner & 2 ? 1 : -1;
+    fitNear.set(x, y, -1).unproject(camera);
+    fitFar.set(x, y, 1).unproject(camera).sub(fitNear);
+    if (fitFar.z > -1e-6) return fitShadows(); // this corner looks at the sky
+    for (const height of [0, SHADOW_FIT.top]) {
+      const t = THREE.MathUtils.clamp((height - fitNear.z) / fitFar.z, 0, 1);
+      fitPoint.copy(fitNear).addScaledVector(fitFar, t);
+      fitPoint.x = THREE.MathUtils.clamp(fitPoint.x, -reach, reach);
+      fitPoint.y = THREE.MathUtils.clamp(fitPoint.y, -reach, reach);
+      fitPoint.applyMatrix4(lightView.matrixWorldInverse);
+      minX = Math.min(minX, fitPoint.x);
+      maxX = Math.max(maxX, fitPoint.x);
+      minY = Math.min(minY, fitPoint.y);
+      maxY = Math.max(maxY, fitPoint.y);
+    }
+  }
+  const needWidth = maxX - minX + 2 * SHADOW_FIT.margin;
+  const needHeight = maxY - minY + 2 * SHADOW_FIT.margin;
+  if (Math.max(needWidth, needHeight) * SHADOW_FIT.slack >= 2 * reach) return fitShadows();
+  const size = (current, need) =>
+    need > current || need < current * SHADOW_FIT.shrink ? Math.ceil((need * SHADOW_FIT.slack) / SHADOW_FIT.step) * SHADOW_FIT.step : current;
+  const width = (shadowFit.width = size(shadowFit.width, needWidth));
+  const height = (shadowFit.height = size(shadowFit.height, needHeight));
+  const texelX = width / sun.shadow.mapSize.x;
+  const texelY = height / sun.shadow.mapSize.y;
+  const left = Math.floor(((minX + maxX) / 2 - width / 2) / texelX) * texelX;
+  const bottom = Math.floor(((minY + maxY) / 2 - height / 2) / texelY) * texelY;
+  setShadowBox(left, left + width, bottom, bottom + height);
 }
 
 function buildWorld(tiles) {
@@ -8306,6 +8375,8 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   postfx.update(realDelta);
   lap('hud widgets, camera');
   if (render) {
+    followShadows();
+    drawProjectiles();
     postfx.render(realDelta);
     if (cssVignette.hidden === postfx.direct) cssVignette.hidden = !postfx.direct;
   }
@@ -8513,6 +8584,15 @@ if (import.meta.env.DEV) {
     quality, // graphics: { step, features, ratio }; game.setQualityStep(0–4) to try a step
     setQualityStep,
     setPixelRatio,
+    /** game.shadowFollow = false: the sun's shadows cover the whole field again (to compare). */
+    set shadowFollow(value) {
+      shadowFit.follow = value;
+      fitShadows(); // fitted afresh on the next frame
+    },
+    get shadowBox() {
+      const { left, right, bottom, top } = sun.shadow.camera;
+      return { left, right, bottom, top, width: right - left, height: top - bottom };
+    },
     syncGarden: () => {
       garden.load(meta.decor);
       syncTrinkets();

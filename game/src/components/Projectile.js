@@ -5,6 +5,71 @@ export const PROJECTILE_HEIGHT = 10;
 const geometries = new Map();
 const materials = new Map();
 
+// --- Batches: every simple spit of one look is drawn by one InstancedMesh ------------------------------------------
+// A late-game build has ~100 spits in flight, and each was a mesh of its own, drawn twice (the shadow pass): ~200
+// draw calls, a third of a busy frame. Round spits, darts, bolts and throwing stars are now plain Object3Ds that
+// carry the transform (`Projectile.mesh`, still added to and removed from the scene by main.js), and
+// `drawProjectiles()` copies the ones still in the scene into their batch right before rendering. The batched
+// geometries have radius 1; the scale carries the size. Axes, potions and fireballs (several parts) stay meshes.
+const batches = new Map();
+let batchScene = null;
+
+/**
+ * The scene the batches are drawn in (main.js, once). Two batches stay in it even when empty, so the instanced
+ * shaders of a lit and an unlit spit are compiled with each arena's lights (during the journey there), not when Tode
+ * spits for the first time there. Three compiles the program of an empty InstancedMesh too.
+ */
+export function initProjectiles(scene) {
+  batchScene = scene;
+  for (const material of [glossy('#ffffff', '#000000'), glowing('#ffffff')]) {
+    const batch = batchFor(sphere(1), material);
+    batch.warm = true;
+    grow(batch, 1);
+  }
+}
+
+function batchFor(geometry, material) {
+  const key = `${geometry.uuid}/${material.uuid}`;
+  let batch = batches.get(key);
+  if (!batch) batches.set(key, (batch = { geometry, material, mesh: null, items: [] }));
+  return batch;
+}
+
+function grow(batch, needed) {
+  let capacity = batch.mesh?.instanceMatrix.count ?? 32;
+  while (capacity < needed) capacity *= 2;
+  batch.mesh?.removeFromParent();
+  batch.mesh?.dispose();
+  const mesh = new THREE.InstancedMesh(batch.geometry, batch.material, capacity);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.castShadow = true;
+  mesh.frustumCulled = false; // the spits are all over the arena; the bounds would need recomputing every frame
+  mesh.userData.keepGeometry = true; // shared, cached geometry
+  batch.mesh = mesh;
+  batchScene.add(mesh);
+}
+
+/** Copies the batched spits' transforms into their batches. Call every frame before rendering. */
+export function drawProjectiles() {
+  for (const batch of batches.values()) {
+    const { items } = batch;
+    // Spits are removed from the scene when they're spent (or the world is cleared): drop those.
+    let live = 0;
+    for (const item of items) if (item.parent) items[live++] = item;
+    items.length = live;
+    if (live > (batch.mesh?.instanceMatrix.count ?? 0)) grow(batch, live);
+    if (!batch.mesh) continue;
+    if (!batch.mesh.parent) batchScene.add(batch.mesh);
+    for (let i = 0; i < live; i++) {
+      items[i].updateMatrix();
+      batch.mesh.setMatrixAt(i, items[i].matrix);
+    }
+    batch.mesh.count = live;
+    batch.mesh.visible = live > 0 || batch.warm;
+    if (live) batch.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
 function sphere(radius) {
   if (!geometries.has(radius)) geometries.set(radius, new THREE.SphereGeometry(radius, 12, 8));
   return geometries.get(radius);
@@ -115,16 +180,20 @@ export class Projectile {
     // The classes' spit (see Classes.js): darts, fireballs, potions, axes or throwing stars; Tode's is a round blob.
     if (shape === 'pellet') radius *= 0.75;
     if (shape === 'dart') stretch = 2.6;
-    this.mesh =
-      shape === 'star'
-        ? new THREE.Mesh(starGeometry(radius), glossy('#c8ccd4', '#3a3a4a'))
-        : shape === 'axe'
-          ? axe(radius * 1.3)
-          : shape === 'potion'
-            ? potion(radius)
-            : shape === 'fireball'
-              ? fireball(radius)
-              : new THREE.Mesh(sphere(shape === 'dart' ? radius * 0.7 : radius), shape === 'bolt' ? glowing('#d8c0ff') : shape === 'dart' ? glossy('#e8d9a0', '#6a5a2a') : glossy(color, emissive));
+    let size = 1; // a batched spit's scale (its geometry has radius 1)
+    if (shape === 'axe') this.mesh = axe(radius * 1.3);
+    else if (shape === 'potion') this.mesh = potion(radius);
+    else if (shape === 'fireball') this.mesh = fireball(radius);
+    else {
+      const look =
+        shape === 'star'
+          ? [starGeometry(1), glossy('#c8ccd4', '#3a3a4a')]
+          : [sphere(1), shape === 'bolt' ? glowing('#d8c0ff') : shape === 'dart' ? glossy('#e8d9a0', '#6a5a2a') : glossy(color, emissive)];
+      size = shape === 'dart' ? radius * 0.7 : radius;
+      this.mesh = new THREE.Object3D();
+      this.mesh.matrixAutoUpdate = false; // drawProjectiles() updates the matrix
+      batchFor(...look).items.push(this.mesh);
+    }
     // A potion is lobbed: it flies over the bees in an arc and shatters where it lands (after `range`).
     this.lob = shape === 'potion';
     this.age = 0;
@@ -134,7 +203,7 @@ export class Projectile {
     this.mesh.castShadow = true;
     this.mesh.position.set(origin.x, origin.y, PROJECTILE_HEIGHT);
     this.direction = direction.clone().setZ(0).normalize();
-    this.mesh.scale.set(stretch, 1, 1);
+    this.mesh.scale.set(stretch * size, size, size);
     this.mesh.rotation.z = Math.atan2(this.direction.y, this.direction.x);
     this.speed = speed;
     this.range = range;

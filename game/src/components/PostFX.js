@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -108,6 +109,37 @@ const SanitizeShader = {
     }`,
 };
 
+/**
+ * Draws the scene into its own multisampled target, then copies it (sanitized) into the composer's plain buffers.
+ * The composer used to multisample both of its buffers, so every full-screen pass after the scene (sanitize, the
+ * bloom's blend, the reality shader) was drawn 4× multisampled and resolved again: ~25% of the GPU time of a frame.
+ */
+class ScenePass extends Pass {
+  constructor(scene, camera) {
+    super();
+    Object.assign(this, { scene, camera });
+    this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    this.copy = new FullScreenQuad(new THREE.ShaderMaterial({ ...SanitizeShader, uniforms: THREE.UniformsUtils.clone(SanitizeShader.uniforms) }));
+  }
+
+  setSize(width, height) {
+    this.target.setSize(width, height);
+  }
+
+  render(renderer, writeBuffer) {
+    renderer.setRenderTarget(this.target);
+    renderer.render(this.scene, this.camera); // clears first (autoClear)
+    this.copy.material.uniforms.tDiffuse.value = this.target.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.copy.render(renderer);
+  }
+
+  dispose() {
+    this.target.dispose();
+    this.copy.dispose();
+  }
+}
+
 const BASE_BLOOM = 0.35;
 
 /** Post-processing pipeline. Effects ease toward their targets, so changes never pop. */
@@ -115,11 +147,18 @@ export class PostFX {
   constructor(renderer, scene, camera) {
     Object.assign(this, { renderer, scene, camera });
     const size = renderer.getSize(new THREE.Vector2());
-    // Multisampled targets keep edges smooth (the canvas' own antialiasing doesn't apply to post-processing).
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
     this.composer = new EffectComposer(renderer, target);
-    this.composer.addPass(new RenderPass(scene, camera));
+    // With multisampling (the canvas' own antialiasing doesn't apply to post-processing) the scene is drawn into a
+    // multisampled target of its own and sanitized on the way into the composer (`msaaScene`); without, straight
+    // into the composer's buffer (`plainScene`), sanitized by its own pass when bloom needs it.
+    this.msaaScene = new ScenePass(scene, camera);
+    this.plainScene = new RenderPass(scene, camera);
+    this.plainScene.enabled = false;
+    this.composer.addPass(this.msaaScene);
+    this.composer.addPass(this.plainScene);
     this.sanitize = new ShaderPass(SanitizeShader);
+    this.sanitize.enabled = false;
     this.composer.addPass(this.sanitize);
     this.bloom = new UnrealBloomPass(size, BASE_BLOOM, 0.55, 0.93);
     this.composer.addPass(this.bloom);
@@ -154,13 +193,11 @@ export class PostFX {
    * (multisampled render targets) and `lite`: render straight to the screen whenever no screen effect is running.
    */
   setQuality({ bloom = true, msaa = true, lite = false }) {
-    this.bloom.enabled = this.sanitize.enabled = bloom;
-    const samples = msaa ? 4 : 0;
-    for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) {
-      if (target.samples === samples) continue;
-      target.samples = samples;
-      target.dispose(); // reallocated with the new sample count on its next use
-    }
+    this.bloom.enabled = bloom;
+    this.msaaScene.enabled = msaa;
+    this.plainScene.enabled = !msaa;
+    this.sanitize.enabled = bloom && !msaa;
+    if (!msaa) this.msaaScene.target.dispose(); // reallocated on its next use
     this.lite = lite;
   }
 

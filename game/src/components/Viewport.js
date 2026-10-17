@@ -3,8 +3,22 @@
  * `window.innerWidth` is the visual viewport instead: on phones it grows when the browser zooms out, and a canvas
  * sized from it made the page wider still, which kept the browser zoomed out and cut off the right side of menus.
  */
-export const viewWidth = () => document.documentElement.clientWidth || window.innerWidth;
-export const viewHeight = () => document.documentElement.clientHeight || window.innerHeight;
+export const viewWidth = () => (size ??= measure()).width;
+export const viewHeight = () => (size ??= measure()).height;
+
+// Cached until the viewport changes: reading `clientWidth` right after the HUD moved a label forces the browser to
+// lay the page out again, and the health bars and damage numbers did that for every label, every frame.
+let size = null;
+const measure = () => ({
+  width: document.documentElement.clientWidth || window.innerWidth,
+  height: document.documentElement.clientHeight || window.innerHeight,
+});
+const forget = () => (size = null);
+// Registered when this module loads, before main.js adds its own resize handler, so that one measures afresh.
+window.addEventListener('resize', forget);
+window.addEventListener('orientationchange', forget);
+window.visualViewport?.addEventListener('resize', forget);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(forget).observe(document.documentElement);
 
 /**
  * Keeps the browser from zooming into the game. iPhone Safari ignores `user-scalable=no` (an accessibility choice),
