@@ -8377,7 +8377,7 @@ function applyArenaFx() {
 /** Low graphics: the frogs and bees keep the garden's plain materials in every arena. */
 function applyCharacterGraphics() {
   const level = quality.features.plainCharacters ? 0 : arena.gfx;
-  setEnemyGraphics(level);
+  setEnemyGraphics(level, quality.features.beeDetail);
   player.setGraphics(level);
   if (coop) for (const remote of coop.remotes.values()) remote.puppet.setGraphics(level);
 }

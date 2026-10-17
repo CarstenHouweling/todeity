@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.28.2',
+    date: '2026-10-17',
+    title: 'Lighter swarms',
+    changes: [
+      '🐝 Big swarms in the later arenas are much lighter to draw: a bee\'s glowing eyes and veins and all its wings now draw together with its body, about a third fewer draw calls (bosses with six wings gain the most), and the same bees on screen',
+      '🖥 On the lighter graphics steps the arena bees are built from fewer pieces, about half the triangles',
+    ],
+  },
+  {
     version: '0.28.1',
     date: '2026-10-17',
     title: 'Keeping it pretty',

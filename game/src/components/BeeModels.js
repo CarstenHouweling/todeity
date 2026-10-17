@@ -73,6 +73,43 @@ export function piece(geometry, color, { position = [0, 0, 0], rotation = [0, 0,
 }
 
 export const merge = (pieces) => (pieces.length ? mergeGeometries(pieces) : null);
+
+/**
+ * Marks pieces as lit (0) or glowing (1). The glowing parts (eyes, veins, crystals, halos) used to be meshes of their
+ * own with an unlit material: two more draw calls a bee. Now they share the body's and abdomen's meshes, and
+ * `glowShader` draws them unlit (v0.28.2).
+ */
+function withGlow(pieces, value) {
+  for (const g of pieces) g.setAttribute('glow', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(value), 1));
+  return pieces;
+}
+
+const GLOW = '1.35'; // as bright as the old glow material: just past the bloom threshold
+
+/** The bee's surface draws vertices marked `glow` as unlit light in their vertex colour (hit flashes still add). */
+function glowShader(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vGlow;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\nvec3 glowLight = vColor.rgb * vGlow * ${GLOW};\ndiffuseColor.rgb *= 1.0 - vGlow;`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += glowLight;');
+  };
+  material.customProgramCacheKey = () => 'bee-glow';
+  return material;
+}
+
+// The shadow pass skips the glowing parts (they never cast shadows when they were meshes of their own): their
+// vertices land outside the shadow camera's view, so nothing of them is drawn.
+const glowlessDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+glowlessDepth.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float glow;')
+    .replace('#include <project_vertex>', '#include <project_vertex>\nif (glow > 0.5) gl_Position = vec4(0.0, 0.0, 2.0, 1.0);');
+};
+glowlessDepth.customProgramCacheKey = () => 'bee-glowless-depth';
 const mix = (a, b, t) => `#${tmpColor.set(a).lerp(new THREE.Color(b), t).getHexString()}`;
 
 /** Leg: upper and lower segment from the thorax down to the ground. */
@@ -142,12 +179,13 @@ function batWing(style, size, seg) {
 
 // --- The bee ---------------------------------------------------------------------------------
 
-function buildGeometry(kind, styleId) {
+function buildGeometry(kind, styleId, detail = 1) {
   const style = STYLES[styleId];
   const build = BUILDS[kind] ?? BUILDS.drone;
   const { bulk } = build;
-  // Smoother every arena; bosses are big on screen, so they get more. (Kept modest: a swarm is 50 bees.)
-  const seg = Math.round((9 + styleId * 2) * (build.boss ? 1.6 : 1));
+  // Smoother every arena; bosses are big on screen, so they get more. (Kept modest: a swarm is 50 bees.) `detail`
+  // below 1 on the lighter quality steps (Quality.js `beeDetail`).
+  const seg = Math.max(6, Math.round((9 + styleId * 2) * (build.boss ? 1.6 : 1) * detail));
   const shell = build.tint ? mix(style.shell, build.tint, styleId === 2 ? 0.25 : 0.2) : style.shell;
   const armor = build.tint ? mix(style.armor, build.tint, 0.35) : style.armor;
   const body = [];
@@ -240,10 +278,8 @@ function buildGeometry(kind, styleId) {
 
   const wings = build.boss ? style.wings : 'insect';
   return {
-    body: merge(body),
-    glow: merge(glow),
-    abdomen: merge(abdomen),
-    abdomenGlow: merge(abdomenGlow),
+    body: merge([...withGlow(body, 0), ...withGlow(glow, 1)]),
+    abdomen: merge([...withGlow(abdomen, 0), ...withGlow(abdomenGlow, 1)]),
     wings,
     wing:
       wings === 'feather'
@@ -324,6 +360,77 @@ function shared(styleId) {
   return sharedMaterials.get(styleId);
 }
 
+/**
+ * All of a bee's wings in one mesh (v0.28.2): they were a mesh each, two draw calls a bee (six for some bosses). Each
+ * wing's vertices carry its pivot, side and phase, and the shader turns them the way the pivots used to turn, from
+ * the bee's own flap clock (`uFlapT`, a uniform of the bee's own wing material).
+ */
+function wingSet(wing, defs) {
+  const geometries = defs.map(({ side, y, z, scale, tilt }) => {
+    const g = wing.clone();
+    g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(), quaternion.setFromEuler(euler.set(0, side * tilt, 0)), new THREE.Vector3(side * scale, scale, scale)));
+    if (side < 0) {
+      // Mirrored: turn the triangles back around, so their front faces stay front faces.
+      for (const attribute of Object.values(g.attributes)) {
+        const { array, itemSize } = attribute;
+        for (let tri = 0; tri < array.length; tri += itemSize * 3) {
+          for (let k = 0; k < itemSize; k++) [array[tri + itemSize + k], array[tri + 2 * itemSize + k]] = [array[tri + 2 * itemSize + k], array[tri + itemSize + k]];
+        }
+      }
+    }
+    const count = g.attributes.position.count;
+    const pivot = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) pivot.set([side * 3.2, y, z], i * 3);
+    g.setAttribute('aPivot', new THREE.BufferAttribute(pivot, 3));
+    g.setAttribute('aSide', new THREE.BufferAttribute(new Float32Array(count).fill(side), 1));
+    g.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(count).fill(tilt), 1));
+    return g;
+  });
+  const merged = mergeGeometries(geometries);
+  geometries.forEach((g) => g.dispose());
+  // Bounds that hold every pose: a wing's vertices stay within their reach of its pivot, whichever way it turns.
+  const center = new THREE.Vector3(0, 15, 0);
+  const position = merged.attributes.position;
+  const pivots = merged.attributes.aPivot;
+  const at = new THREE.Vector3();
+  let radius = 0;
+  for (let i = 0; i < position.count; i++) radius = Math.max(radius, at.fromBufferAttribute(pivots, i).distanceTo(center) + at.fromBufferAttribute(position, i).length());
+  merged.boundingSphere = new THREE.Sphere(center, radius);
+  return merged;
+}
+
+/** A bee's own wing material: a copy of the shared one that flaps its wings in the vertex shader. */
+function flappingWings(shared, rate, slow) {
+  const material = shared.clone();
+  const flapT = { value: 0 };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, { uFlapT: flapT, uFlapRate: { value: rate }, uSlow: { value: slow ? 1 : 0 } });
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform float uFlapT;
+uniform float uFlapRate;
+uniform float uSlow;
+attribute vec3 aPivot;
+attribute float aSide;
+attribute float aPhase;
+mat3 wingTurn() {
+  float flap = sin(uFlapT * uFlapRate + aPhase * 3.0);
+  float rz = aSide * (uSlow > 0.5 ? 0.15 + flap * 0.55 : 0.25 + flap * 0.45);
+  float rx = uSlow > 0.5 ? flap * 0.1 : 0.0;
+  mat3 turnZ = mat3(cos(rz), sin(rz), 0.0, -sin(rz), cos(rz), 0.0, 0.0, 0.0, 1.0);
+  mat3 turnX = mat3(1.0, 0.0, 0.0, 0.0, cos(rx), sin(rx), 0.0, -sin(rx), cos(rx));
+  return turnX * turnZ; // as a pivot's rotation (x, then z) did
+}`
+      )
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nmat3 wingTurned = wingTurn();\nobjectNormal = wingTurned * objectNormal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = aPivot + wingTurned * transformed;');
+  };
+  material.customProgramCacheKey = () => 'bee-wings';
+  return { material, flapT };
+}
+
 const sharedMesh = (geometry, material) => {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData.shared = true; // geometry and material outlive the bee
@@ -333,15 +440,15 @@ const sharedMesh = (geometry, material) => {
 /**
  * Builds a bee: `{ root, materials, animate(time, delta, enemy) }`. `root` is Y-up facing +Z like the glTF bee.
  */
-export function buildBee(kind, styleId) {
-  const key = `${kind}:${styleId}`;
-  if (!geometryCache.has(key)) geometryCache.set(key, buildGeometry(kind, styleId));
+export function buildBee(kind, styleId, detail = 1) {
+  const key = `${kind}:${styleId}:${detail}`;
+  if (!geometryCache.has(key)) geometryCache.set(key, buildGeometry(kind, styleId, detail));
   const parts = geometryCache.get(key);
   const style = STYLES[styleId];
   const materials = shared(styleId);
 
   // The body is per bee so hit flashes and status glows only light up this one.
-  const surface = upgradeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: style.roughness, metalness: style.metalness }), styleId);
+  const surface = glowShader(upgradeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: style.roughness, metalness: style.metalness }), styleId));
   surface.color.set('#ffffff');
 
   const root = new THREE.Group();
@@ -350,35 +457,32 @@ export function buildBee(kind, styleId) {
   const body = new THREE.Mesh(parts.body, surface);
   body.userData.keepGeometry = true;
   body.castShadow = true;
+  body.customDepthMaterial = glowlessDepth;
   inner.add(body);
-  if (parts.glow) inner.add(sharedMesh(parts.glow, materials.glow));
 
   const tail = new THREE.Group(); // the abdomen sways
   tail.position.set(0, 10, -1.5);
   const abdomen = new THREE.Mesh(parts.abdomen, surface);
   abdomen.userData.keepGeometry = true; // (only the body casts a shadow: fewer draw calls for a swarm)
   tail.add(abdomen);
-  if (parts.abdomenGlow) tail.add(sharedMesh(parts.abdomenGlow, materials.glow));
   inner.add(tail);
 
-  const wings = [];
-  const addWing = (side, y, z, scale, tilt) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 3.2, y, z);
-    const wing = sharedMesh(parts.wing, parts.wings === 'insect' ? materials.bugWing : materials.wing);
-    wing.scale.set(side * scale, scale, scale);
-    wing.rotation.y = side * tilt;
-    pivot.add(wing);
-    inner.add(pivot);
-    wings.push({ pivot, side, phase: tilt });
-  };
-  for (const side of [-1, 1]) {
-    addWing(side, 15, 1, 1, 0.15);
-    if (parts.extraWings) {
-      addWing(side, 14, -2, 0.8, 0.55);
-      if (styleId === 2) addWing(side, 16.5, 3, 0.7, -0.3);
+  const slowFlap = parts.wings !== 'insect';
+  if (!parts.wingSet) {
+    const defs = [];
+    for (const side of [-1, 1]) {
+      defs.push({ side, y: 15, z: 1, scale: 1, tilt: 0.15 });
+      if (parts.extraWings) {
+        defs.push({ side, y: 14, z: -2, scale: 0.8, tilt: 0.55 });
+        if (styleId === 2) defs.push({ side, y: 16.5, z: 3, scale: 0.7, tilt: -0.3 });
+      }
     }
+    parts.wingSet = wingSet(parts.wing, defs);
   }
+  const flap = flappingWings(parts.wings === 'insect' ? materials.bugWing : materials.wing, slowFlap ? style.flap : Math.max(style.flap, 26), slowFlap); // insect wings buzz
+  const wings = new THREE.Mesh(parts.wingSet, flap.material);
+  wings.userData.keepGeometry = true;
+  inner.add(wings);
 
   let cape = null;
   if (parts.cape) {
@@ -403,10 +507,10 @@ export function buildBee(kind, styleId) {
     inner.add(orbit);
   }
 
-  const slowFlap = parts.wings !== 'insect';
   return {
     root,
     materials: [surface],
+    ownMaterials: [flap.material], // the bee's own, but no hit flash (Enemy.dispose frees them)
     animate(time, delta, enemy) {
       const frozen = enemy.isFrozen;
       const rate = frozen ? 0 : enemy.speedFactor;
@@ -414,11 +518,7 @@ export function buildBee(kind, styleId) {
       const t = enemy.flapTime;
       inner.position.y = Math.sin(t * 3) * 1.4;
       tail.rotation.x = Math.sin(t * 4.2) * 0.1 - (enemy.glow > 0.3 ? 0.35 : 0);
-      for (const { pivot, side, phase } of wings) {
-        const flap = Math.sin(t * (slowFlap ? style.flap : Math.max(style.flap, 26)) + phase * 3); // insect wings buzz
-        pivot.rotation.z = side * (slowFlap ? 0.15 + flap * 0.55 : 0.25 + flap * 0.45);
-        pivot.rotation.x = slowFlap ? flap * 0.1 : 0;
-      }
+      flap.flapT.value = t; // the wings flap in their shader (flappingWings)
       if (cape) cape.rotation.x = 0.45 + Math.sin(t * 2.3) * 0.12;
       if (orbit) orbit.rotation.y = t * 1.3;
       if (enemy.dying) {

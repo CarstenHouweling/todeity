@@ -865,6 +865,19 @@ server proxies `/ws` and `/api`).
   wings (a style's `bugWing` tints them); only the boss queens keep the feather or bat wings of their style. Geometry is cached per kind and arena and marked `userData.shared`/`keepGeometry` so
   dispose leaves it alone. Their hitboxes match the glTF bee (`HITBOX_PER_SCALE`), so balance doesn't change. The HUD runs every frame, so it only writes to the DOM when a value changed
   (`setText`/`setStyle` in `Hud.js`). Adaptive resolution won't climb back to a ratio that proved too slow.
+- **Bee draw calls** (v0.28.2, `BeeModels.js`): a regular arena bee is 3 meshes (body, abdomen, wings), was 6. The
+  glowing pieces (eyes, veins, crystals, halos) are merged into the body and abdomen with a `glow` vertex attribute;
+  `glowShader` (an `onBeforeCompile` on the bee's own surface material) draws them unlit at the old glow material's
+  brightness (×1.35), and `glowlessDepth` (the body's `customDepthMaterial`) moves them out of the shadow pass, so
+  they cast no shadow, as before (`renderer.info` still counts those triangles). All wings of a bee are one mesh
+  (`wingSet`: each wing's vertices carry `aPivot`, `aSide`, `aPhase`) on the bee's own copy of the wing material
+  (`flappingWings`), whose vertex shader turns them the way the pivots did from `uFlapT` (the bee's `flapTime`,
+  set in `animate`); `rig.ownMaterials` are freed in `Enemy.dispose`. Note: three's shadow pass tests layers against
+  the main camera, so a shadow-only proxy on another layer doesn't work. Quality steps 2+ build bees with
+  `beeDetail` 0.65 (fewer segments; the geometry cache key includes it). Measured on a Mac with 180 bees at full
+  quality: 4.3–4.6 → 2.84 draw calls a bee, render CPU ~7 → ~5 ms, frame ~9.6 → ~7.1 ms; at step 2, 10.5k → 5.6k
+  triangles a bee in the Underworld. Compare looks with a lineup rendered off-screen (`buildBee` per style into a
+  bare scene with the arena's lights, `renderer.render`, `toDataURL`) before and after a change.
 - Constants for tuning sit at the top of each file (`main.js`, `Player.js` `BASE_STATS`, `Enemy.js`
   `ENEMY_TYPES`, `Waves.js`).
 - **The frame loop must not throw.** three.js asks for the next frame only after `setAnimationLoop`'s callback

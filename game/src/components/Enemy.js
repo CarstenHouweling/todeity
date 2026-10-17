@@ -183,12 +183,14 @@ function createHorns() {
 
 let template = null;
 let graphicsLevel = 0;
+let beeDetail = 1; // the arena bees' geometry detail (Quality.js `beeDetail`)
 let baseColors = null; // vertex colours of the merged bee, before tinting
 const geometryByType = {};
 
-/** Bees spawned from now on use this graphics level (see Graphics.js). */
-export function setEnemyGraphics(level) {
+/** Bees spawned from now on use this graphics level (see Graphics.js) and geometry detail. */
+export function setEnemyGraphics(level, detail = 1) {
   graphicsLevel = level;
+  beeDetail = detail;
 }
 
 export async function loadEnemyModel() {
@@ -272,7 +274,7 @@ export class Enemy {
       this.materials.push(...this.rig.materials);
     } else if (graphicsLevel > 0) {
       // A new species for every arena after the garden (see BeeModels.js).
-      this.rig = buildBee(type.model ?? kind, graphicsLevel);
+      this.rig = buildBee(type.model ?? kind, graphicsLevel, beeDetail);
       model = this.rig.root;
       model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
       this.materials.push(...this.rig.materials);
@@ -535,5 +537,6 @@ export class Enemy {
       }
     });
     for (const material of this.materials) material.dispose();
+    for (const material of this.rig?.ownMaterials ?? []) material.dispose();
   }
 }
