@@ -53,6 +53,23 @@ const SHADOW = shared(new THREE.CircleGeometry(6, 16));
 const SHADOW_MATERIAL = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.22, depthWrite: false });
 
 /**
+ * One of each thing the garden games draw, for main.js to compile their shaders on the way into a garden (the first
+ * koi or leaf used to stall a frame, enough on a slow machine to cost a quality step). Kept: a program whose last
+ * material is disposed is deleted.
+ */
+let warm = null;
+export function gardenWarmup() {
+  if (warm) return warm;
+  warm = new THREE.Group();
+  const koi = new THREE.Mesh(KOI_BODY, new THREE.MeshStandardMaterial({ color: '#ff7a2e', roughness: 0.35 }));
+  const stone = new THREE.Mesh(STONE, new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: 0.6 }));
+  const ring = new THREE.Mesh(STONE, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(document.createElement('canvas')), transparent: true, depthWrite: false }));
+  warm.add(koi, stone, ring, label, new THREE.Mesh(LEAF, LEAF_MATERIALS.small), new THREE.Mesh(SHADOW, SHADOW_MATERIAL));
+  return warm;
+}
+
+/**
  * A skipped stone's landings from where it was thrown: [{ x, y, wet, t }] (t: when it lands, from the throw). It
  * stops after `bounces`, at the first landing on the bank, or when the hops get too small.
  */

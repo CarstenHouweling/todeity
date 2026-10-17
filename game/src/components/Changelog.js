@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.28.1',
+    date: '2026-10-17',
+    title: 'Keeping it pretty',
+    changes: [
+      '🖥 Auto graphics no longer drops to Low after a few hiccups: it looks at your typical frame instead of the slowest moments, waits for two slow stretches in a row, and gives a new garden, arena or run a few seconds to settle',
+      '🏡 Gardens full of trinkets draw about a third fewer pieces, and the garden games\' water, leaves and fish are prepared as you come in, so the first koi doesn\'t stutter',
+      '🌑 Lighter shadows on the lower graphics steps',
+    ],
+  },
+  {
     version: '0.28.0',
     date: '2026-10-17',
     title: 'Games in the garden',

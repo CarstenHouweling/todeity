@@ -51,6 +51,7 @@ import { BOONS, dailyTwists, TRIALS } from './components/DailyTwists.js';
 import { GARDEN_SONGS, accountLevel, ownedTrinkets, songHint, songUnlocked } from './components/Rewards.js';
 import { TitleGarden } from './components/TitleGarden.js';
 import { GardenHub } from './components/GardenHub.js';
+import { gardenWarmup } from './components/GardenGames.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
 import { EMOTES, bestTier, emoteUnlocked } from './components/Emotes.js';
 import { onServerBack, setPresence, startPresence } from './components/Presence.js';
@@ -433,6 +434,7 @@ function achieve(id) {
 // The host simulates the bees and the waves; every player simulates their own Tode.
 const net = new Net();
 let coop = null; // { host: boolean, remotes: Map<id, RemoteTode>, ready: Set<id>, size }
+let qualityHold = 0; // s the frame-rate watch looks away after a scene change (see qualityGrace)
 let nextNetId = 1; // host: id for every bee, so guests can mirror them
 const mirrors = new Map(); // guest: netId → mirrored Enemy
 const isGuest = () => Boolean(coop && !coop.host);
@@ -4434,6 +4436,8 @@ function refreshGardenWalk() {
 /** Into a garden as a hopping frog: `code` (null offline), `own`, `owner` (the name on a visited garden). */
 function enterGarden({ code, own, owner = null }) {
   hud.hideModal();
+  qualityGrace();
+  warmGarden();
   houseField ??= houses[0] ? heightField(houses[0].house, { cell: 4 }) : null;
   decorating = true;
   gardenVisit = { code, own, owner };
@@ -4443,6 +4447,14 @@ function enterGarden({ code, own, owner = null }) {
   if (own) hub.look = myLook(); // sent to visitors as they come in
   garden.walk(player.group.position);
   refreshGardenWalk();
+}
+
+let gardenWarmed = false;
+/** Compiles the garden games' shaders in the background, once (see gardenWarmup in GardenGames.js). */
+function warmGarden() {
+  if (gardenWarmed) return;
+  gardenWarmed = true;
+  renderer.compileAsync(gardenWarmup(), camera, scene).catch(() => {});
 }
 
 /** Your own garden (🏡 My garden on the title screen). */
@@ -4487,6 +4499,7 @@ async function fetchGardens() {
 /** Leaves the garden view (to the title screen, or because a run starts). */
 function leaveGardenView() {
   if (!decorating) return;
+  qualityGrace();
   hub.leave();
   player.rig?.play('idle'); // an emote still playing stays in the garden
   if (!gardenVisit?.own) garden.load(meta.decor);
@@ -4831,6 +4844,7 @@ function resetExperience() {
 // --- Arenas and the journey between them ---
 /** Shows an arena right away: its world, obstacles, lighting and graphics level (call it under a flash). */
 function setArena(next) {
+  qualityGrace();
   arena = next;
   const garden = next.id === 'garden';
   prepareArena(next);
@@ -8305,7 +8319,18 @@ function frame(realDelta, render = true, elapsed = realDelta) {
 const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
 // `ceiling` drops below a resolution that proved too slow, so quality settles instead of see-sawing
 // (every change reallocates the render targets, which shows as a hitch).
-const quality = { step: 0, features: stepFeatures(0), ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: 0, goodWindows: 0 };
+const quality = { step: 0, features: stepFeatures(0), ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: [], goodWindows: 0, slowWindows: 0 };
+const QUALITY_WINDOW = 2; // s of frames judged together
+const QUALITY_GRACE = 3; // s not judged after a scene change
+
+/**
+ * A scene change (a garden, a new arena, a run, the tab coming back) compiles shaders and uploads models: a hitch
+ * there used to cost a quality step for good, and gardens went to Low a few seconds after you came in.
+ */
+function qualityGrace(seconds = QUALITY_GRACE) {
+  qualityHold = Math.max(qualityHold, seconds);
+}
+document.addEventListener('visibilitychange', () => qualityGrace());
 const STEP_NAMES = ['full', 'no bloom', 'lite', 'no shadows', 'low'];
 
 const maxRatio = () => Math.min(MAX_PIXEL_RATIO, quality.features.maxRatio);
@@ -8321,6 +8346,11 @@ function setQualityStep(step) {
   const features = (quality.features = stepFeatures(step));
   postfx.setQuality(features);
   sun.castShadow = features.shadows;
+  if (sun.shadow.mapSize.x !== features.shadowSize) {
+    sun.shadow.mapSize.set(features.shadowSize, features.shadowSize);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null; // made again at the new size
+  }
   quality.ceiling = Math.min(quality.ceiling, maxRatio());
   setPixelRatio(quality.ratio);
   applyArenaFx();
@@ -8366,21 +8396,37 @@ const AUTO_LADDER = [() => lowerRatio(1), () => stepTo(1), () => stepTo(2), () =
 
 function adaptQuality(delta) {
   updateFpsMeter(delta);
+  if (qualityHold > 0) {
+    qualityHold -= delta;
+    quality.time = 0;
+    quality.frames.length = 0;
+    return;
+  }
   quality.time += delta;
-  quality.frames++;
-  if (quality.time < 2) return;
-  const fps = quality.frames / quality.time;
-  quality.time = quality.frames = 0;
+  quality.frames.push(delta);
+  if (quality.time < QUALITY_WINDOW) return;
+  // The typical frame (the median), not the average: a few hitches (a shader compiling, garbage collection, a big
+  // effect starting) made a smooth game look slow, and every slow window cost a step for good.
+  const frames = quality.frames.sort((a, b) => a - b);
+  const fps = 1 / Math.max(1e-3, frames[Math.floor(frames.length / 2)]);
+  const average = frames.length / quality.time;
+  quality.time = 0;
+  quality.frames.length = 0;
   if (document.hidden) return;
-  if (fps < 45) {
+  if (fps < 45 || average < 25) {
     quality.goodWindows = 0;
+    // One slow window may be a passing moment: step down after two in a row (at once when it's very slow).
+    if (++quality.slowWindows < 2 && fps >= 25) return;
+    quality.slowWindows = 0;
     // Very slow: two steps at once, so a weak phone doesn't stutter for long.
     if (settings.graphics === 'auto') for (let i = fps < 25 ? 2 : 1; i > 0; i--) AUTO_LADDER.some((step) => step());
     else if (!lowerRatio(quality.features.minRatio) && fps < 30 && settings.graphics === 'high') sun.castShadow = false; // last resort
-  } else if (fps > 57 && quality.ratio < quality.ceiling - 0.01 && ++quality.goodWindows >= 3) {
+    return;
+  }
+  quality.slowWindows = 0;
+  if (fps <= 57) quality.goodWindows = 0;
+  else if (quality.ratio < quality.ceiling - 0.01 && ++quality.goodWindows >= 3) {
     setPixelRatio(Math.min(quality.ceiling, quality.ratio + 0.1));
-    quality.goodWindows = 0;
-  } else if (fps <= 57) {
     quality.goodWindows = 0;
   }
 }

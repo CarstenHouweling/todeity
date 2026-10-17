@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * Procedural models for the trinkets players place in the title garden (see Rewards.js for the list). Each is a
@@ -340,6 +341,7 @@ const BUILDERS = {
     const flower = ball(2.5, mat('#ff9ec7', { emissive: '#a0284a', intensity: 0.4 }), [6, 9.5, 4], 0);
     g.add(flower);
     // A bounce (TitleGarden sets `bounce` when a frog lands on it) makes the pad dip and spring back.
+    g.userData.moving = [pad, flower]; // only after a bounce, so mergeStill can't see them move by itself
     g.userData.anim = (t) => {
       const dip = g.userData.springAt ? Math.max(0, 1 - (t - g.userData.springAt) * 3) : 0;
       pad.position.y = 8.5 - Math.sin(dip * Math.PI * 3) * 2.5 * dip;
@@ -414,6 +416,7 @@ const BUILDERS = {
 export function buildTrinket(id) {
   const inner = new THREE.Group();
   (BUILDERS[id] ?? BUILDERS.lantern)(inner);
+  mergeStill(inner);
   const body = new THREE.Group(); // turned Z-up; its own animations move the inner model
   body.add(inner);
   body.rotation.x = Math.PI / 2; // Y-up model, Z-up world
@@ -434,6 +437,92 @@ export function buildTrinket(id) {
     group.userData.glow = glow;
   }
   return group;
+}
+
+/**
+ * Fewer draw calls (v0.28.1): a trinket is built from up to 20 little parts, and a full garden drew 400+ meshes,
+ * twice with the shadow pass. The parts its animation never touches are merged: one mesh per kind of surface (the
+ * same material but for its colour), the colours baked into the vertices. What the animation moves is found by
+ * running it at a few moments (day and night) and seeing which parts changed.
+ */
+const twins = new Map(); // a material's family (all but the colour) → its vertex-coloured twin
+function family(material) {
+  if (!material.isMeshStandardMaterial || material.map || material.vertexColors) return null;
+  const m = material;
+  return [m.emissive.getHex(), m.emissiveIntensity, m.metalness, m.roughness, m.opacity, m.transparent, m.flatShading, m.side].join('|');
+}
+function twinOf(material, key) {
+  if (!twins.has(key)) {
+    const twin = material.clone();
+    twin.color.set('#ffffff');
+    twin.vertexColors = true;
+    twins.set(key, twin);
+  }
+  return twins.get(key);
+}
+
+function mergeStill(inner) {
+  const anim = inner.userData.anim;
+  const state = (o) => {
+    const m = o.material;
+    return [o.position.toArray(), o.rotation.toArray().slice(0, 3), o.scale.toArray(), o.visible, m?.emissiveIntensity, m?.opacity, m?.color?.getHex()].join();
+  };
+  const moving = new Set(inner.userData.moving ?? []); // parts that only move on an event (a bounce)
+  if (anim) {
+    const before = new Map();
+    inner.traverse((o) => before.set(o, state(o)));
+    for (const [t, night] of [[0.37, false], [1.91, true], [4.3, false], [7.7, true], [13.1, false]]) {
+      anim(t, night);
+      inner.traverse((o) => before.get(o) !== state(o) && moving.add(o));
+    }
+  }
+  // Parts are merged within the closest thing that moves them (a swaying crown, a bending stem), or the trinket.
+  const rootOf = (o) => {
+    for (let p = o.parent; p && p !== inner; p = p.parent) if (moving.has(p)) return p;
+    return inner;
+  };
+  inner.updateMatrixWorld(true);
+  const groups = new Map(); // root → family (or the material itself) → its still meshes
+  inner.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || o.children.length || !o.visible || moving.has(o)) return;
+    const root = rootOf(o);
+    const key = family(o.material) ?? o.material;
+    if (!groups.has(root)) groups.set(root, new Map());
+    const byKey = groups.get(root);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(o);
+  });
+  for (const [root, byKey] of groups) for (const [key, meshes] of byKey) {
+    if (meshes.length < 2) continue;
+    const toRoot = root.matrixWorld.clone().invert();
+    const coloured = typeof key === 'string';
+    const geometries = meshes.map((mesh) => {
+      const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+      geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(toRoot, mesh.matrixWorld));
+      for (const name of Object.keys(geometry.attributes)) if (!['position', 'normal', 'uv'].includes(name)) geometry.deleteAttribute(name);
+      if (coloured) {
+        const { r, g, b } = mesh.material.color;
+        const count = geometry.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) colors.set([r, g, b], i * 3);
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+      return geometry;
+    });
+    if (!geometries.every((g) => g.attributes.uv)) geometries.forEach((g) => g.deleteAttribute('uv'));
+    geometries.forEach((g) => (g.morphAttributes = {}, g.clearGroups()));
+    const merged = mergeGeometries(geometries);
+    geometries.forEach((g) => g.dispose());
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, coloured ? twinOf(meshes[0].material, key) : key);
+    mesh.castShadow = meshes.some((m) => m.castShadow);
+    mesh.receiveShadow = meshes.some((m) => m.receiveShadow);
+    root.add(mesh);
+    for (const old of meshes) {
+      old.removeFromParent();
+      old.geometry.dispose();
+    }
+  }
 }
 
 let softGlow = null;

@@ -400,6 +400,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `WORDS` only as whole words, so Spicy or Peacock pass); the server also runs leaderboard, co-op and garden names
   through `publicName()`. 🏷 on the title (and the co-op lobby's "Playing as" chip) opens `hud.showProfile`;
   `needName(next)` asks for a name before the first co-op or garden step.
+- **Trinket draw calls** (v0.28.1, `mergeStill` in TrinketModels.js): a trinket's parts that its animation never
+  touches are merged into one mesh per material family (everything but the colour, which goes into vertex colours
+  on a shared `vertexColors` twin), within the closest moving group (a swaying crown, a bending stem) or the
+  trinket. What moves is found by running `userData.anim` at five moments, day and night, and comparing transforms,
+  visibility and material values. All 27 trinkets: about 220 meshes → 119, a full garden 424 draw calls → 306 (with
+  the shadow pass). A part that only moves on an event (the trampoline's pad after a bounce) isn't seen moving, so
+  its builder lists it in `userData.moving`. Check a trinket still animates after changing it.
 - **The playground** (v0.24): the house and trinkets are solid (`GardenPhysics.js`: height fields sampled once by
   raycasting down, `hub.world.heightAt`; walls stop you unless they're within `STEP_UP`, tops can be stood on).
   `BOUNCE` (trampoline, Fairy Ring) throws frogs up; the Teapot Cannon fires them along its facing (`CANNON`); the
@@ -686,7 +693,13 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   (`applyCharacterGraphics`) and no arena floor shaders or motes (`userData.arenaFx`, `applyArenaFx`). Auto starts
   at 4 when `looksWeak()` (≤2 GB memory, a phone with ≤4 cores, a tiny screen or a known weak GPU) and otherwise walks
   down `AUTO_LADDER` (resolution and steps in turns, two at once below 25 fps) in 2 s windows under 45 fps; steps
-  never come back in a session. High only lowers the resolution (and shadows below 30 fps). The canvas itself has
+  never come back in a session. **Since v0.28.1** a window is judged by its median frame (or an average under 25
+  fps), a step needs two slow windows in a row (one below 25 fps), and `qualityGrace()` ignores 3 s after a scene
+  change (`enterGarden`, `leaveGardenView`, `setArena`, the tab becoming visible again). Before, one hitch (shaders
+  compiling, a garden's trinkets loading, garbage collection) in a 2 s window at ~50 fps cost a step for good, and
+  gardens went to Low a few seconds after you came in. Steps 2+ also halve the sun's shadow map (`shadowSize`, 1024).
+  Test it by busy-waiting in a `requestAnimationFrame` loop: 17 ms a frame with a 300 ms hitch every 1.5 s keeps step
+  0; 30 ms a frame steps down every 4 s. High only lowers the resolution (and shadows below 30 fps). The canvas itself has
   no antialiasing: the composer's multisampled targets do it. Measured on a Mac at the same resolution in the
   Tournament: 6.1 ms per frame at step 0, 2.0 ms at Low. 📈 `settings.showFps` shows fps, resolution and the step.
   In the console: `game.quality`, `game.setQualityStep(n)`.
@@ -812,7 +825,7 @@ server proxies `/ws` and `/api`).
 | `components/GardenAuras.js` | A garden frog's level aura (ring, leaves, fireflies, steam, halo, crown, pillar) and its landing puffs; `GardenFx.levelAura` builds it. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
-| `components/GardenGames.js` | Garden games: the pond (swimming, cannonballs, skipping stones, the koi) and Leaf Rush. |
+| `components/GardenGames.js` | Garden games: the pond (swimming, cannonballs, skipping stones, the koi) and Leaf Rush; `gardenWarmup()` (one of each of their meshes, compiled in the background by `warmGarden` in main.js on the way into a garden). |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
 | `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
 | `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the seven frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |

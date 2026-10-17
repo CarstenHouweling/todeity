@@ -23,6 +23,7 @@ export function stepFeatures(step) {
     particles: step >= LOW_STEP ? 0.45 : 1,
     arenaFx: step < LOW_STEP,
     plainCharacters: step >= LOW_STEP,
+    shadowSize: step >= 2 ? 1024 : 2048, // the sun's shadow map: a quarter of the pixels to draw and sample
     maxRatio: step >= LOW_STEP ? 1 : 1.5,
     minRatio: step >= LOW_STEP ? 0.5 : 0.6,
   };
