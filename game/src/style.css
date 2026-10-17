@@ -3618,6 +3618,39 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
   margin-top: 8px;
 }
 
+/* Leaf Rush (v0.28, GardenGames.js): the clock and the scores under the garden toolbar */
+.rush-board {
+  pointer-events: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-top: 8px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(20, 40, 10, 0.6);
+  color: #eaffd0;
+  font-size: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.rush-board[hidden] {
+  display: none;
+}
+
+.rush-board > b {
+  color: #ffe680;
+}
+
+.rush-board span.me {
+  color: #ffe680;
+}
+
+.rush-board small {
+  opacity: 0.8;
+}
+
 /* --- Phones held upright (v0.26.1): turn sideways ---------------------- */
 @keyframes turn-phone {
   0%, 20% { transform: rotate(0deg); }

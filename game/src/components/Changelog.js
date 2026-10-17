@@ -3,6 +3,19 @@
 
 export const CHANGELOG = [
   {
+    version: '0.28.0',
+    date: '2026-10-17',
+    title: 'Games in the garden',
+    changes: [
+      '🍃 Leaf Rush: start a 30-second race for everyone in the garden (🍃 or L). Hop into the golden leaves scattered over the lawn, the roof and the pond; amber ones count 3. Alone, beat your own best',
+      '🏊 The pond is for swimming now: hop in and paddle, and land in it from the cannon or the trampoline for a cannonball that soaks everyone nearby',
+      '🪨 Boop at the water\'s edge to skip a stone. A run-up skips further, and now and then one makes it all the way across',
+      '🐟 A koi leaps out of the pond now and then',
+      '🖱 On a computer, right-click boops in the garden (B still works)',
+      '🔭 Gardens open a little further zoomed out, so you see who is around',
+    ],
+  },
+  {
     version: '0.27.2',
     date: '2026-10-17',
     title: 'Can you hear me now?',

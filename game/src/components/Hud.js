@@ -1126,6 +1126,15 @@ ${ meta.runs > 0 ? '' :
     }).join('');
   }
 
+  /** Leaf Rush's scores and clock (GardenGames.js) under the garden toolbar; '' hides it. Called every frame. */
+  setRushBoard(html) {
+    const board = this.menuName === 'garden-walk' && this.menu.querySelector('.rush-board');
+    if (!board || board.dataset.html === html) return;
+    board.dataset.html = html;
+    board.innerHTML = html;
+    board.hidden = !html;
+  }
+
   /** A short line over the garden tray ("Tea Party complete!"). */
   gardenFlash(text) {
     const flash = ['garden-mode', 'garden-walk'].includes(this.menuName) && this.menu.querySelector('.garden-flash');
@@ -1167,8 +1176,8 @@ ${ meta.runs > 0 ? '' :
           ? `Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
           : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
         : info.touch
-          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), 🥊 to boop a frog or a trinket, drag the right side to look around.'
-          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), B to boop frogs and trinkets, 1–9 to emote. 🚩 Invite others to play together.';
+          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), 🥊 to boop a frog or a trinket (or skip a stone at the pond), drag the right side to look around.'
+          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), right-click or B to boop frogs and trinkets (or skip a stone at the pond), 1–9 to emote, L for a Leaf Rush. 🚩 Invite others to play together.';
     const buttons = [
       info.own ? tool('garden-edit', '✏️ Edit garden') : '',
       info.own && info.online ? tool('garden-public', info.public ? '🌍 Public' : '🔒 Private', info.public ? 'on' : '') : '',
@@ -1176,6 +1185,7 @@ ${ meta.runs > 0 ? '' :
       info.inviting && info.readyCount ? tool('garden-go', `▶ Go now (${info.readyCount + 1})`, 'ready') : '',
       tool('garden-emotes', '😀 Emotes', info.emotes ? 'on' : ''),
       tool('garden-boop', '👉 Boop'),
+      tool('garden-rush', info.rush ? '🍃 Rush on!' : '🍃 Leaf Rush', info.rush ? 'on' : ''),
       tool('garden-visit', '👀 Visit'),
       info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
       tool('garden-night', info.night ? '🌙' : '☀️'),
@@ -1202,6 +1212,7 @@ ${ meta.runs > 0 ? '' :
         }
       </div>
       <div class="garden-flash" hidden></div>
+      <div class="rush-board" hidden></div>
       ${info.countdown ? `<div class="garden-countdown">${info.countdown}</div>` : ''}`
     );
   }

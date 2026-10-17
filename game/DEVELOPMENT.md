@@ -425,6 +425,20 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4 })`
   and main.js damps the form's screen warp (`soft`): at garden camera distance on a sunny lawn the full form washed
   the screen out white.
+- **Garden games** (v0.28, `components/GardenGames.js`, wired into `GardenHub`): **the pond** (`GardenPond`,
+  `POND` in Environment.js, `inPond`): a frog on the lawn's level inside the water swims (`SWIM`: 55% speed, sunk
+  in, paddling, ripples). Every screen works that out for every frog from its position, so nothing extra is sent. A
+  landing faster than `CANNONBALL` is a `splash` event: a big splash, and frogs within `SOAK` are washed back on
+  their own screens. A boop with nothing else in reach and water ahead skips a stone (`skip`); its path
+  (`skipPath`) follows from the throw, so the `skip` event replays it exactly. A koi leaps every 6–14 s (each screen
+  its own). **Leaf Rush** (`LeafRush`, 🍃 or L): a round (`RUSH`: 3 s countdown, 30 s) run by the frog that starts
+  it: its screen scatters leaves (`rleaf`, more with more frogs), awards each one first come (`rgrab` → `rgot`
+  with the score) and ends it (`rend`). Others hide a leaf at once when they touch it and wait for `rgot`. If the
+  host leaves, the round is off; two starts at once keep the lower id's round. The board under the toolbar is
+  `hud.setRushBoard` (a `.rush-board` in the walk menu, rewritten every frame only when its HTML changes). Bests
+  alone (skips, Leaf Rush) are kept in `meta.gardenBests` (`hooks.onRecord`). In a garden, the **right mouse button
+  boops** (`MouseRight` in Input.js; `TitleGarden.down` ignores it while walking, so it doesn't turn the camera),
+  and the walking camera starts at `WALK_VIEW` (410 away; it was 300, too close when joining).
 - **Level aura** (v0.26, bolder in v0.26.2: `GardenFx.levelAura` builds a `GardenAura` from
   `components/GardenAuras.js`): every frog in a garden carries its account level (`accountLevel`, sent as `lv` in
   `genter`, with `mt` the best form; the server passes both in `frogInfo`; looks only, so the client's word is
@@ -798,6 +812,7 @@ server proxies `/ws` and `/api`).
 | `components/GardenAuras.js` | A garden frog's level aura (ring, leaves, fireflies, steam, halo, crown, pillar) and its landing puffs; `GardenFx.levelAura` builds it. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
+| `components/GardenGames.js` | Garden games: the pond (swimming, cannonballs, skipping stones, the koi) and Leaf Rush. |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |
 | `components/FrogModels.js` | The player frogs (since v0.17; `tode.glb` is no longer used): procedural voxel frogs in Tode's style with real joints (head, jaw, tongue, throat, blinking eyes, arms, folding legs) and animations: idle, hop, spit, dash, victory and a signature move per class. Seven classes: Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner (calls up a giant Ancient Pond Toad, the hidden `giant` look; his little `pondling` companions) and Ninja. Effects (`smoke`, `runeCircle`, `sparks`) are pure functions of time, so frozen frames match live ones. The Summoner and Ninja are inspired by ninja-anime toads but deliberately original (no leaf headband, no copied characters or names): keep it that way for the challenge rules. Built Y-up facing +Z. |
 | `dev/classes.js`, `../classes.html` | Dev-only preview of the classes (`/classes.html` while `npm run dev` runs; not in the production build): the seven frogs cycling their moves, with camera buttons. `preview.sheet([...])` in the console renders a contact sheet of frozen moments. |

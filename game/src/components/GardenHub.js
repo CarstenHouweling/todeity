@@ -4,6 +4,7 @@ import { Ascension } from './Ascension.js';
 import { emoteById } from './Emotes.js';
 import { GardenFx } from './GardenFx.js';
 import { duckMusicFor, groove } from './Sound.js';
+import { GardenPond, LeafRush } from './GardenGames.js';
 
 /**
  * Gardens as a meeting place. In a garden (your own or someone else's) Tode hops around slowly, jumps with Space
@@ -22,6 +23,8 @@ import { duckMusicFor, groove } from './Sound.js';
  * a waving frog a high five, kicks the ball, or pokes the nearest trinket (it wobbles and answers: chimes ring, the
  * duck quacks…). Emotes run as scripts (`EMOTE_FX`): a Ground Pound bounces everyone near, a Power Up's sonic boom
  * pushes them away. Sit still on the bench for a cup of tea. Every frog carries its account level as an aura.
+ *
+ * **Garden games** (v0.28, GardenGames.js): swimming in the pond, cannonballs, skipping stones, and Leaf Rush.
  */
 export const INVITE_RADIUS = 95;
 const WALK_SPEED = 105; // a gentle hop, slower than in a fight
@@ -249,6 +252,8 @@ export class GardenHub {
     this.myCircle = inviteCircle('#ffd36b');
     scene.add(this.myCircle);
     this.myLabel = null;
+    this.pond = new GardenPond(this);
+    this.rush = new LeafRush(this);
     net.on((message) => this.receive(message));
   }
 
@@ -277,6 +282,7 @@ export class GardenHub {
     this.restFor = 0;
     this.identity = { name, cls, color, lv: level, mt: maxTier };
     this.myAura = this.fx.levelAura(level, this.player.group, frogHeight(this.player));
+    this.pond.reset();
     if (!code) return;
     try {
       await this.net.connect();
@@ -293,6 +299,7 @@ export class GardenHub {
     if (this.myEmote) this.endEmote(this.myEmote); // (a Power Up gives the form back)
     this.myEmote = null;
     this.pounding = null;
+    this.rush.stop();
     this.myAura?.dispose();
     this.myAura = null;
     this.fx.clear();
@@ -333,6 +340,7 @@ export class GardenHub {
       this.play?.('pop');
       this.hooks.onChange?.();
     } else if (message.t === 'gpart') {
+      this.rush.left(message.id);
       this.frogs.get(message.id)?.dispose();
       this.frogs.delete(message.id);
       this.party = this.party.filter((id) => id !== message.id);
@@ -349,6 +357,7 @@ export class GardenHub {
       for (const frog of this.frogs.values()) frog.dispose();
       this.frogs.clear();
       this.party = [];
+      if (this.rush.round && !this.rush.round.mine) this.rush.stop();
       this.hooks.onChange?.();
       this.reconnect();
     }
@@ -377,6 +386,8 @@ export class GardenHub {
   }
 
   event(from, data) {
+    if (data.k === 'splash' || data.k === 'skip') return this.pond.event(from, data);
+    if (['rush', 'rleaf', 'rgrab', 'rgot', 'rend'].includes(data.k)) return this.rush.event(from, data);
     if (data.k === 'go' && data.party?.includes(this.myId)) {
       // My party sets off: join its co-op room.
       this.hooks.onGo?.(data.code, from);
@@ -697,7 +708,7 @@ export class GardenHub {
     return true;
   }
 
-  /** Boop with no frog in reach: kick the ball, or poke the nearest trinket. */
+  /** Boop with no frog in reach: kick the ball, poke the nearest trinket, or skip a stone across the pond. */
   boopThing() {
     const pos = this.player.group.position;
     let nearest = null;
@@ -708,7 +719,7 @@ export class GardenHub {
       const d = Math.hypot(p.x - pos.x, p.y - pos.y);
       if (d < best && Math.abs((item.ball?.p.z ?? 0) - this.z) < 40) [nearest, best] = [item, d];
     }
-    if (!nearest) return false;
+    if (!nearest) return this.pond.skip();
     if (nearest.id === 'ball') {
       const ball = (nearest.ball ??= { p: new THREE.Vector3(nearest.x, nearest.y, 0), v: new THREE.Vector3(), spin: 0 });
       const f = this.player.facing;
@@ -802,7 +813,7 @@ export class GardenHub {
       this.endEmote(this.myEmote);
       this.myEmote = null;
     }
-    if (!this.flying) this.velocity.lerp(wanted.clone().multiplyScalar(WALK_SPEED), 1 - Math.exp(-ACCELERATION * delta));
+    if (!this.flying) this.velocity.lerp(wanted.clone().multiplyScalar(WALK_SPEED * this.pond.speedFactor), 1 - Math.exp(-ACCELERATION * delta));
     const before = { x: pos.x, y: pos.y };
     pos.x += this.velocity.x * delta;
     pos.y += this.velocity.y * delta;
@@ -862,6 +873,7 @@ export class GardenHub {
       this.vz = 0;
       this.flying = false;
       this.standingOn = groundFrog;
+      if (!groundFrog && !under.item) this.pond.landed(pos, ground, falling);
       if (this.pounding && falling < -100) {
         // Ground Pound: the slam (everyone else gets a `slam` event and bounces on their own screen).
         this.pounding = null;
@@ -901,9 +913,10 @@ export class GardenHub {
 
     this.updateBall(delta, pos);
 
-    // The little running hops, and facing where we go.
+    // The little running hops (swimming: paddling), and facing where we go.
     const speed = Math.hypot(this.velocity.x, this.velocity.y);
-    if (speed > 8 && this.z <= ground + 0.5) {
+    const swimming = this.pond.updateMe(delta, pos, !groundFrog && !under.item && ground <= 0.5, speed);
+    if (speed > 8 && this.z <= ground + 0.5 && !swimming) {
       this.hopPhase += ((speed * delta) / HOP_LENGTH) * Math.PI;
       this.hop = Math.abs(Math.sin(this.hopPhase)) * HOP_HEIGHT;
     } else {
@@ -913,10 +926,10 @@ export class GardenHub {
       player.facing.set(this.velocity.x, this.velocity.y, 0).normalize();
       player.applyFacing();
     }
-    player.model.position.z = player.groundOffset + this.hop;
+    player.model.position.z = player.groundOffset + this.hop - (swimming ? this.pond.sink : 0);
     player.adornments.position.z = this.hop;
     player.rig.inPlace = true;
-    player.rig.setLocomotion(this.hop / HOP_HEIGHT);
+    player.rig.setLocomotion(swimming ? this.pond.paddle : this.hop / HOP_HEIGHT);
     // Sitting still on the bench: time for a cup of tea.
     const resting = this.onItem?.id === 'bench' && speed < 5 && !this.flying && !this.myEmote && walking;
     this.restFor = resting ? this.restFor + delta : 0;
@@ -963,7 +976,9 @@ export class GardenHub {
         frog.emote = this.startEmote(emoteById(frog.state.e), frog.actor);
       }
       this.updateEmote(frog.emote, delta, frog.bubble);
+      this.pond.puppet(frog, delta);
     }
+    this.rush.update(delta, pos);
 
     // My own circle and label.
     updateCircle(this.myCircle, pos, this.inviting, this.time);

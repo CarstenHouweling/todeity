@@ -21,6 +21,7 @@ const UNDO_LIMIT = 50;
 const VIEW = { yaw: -Math.PI / 4, pitch: 0.82, distance: 430 };
 const PITCH = [0.22, 1.5];
 const DISTANCE = [140, 720];
+const WALK_VIEW = { pitch: 0.68, distance: 410 }; // hopping around: closer than the editor, far enough to see who's near
 
 const SET_EFFECTS = {
   steam: { colors: ['#ffffff', '#f4ead8'], up: 60, gravity: -30, size: 3.2, height: 18, count: 2, every: 0.12, spread: 12 },
@@ -221,7 +222,7 @@ export class TitleGarden {
     this.follow = follow;
     for (const mesh of [this.boundary, this.grid, this.marker, this.selection]) mesh.visible = false;
     if (!fromEditor) this.view = this.viewFromCamera();
-    Object.assign(this.goal, { pitch: 0.62, distance: 300 });
+    Object.assign(this.goal, WALK_VIEW);
   }
 
   /** Where the camera is now, as orbit values around the middle of the garden. */
@@ -369,6 +370,7 @@ export class TitleGarden {
 
   down(event) {
     if (!this.active) return;
+    if (this.walking && event.button === 2) return; // the right button boops (main.js), it doesn't turn the camera
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (this.pointers.size === 2) {
       // Two fingers: pinch to zoom, move to pan. A drag in progress is called off.

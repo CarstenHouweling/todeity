@@ -335,7 +335,7 @@ export const PATH = [
   [0, 0],
 ];
 
-const POND = { x: 195, y: 175, radius: 62 };
+export const POND = { x: 195, y: 175, radius: 62 }; // the garden's pond (frogs swim in it, see GardenGames.js)
 export const TEA_TABLE = { x: -95, y: 175 };
 const hiveOffset = () => MAP_HALF_SIZE + 38;
 const CORNER_GAP = 80; // fence opening at each corner, where the bees come in

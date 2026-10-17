@@ -4356,6 +4356,16 @@ const hub = new GardenHub(
       refreshGardenWalk();
     },
     onAchieve: (id) => achieve(id),
+    // Garden games (GardenGames.js): my best stone skip and Leaf Rush alone. Returns the best before this one.
+    onRecord: (kind, value) => {
+      meta.gardenBests ??= {};
+      const best = meta.gardenBests[kind] ?? 0;
+      if (value > best) {
+        meta.gardenBests[kind] = value;
+        saveMeta();
+      }
+      return best;
+    },
     onFull: () => {
       closeGarden();
       hud.showGardenVisitForm('That garden is full right now. Try another one!');
@@ -4409,6 +4419,7 @@ const walkInfo = () => {
     night: gardenLook().night,
     song: GARDEN_SONGS.find((song) => song.id === gardenLook().song),
     touch: touch.enabled,
+    rush: hub.rush.running,
     public: Boolean(cloud.gardenPublic),
     emotes: showEmotes
       ? EMOTES.filter((emote) => !emote.hidden).map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta), hint: emote.how ?? ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name }))
@@ -4602,7 +4613,8 @@ function gardenKeys(delta, elapsed = delta) {
     if (input.wasPressed('KeyF')) MENU_ACTIONS['garden-invite']();
     if (input.wasPressed('KeyR')) MENU_ACTIONS['garden-ready']();
     if (input.wasPressed('KeyN')) MENU_ACTIONS['garden-night']();
-    if (input.wasPressed('KeyB')) hub.boop();
+    if (input.wasPressed('KeyB', 'MouseRight')) hub.boop();
+    if (input.wasPressed('KeyL')) MENU_ACTIONS['garden-rush']();
     // 1–9: emotes.
     ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'].forEach((key, i) => {
       if (input.wasPressed(key) && myEmotes()[i]) hub.playEmote(myEmotes()[i].id);
@@ -7785,6 +7797,7 @@ const MENU_ACTIONS = {
     if (emote && emoteUnlocked(emote, meta)) hub.playEmote(id);
   },
   'garden-boop': () => hub.boop(),
+  'garden-rush': () => hub.rush.start(),
   'garden-public': async () => {
     const now = await setGardenPublic(!cloud.gardenPublic);
     if (now === null) return;

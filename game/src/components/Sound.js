@@ -218,6 +218,11 @@ const SOUNDS = {
   },
   shield: () => notes([1200, 900, 1500], { type: 'sine', step: 0.04, duration: 0.15, volume: 0.1 }),
   sting: () => tone({ type: 'sawtooth', frequency: vary(1300), to: 800, duration: 0.06, volume: 0.025 }),
+  plink: () => {
+    // A pebble skipping, a frog wading in, a koi: a small drop in the water.
+    tone({ frequency: vary(1300, 0.15), to: 650, duration: 0.09, volume: 0.09 });
+    noise({ duration: 0.08, volume: 0.05, filter: 'lowpass', frequency: 2400, to: 600 });
+  },
   tick: () => tone({ type: 'triangle', frequency: vary(1500, 0.1), to: 1100, duration: 0.035, volume: 0.06 }),
   graze: () => tone({ type: 'sine', frequency: vary(2300, 0.05), to: 3100, duration: 0.05, volume: 0.035 }),
   leafStorm: () => {
