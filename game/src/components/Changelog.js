@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.0',
+    date: '2026-10-17',
+    title: 'Dress up your frog',
+    changes: [
+      '👕 The Wardrobe: 33 things to wear in five slots. Hats (a tea cosy, a top hat, a ronin helm, devil horns…), face (shades, a monocle, a grand moustache), body (a cozy scarf, leaf armor, a golden breastplate), back (capes, butterfly and infernal wings, a teapot backpack) and auras (petals, fireflies, embers, stardust)',
+      '🏆 Three are yours right away; the rest unlock as you level up, beat bosses, earn achievements and reach new divine forms. Locked ones say how to get them',
+      '🏡 Everyone in a garden sees what you wear, and your frog does a little twirl when you change. Open 👕 Wardrobe from the title screen or the garden bar',
+      '🐸 Every class can wear everything: a hat replaces the Mage\'s hat or the Brawler\'s helmet, a cape replaces the kettle or the scroll',
+      '⚔️ Your outfit comes along into runs, and co-op teammates see theirs too (hats make way for a divine form\'s crest, auras stay in the garden)',
+    ],
+  },
+  {
     version: '0.28.4',
     date: '2026-10-17',
     title: 'See the frog',

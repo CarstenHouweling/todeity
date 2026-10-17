@@ -446,6 +446,30 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   alone (skips, Leaf Rush) are kept in `meta.gardenBests` (`hooks.onRecord`). In a garden, the **right mouse button
   boops** (`MouseRight` in Input.js; `TitleGarden.down` ignores it while walking, so it doesn't turn the camera),
   and the walking camera starts at `WALK_VIEW` (410 away; it was 300, too close when joining).
+- **Wardrobe** (v0.29.0, `components/Wearables.js` for the items and rules, shared with the server;
+  `components/WearableModels.js` for the models): 33 wearables in five slots (hats, face, body, back, aura), one per
+  slot. Three are free (Leaf Cap, Round Specs, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
+  the server can work out itself (`unlock`: an achievement, an account level or the best form), so nothing new is
+  stored per item. The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
+  `saveOutfit` in CloudSave.js, sent 1.5 s after the last click; the server keeps only unlocked items with
+  `cleanOutfit(outfit, progress)`, and its cleaned copy replaces the local one). `myOutfit()` in main.js cleans it again
+  with the loaded save. **Where it shows:** everywhere. The frame loop dresses Tode (`player.setOutfit`, a no-op
+  while unchanged) through `shownOutfit(outfit, { tier, run })`: no hat from `CREST_TIER` (2, the form's crest sits on
+  the head; also a garden Power Up) and no aura in runs (the forms bring their own). Co-op teammates get the outfit
+  with every 40th state (`o` in `sendState`, every 2 s) and `RemoteTode` applies the same rule with their tier; the
+  Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
+  any known items, `cleanOutfit(o)`), a change is an `outfit` event (`hub.setOutfit`; the server remembers it for frogs
+  who join later), and puppets twirl when they change. **Models:** voxel boxes like the frogs, hung on the rig's
+  head and body joints (`rig.parts`), sized from `rig.fit` (head width, body size) so every class fits; capes sway,
+  wings flap, the halo bobs, auras are one instanced mesh of 22 voxels (falling, rising or orbiting). A filled slot
+  hides the class's own gear there (`rig.cover`, using the `slotGear` tags in buildFrog: the Mage's hat, the Brawler's
+  helmet, the Ninja's hood, the Alchemist's goggles, capes, the kettle, the scroll, the swords, the blowpipe).
+  **UI:** 👕 Wardrobe in the garden bar opens a panel (`hud.wardrobePanel`: slot tabs with what's worn, then the
+  slot's items; locked ones show how they unlock; on phones one sideways-scrolling row). While it's open the camera
+  comes closer and looks past the frog so he stands below the panel (`garden.dressing(below)`, `goal.shift`). The
+  title screen's 👕 Wardrobe (next to 🏡 My garden, after the first run) opens your garden with the panel open; both
+  buttons count unlocked items not yet seen (`meta.wearablesSeen`, local). To preview models outside the game, build
+  frogs with `buildFrog` and `dressFrog` into a scene of their own and render a contact sheet.
 - **Level aura** (v0.26, bolder in v0.26.2: `GardenFx.levelAura` builds a `GardenAura` from
   `components/GardenAuras.js`): every frog in a garden carries its account level (`accountLevel`, sent as `lv` in
   `genter`, with `mt` the best form; the server passes both in `frogInfo`; looks only, so the client's word is
@@ -877,6 +901,8 @@ server proxies `/ws` and `/api`).
 | `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
 | `components/TrinketModels.js` | Procedural models of the 27 trinkets. |
 | `components/GardenAuras.js` | A garden frog's level aura (ring, leaves, fireflies, steam, halo, crown, pillar) and its landing puffs; `GardenFx.levelAura` builds it. |
+| `components/Wearables.js` | The wardrobe's slots and items, how each unlocks (`wearableUnlocked`, `wearableHint`) and `cleanOutfit` (no three.js: the server imports it). |
+| `components/WearableModels.js` | The wearables' voxel models and auras; `dressFrog(rig, outfit)` puts them on a frog's rig and covers the class's own gear. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
 | `components/GardenGames.js` | Garden games: the pond (swimming, cannonballs, skipping stones, the koi) and Leaf Rush; `gardenWarmup()` (one of each of their meshes, compiled in the background by `warmGarden` in main.js on the way into a garden). |
@@ -1033,6 +1059,7 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
   and the transformation burst can still flash white for a frame or two right after a page load.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
+- Wardrobe in co-op runs (v0.29.0) was only checked solo: try a 2-tab co-op run to see teammates' outfits.
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant
   landmark per arena placed toward the camera's view (-x, +y) is what reads best in play.
 - The Divinity world transformations (blossoms, lanterns, heaven) only apply in the garden.

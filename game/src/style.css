@@ -3608,6 +3608,59 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
 .emote small { font-size: 10px; line-height: 1.1; }
 .emote.locked { opacity: 0.4; cursor: default; }
 
+/* The wardrobe (Hud.wardrobePanel): slot tabs over the emote-style grid. */
+.wardrobe-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.wardrobe-tab {
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wardrobe-tab.on { border-color: #ffd36b; background: rgba(255, 211, 107, 0.25); }
+.wardrobe-tab .worn-icon { margin-left: 2px; }
+.wardrobe-grid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.emote.wear.worn { border-color: #ffd36b; background: rgba(255, 211, 107, 0.3); box-shadow: 0 0 0 1px #ffd36b; }
+.emote.wear .wear-hint { margin-top: 2px; font-size: 9px; opacity: 0.85; }
+.emote.wear.locked { opacity: 0.55; }
+.wardrobe-note { margin: 4px 0 0; font-size: 11px; }
+
+/* Phones: one row that scrolls sideways, so the panel doesn't cover the frog it dresses. */
+@media (max-width: 700px), (max-height: 500px) {
+  .wardrobe-grid {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 84px;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+  }
+
+  .wardrobe-note { display: none; }
+}
+
+.garden-tool .new-count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ffd76a;
+  color: #3b2a14;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .world-label.emote-bubble {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 999px;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Player } from './Player.js';
 import { Ascension } from './Ascension.js';
 import { emoteById } from './Emotes.js';
+import { cleanOutfit, shownOutfit } from './Wearables.js';
 import { GardenFx } from './GardenFx.js';
 import { duckMusicFor, groove } from './Sound.js';
 import { GardenPond, LeafRush } from './GardenGames.js';
@@ -99,12 +100,14 @@ const frogHeight = (player) => {
 
 /** Another player's frog in the garden. */
 class GardenFrog {
-  constructor({ id, name, cls, color, lv, mt }, { scene, hud, fx }) {
+  constructor({ id, name, cls, color, lv, mt, o }, { scene, hud, fx }) {
     Object.assign(this, { id, name, color, hud });
     this.level = Math.max(1, Math.round(Number(lv) || 1));
     this.maxTier = Math.max(0, Math.min(5, Math.round(Number(mt) || 0)));
     this.puppet = new Player();
     this.puppet.setClass(cls ?? 'tode');
+    this.outfit = cleanOutfit(o); // what they wear (looks only: their word is enough)
+    this.puppet.setOutfit(this.outfit);
     this.puppet.rig.inPlace = true;
     this.target = new THREE.Vector3();
     this.position = new THREE.Vector3();
@@ -169,6 +172,7 @@ class GardenFrog {
       this.waveIn = 4 + Math.random() * 2;
       this.puppet.rig.play('victory', { once: true });
     }
+    this.puppet.setOutfit(shownOutfit(this.outfit, { tier: this.ascension?.tier ?? 0 })); // (a Power Up's crest)
     this.puppet.animate(delta);
     this.ascension?.update(delta); // only while a Power Up shows off a form
     this.aura?.update(delta, group.position, { moving: this.position.distanceToSquared(this.last) > (8 * delta) ** 2, hop: this.hop, visible: this.seen });
@@ -266,7 +270,7 @@ export class GardenHub {
    * Enter a garden: `code` (null offline: alone, nothing sent), `own` (your own garden), `level` (the account level:
    * my aura), `maxTier` (the highest form reached: what my Power Up shows).
    */
-  async enter({ code, own, name, cls, color, level = 1, maxTier = 0 }) {
+  async enter({ code, own, name, cls, color, level = 1, maxTier = 0, outfit = {} }) {
     // Stepping back into the same garden (a new name) keeps Tode where he stands.
     const stay = this.active && this.code === code ? this.player.group.position.clone().setZ(0) : null;
     this.leave();
@@ -280,7 +284,7 @@ export class GardenHub {
     this.myBubble.classList.add('emote-bubble');
     this.myEmote = null;
     this.restFor = 0;
-    this.identity = { name, cls, color, lv: level, mt: maxTier };
+    this.identity = { name, cls, color, lv: level, mt: maxTier, o: outfit };
     this.myAura = this.fx.levelAura(level, this.player.group, frogHeight(this.player));
     this.pond.reset();
     if (!code) return;
@@ -397,6 +401,10 @@ export class GardenHub {
       this.hooks.onLook?.(data); // the owner switched day or night, or the song
     } else if (data.k === 'wave') {
       this.frogs.get(from)?.puppet.rig.play('victory', { once: true });
+    } else if (data.k === 'outfit') {
+      const frog = this.frogs.get(from); // changed clothes: a little twirl to show them off
+      if (frog) frog.outfit = cleanOutfit(data.o);
+      frog?.puppet.rig.play('victory', { once: true });
     } else if (data.k === 'emote') {
       const frog = this.frogs.get(from);
       const emote = emoteById(data.id);
@@ -496,6 +504,13 @@ export class GardenHub {
   /** Owner: the garden was redecorated. */
   sendDecor(decor) {
     if (this.own) this.send('gevent', { k: 'decor', decor });
+  }
+
+  /** I changed clothes (the wardrobe): everyone here sees it now, and the server tells whoever comes in later. */
+  setOutfit(outfit) {
+    if (!this.active) return;
+    this.identity.o = outfit;
+    this.send('gevent', { k: 'outfit', o: outfit });
   }
 
   /** Owner: my garden's look ({ night, song }); everyone here gets it now, and whoever comes in later on arrival. */

@@ -22,6 +22,7 @@ const VIEW = { yaw: -Math.PI / 4, pitch: 0.82, distance: 430 };
 const PITCH = [0.22, 1.5];
 const DISTANCE = [140, 720];
 const WALK_VIEW = { pitch: 0.68, distance: 410 }; // hopping around: closer than the editor, far enough to see who's near
+const DRESSING_DISTANCE = 230; // the wardrobe is open: close enough to see what he wears
 
 const SET_EFFECTS = {
   steam: { colors: ['#ffffff', '#f4ead8'], up: 60, gravity: -30, size: 3.2, height: 18, count: 2, every: 0.12, spread: 12 },
@@ -63,8 +64,9 @@ export class TitleGarden {
     this.ground = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     this.hit = new THREE.Vector3();
     this.time = 0;
-    this.view = { ...VIEW, x: 0, y: 0 };
-    this.goal = { ...VIEW, x: 0, y: 0 };
+    this.view = { ...VIEW, x: 0, y: 0, shift: 0 };
+    this.goal = { ...VIEW, x: 0, y: 0, shift: 0 };
+    this.dressingFrom = null; // the walking distance before the wardrobe opened (see `dressing`)
 
     const ring = (inner, outer, color, opacity = 0.8) => {
       const mesh = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
@@ -223,6 +225,21 @@ export class TitleGarden {
     for (const mesh of [this.boundary, this.grid, this.marker, this.selection]) mesh.visible = false;
     if (!fromEditor) this.view = this.viewFromCamera();
     Object.assign(this.goal, WALK_VIEW);
+  }
+
+  /**
+   * The wardrobe is open (`below`: how far down the screen the frog should stand, 0–1, so the panel at the top
+   * doesn't cover him): the camera comes closer and looks past him. Closed (null): back to how it was.
+   */
+  dressing(below) {
+    if (below !== null && this.dressingFrom === null) this.dressingFrom = this.goal.distance;
+    if (below === null && this.dressingFrom !== null) {
+      this.goal.distance = this.dressingFrom;
+      this.dressingFrom = null;
+    }
+    if (below !== null) this.goal.distance = DRESSING_DISTANCE;
+    // Looking a little beyond the frog moves him down the screen (worked out for the walking pitch).
+    this.goal.shift = below === null ? 0 : Math.max(0, below - 0.45) * this.goal.distance * 0.6;
   }
 
   /** Where the camera is now, as orbit values around the middle of the garden. */
@@ -531,8 +548,11 @@ export class TitleGarden {
     // Turn the shorter way round.
     const yawGap = Math.atan2(Math.sin(this.goal.yaw - this.view.yaw), Math.cos(this.goal.yaw - this.view.yaw));
     this.view.yaw += yawGap * k;
-    for (const key of ['pitch', 'distance', 'x', 'y']) this.view[key] += (this.goal[key] - this.view[key]) * k;
-    const { yaw, pitch, distance, x, y } = this.view;
+    for (const key of ['pitch', 'distance', 'x', 'y', 'shift']) this.view[key] = (this.view[key] ?? 0) + ((this.goal[key] ?? 0) - (this.view[key] ?? 0)) * k;
+    const { yaw, pitch, distance, shift } = this.view;
+    // (`shift`: looking past the followed frog, away from the camera, see `dressing`.)
+    const x = this.view.x - Math.cos(yaw) * shift;
+    const y = this.view.y - Math.sin(yaw) * shift;
     const lookZ = this.walking && this.follow ? this.follow.z * 0.8 + 12 : 0;
     camera.position.set(x + Math.cos(yaw) * Math.cos(pitch) * distance, y + Math.sin(yaw) * Math.cos(pitch) * distance, lookZ + Math.sin(pitch) * distance);
     if (origin) camera.position.sub(origin);

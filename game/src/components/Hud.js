@@ -19,6 +19,7 @@ import { GRAPHICS_LABELS } from './Quality.js';
 import { NAME_MAX, TAG_COLORS } from './PlayerTag.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
 import { SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
+import { WEARABLES, unlockedWearables } from './Wearables.js';
 import { trinketPicture } from './TrinketPortraits.js';
 import { viewHeight, viewWidth } from './Viewport.js';
 
@@ -590,8 +591,10 @@ export class Hud {
   }
 
   /** `keepsake`: the keepsake this achievement unlocks, if any. */
-  showAchievement({ icon, name, text, reward }, keepsake = null) {
-    const unlocked = keepsake ? `<em class="toast-keepsake">🎒 New keepsake: ${keepsake.icon} ${keepsake.name}</em>` : '';
+  showAchievement({ icon, name, text, reward }, keepsake = null, wearable = null) {
+    const unlocked =
+      (keepsake ? `<em class="toast-keepsake">🎒 New keepsake: ${keepsake.icon} ${keepsake.name}</em>` : '') +
+      (wearable ? `<em class="toast-keepsake">👕 New to wear: ${wearable.icon} ${wearable.name}</em>` : '');
     this.toast(`<span class="toast-icon">${icon}</span><span><small>Achievement unlocked · +${reward} 🍃</small><b>${name}</b><em>${text}</em>${unlocked}</span>`);
   }
 
@@ -996,12 +999,14 @@ ${ meta.runs > 0 ? '' :
   prepareButtons() {
     if (!meta.runs) return '';
     const fresh = meta.seenUnlocks ? '' : ' fresh';
+    const unseenWear = unlockedWearables(meta).filter((id) => !(meta.wearablesSeen ?? []).includes(id)).length;
     const isNew = meta.seenUnlocks ? '' : '<em class="new-tag">✨ New</em>';
     return `
       <button class="menu-button${fresh}" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small>${isNew}</button>
       <button class="menu-button${fresh}" data-action="keepsakes">${currentKeepsake().icon} Keepsake${isNew}</button>
       <button class="menu-button${fresh}" data-action="steeping">🔥 Steeping <small>${meta.gentle ? 'off · 🌿 Gentle' : steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small>${isNew}</button>
-      <button class="menu-button${fresh}" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small>${isNew}</button>`;
+      <button class="menu-button${fresh}" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small>${isNew}</button>
+      <button class="menu-button${fresh || unseenWear ? ' fresh' : ''}" data-action="wardrobe">👕 Wardrobe <small>${unlockedWearables(meta).length}/${WEARABLES.length}</small>${unseenWear ? `<em class="new-tag">${unseenWear} new</em>` : isNew}</button>`;
   }
 
   rewardRow() {
@@ -1184,6 +1189,7 @@ ${ meta.runs > 0 ? '' :
       info.leaderName ? tool('garden-ready', info.ready ? '✋ Ready ✓' : '✋ Ready', 'ready') : tool('garden-invite', info.inviting ? '✖ Stop inviting' : '🚩 Invite to play', info.inviting ? '' : 'invite'),
       info.inviting && info.readyCount ? tool('garden-go', `▶ Go now (${info.readyCount + 1})`, 'ready') : '',
       tool('garden-emotes', '😀 Emotes', info.emotes ? 'on' : ''),
+      tool('garden-wardrobe', `👕 Wardrobe${info.newWear ? ` <em class="new-count">${info.newWear}</em>` : ''}`, info.wardrobe ? 'on' : ''),
       tool('garden-boop', '👉 Boop'),
       tool('garden-rush', info.rush ? '🍃 Rush on!' : '🍃 Leaf Rush', info.rush ? 'on' : ''),
       tool('garden-visit', '👀 Visit'),
@@ -1210,11 +1216,34 @@ ${ meta.runs > 0 ? '' :
                 .join('')}</div>`
             : ''
         }
+        ${info.wardrobe ? this.wardrobePanel(info.wardrobe) : ''}
       </div>
       <div class="garden-flash" hidden></div>
       <div class="rush-board" hidden></div>
       ${info.countdown ? `<div class="garden-countdown">${info.countdown}</div>` : ''}`
     );
+  }
+
+  /**
+   * The wardrobe in the garden bar (Wearables.js): a tab per slot (with what's worn there), then that slot's items.
+   * Locked ones say how they unlock. `wardrobe`: { slot, slots, items, unlocked, total } from main.js.
+   */
+  wardrobePanel({ slot, slots, items, unlocked, total }) {
+    const tabs = slots
+      .map((s) => `<button type="button" class="wardrobe-tab${s.id === slot ? ' on' : ''}" data-action="wardrobe-slot" data-slot="${s.id}">${s.icon} ${s.name}${s.worn ? ` <span class="worn-icon">${s.worn}</span>` : ''}</button>`)
+      .join('');
+    const grid = items
+      .map((item) => {
+        const title = item.locked ? `${item.name} · ${item.hint}` : item.worn ? `${item.name} (worn: click to take it off)` : item.name;
+        return `<button type="button" class="emote wear${item.worn ? ' worn' : ''}${item.locked ? ' locked' : ''}" ${item.locked ? 'disabled' : `data-action="wear" data-id="${item.id}"`} title="${escapeHtml(title)}">
+          <span>${item.locked ? '🔒' : item.icon}</span><small>${escapeHtml(item.name)}</small>${item.locked ? `<small class="wear-hint">${escapeHtml(item.hint)}</small>` : ''}</button>`;
+      })
+      .join('');
+    return `<div class="wardrobe">
+      <div class="wardrobe-tabs">${tabs}</div>
+      <div class="emote-grid wardrobe-grid">${grid}</div>
+      <p class="sub wardrobe-note">${unlocked}/${total} unlocked. Everyone in the garden sees what you wear. Click a worn item to take it off.</p>
+    </div>`;
   }
 
   /** Public gardens as rows to join: [{ garden, name, frogs, max, beauty }]. */

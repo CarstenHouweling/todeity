@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { upgradeMaterial } from './Graphics.js';
 import { buildFrog } from './FrogModels.js';
+import { dressFrog } from './WearableModels.js';
 
 // The frogs of FrogModels.js are built about 25 units tall; at this size they match the original glTF Tode.
 export const FROG_SCALE = 0.65;
@@ -135,6 +136,8 @@ export class Player {
   /** Builds (or rebuilds) the frog of a class (see Classes.js): its model, materials and animations. */
   setClass(id) {
     if (this.rig && this.frogClass === id) return;
+    this.outfit?.dispose();
+    this.outfit = null;
     if (this.model) {
       this.model.removeFromParent();
       this.model.traverse((child) => child.isMesh && !child.userData.shared && child.geometry?.dispose());
@@ -170,11 +173,26 @@ export class Player {
     this.graphicsLevel = 0;
     this.setGraphics(level);
     this.applyFacing();
+    if (this.outfitWanted) this.outfit = dressFrog(rig, this.outfitWanted);
+  }
+
+  /**
+   * Puts on an outfit from the wardrobe ({ slot: id }, see Wearables.js), or takes it off (null). Kept across class
+   * changes. Main.js dresses Tode on the title screen and in gardens; runs show the class's own gear.
+   */
+  setOutfit(outfit) {
+    const key = outfit ? JSON.stringify(outfit) : '';
+    if (key === (this.outfitKey ?? '')) return;
+    this.outfitKey = key;
+    this.outfitWanted = outfit && Object.keys(outfit).length ? outfit : null;
+    this.outfit?.dispose();
+    this.outfit = this.rig && this.outfitWanted ? dressFrog(this.rig, this.outfitWanted) : null;
   }
 
   /** Runs the frog's animations (every frame, menus and cut-scenes too). */
   animate(delta) {
     this.rig?.update(delta);
+    this.outfit?.update(delta);
   }
 
   get position() {

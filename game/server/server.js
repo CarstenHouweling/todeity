@@ -31,6 +31,7 @@ import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
 import { CLASSES } from '../src/components/Classes.js';
 import { TAG_COLORS, publicName } from '../src/components/PlayerTag.js';
 import { VERSION } from '../src/components/Changelog.js';
+import { cleanOutfit } from '../src/components/Wearables.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -427,14 +428,15 @@ function handleSocketMessage(client, raw) {
 // to GARDEN_MAX frogs, on the same socket as co-op (a frog can be in a garden and a co-op room for a moment, while a
 // party sets off). The server only checks the garden exists and passes states and events along.
 //
-// client → server: { t: 'genter', garden, name, cls, color, lv, mt } | { t: 'gleave' } | { t: 'gstate', d } | { t: 'gevent', d }
-// server → client: { t: 'gwelcome', garden, id, frogs: [{ id, name, cls, color, lv, mt }] } | { t: 'gjoin', frog }
+// client → server: { t: 'genter', garden, name, cls, color, lv, mt, o } | { t: 'gleave' } | { t: 'gstate', d } | { t: 'gevent', d }
+// server → client: { t: 'gwelcome', garden, id, frogs: [{ id, name, cls, color, lv, mt, o }] } | { t: 'gjoin', frog }
+// `o` is the frog's outfit (Wearables.js); an `outfit` event updates it for frogs who come in later.
 //                  { t: 'gpart', id } | { t: 'gstate', from, d } | { t: 'gevent', from, d } | { t: 'gfull' }
 const GARDEN_MAX = 12;
 const GARDEN_COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f', '#c58aff', '#ff8a3a', '#7ff0d0', '#ff5a7a', '#e8f8ff', '#b8e34a', '#ffb000', '#9fb8ff'];
 const gardenRooms = new Map(); // garden code → { code, clients: Map(id → client) }
 
-const frogInfo = (client) => ({ id: client.id, name: client.gardenName, cls: client.gardenClass, color: client.gardenColor, lv: client.gardenLevel, mt: client.gardenTier });
+const frogInfo = (client) => ({ id: client.id, name: client.gardenName, cls: client.gardenClass, color: client.gardenColor, lv: client.gardenLevel, mt: client.gardenTier, o: client.gardenOutfit });
 
 function leaveGarden(client) {
   const room = client.garden;
@@ -458,6 +460,7 @@ function enterGarden(client, message) {
   // Looks only (the level aura, the Power Up's form), so taken as they come, within bounds.
   client.gardenLevel = Math.max(1, Math.min(999, Math.round(Number(message.lv) || 1)));
   client.gardenTier = Math.max(0, Math.min(5, Math.round(Number(message.mt) || 0)));
+  client.gardenOutfit = cleanOutfit(message.o); // known items in their own slots
   // Their own name colour (player tag), or a free one.
   client.gardenColor = TAG_COLORS.includes(message.color) ? message.color : GARDEN_COLORS.find((color) => !used.has(color)) ?? GARDEN_COLORS[0];
   client.garden = room;
@@ -475,6 +478,10 @@ function gardenRelay(client, type, data) {
   const now = Date.now();
   if (now - budget.at > 1000) Object.assign(budget, { at: now, count: 0 });
   if (++budget.count > 40) return;
+  if (type === 'gevent' && data?.k === 'outfit') {
+    client.gardenOutfit = cleanOutfit(data.o); // remembered for frogs who come in later
+    data = { k: 'outfit', o: client.gardenOutfit };
+  }
   const out = JSON.stringify({ t: type, from: client.id, d: data });
   for (const other of room.clients.values()) if (other !== client && other.ws.readyState === 1) other.ws.send(out);
 }

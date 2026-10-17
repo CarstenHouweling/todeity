@@ -187,7 +187,7 @@ function sparks(parent, position, { count = 14, reach = 22, color = '#fff27a' } 
 const tmpColor = new THREE.Color();
 
 /** A box of `size` at `position` (optionally turned), coloured by vertex colour, ready to merge into a part. */
-function box(boxes, size, position, color, rotation = null) {
+export function box(boxes, size, position, color, rotation = null) {
   const geometry = new THREE.BoxGeometry(...size).toNonIndexed();
   if (rotation) geometry.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...rotation)));
   geometry.translate(...position);
@@ -335,6 +335,9 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
 
   // --- Gear per class ------------------------------------------------------------------------------
   const gear = {};
+  // The class's own gear per wardrobe slot: a worn item (WearableModels.js) covers what's in its slot.
+  const slotGear = { head: [], face: [], back: [] };
+  const tag = (slot, group) => (slotGear[slot].push(group), group);
   {
     // A teacup for the sip (Tode's signature; every frog sips in the ending). Only shown while sipping. Carried
     // by the head (the sip moves it from below the chin up to the mouth), so it always shows.
@@ -349,7 +352,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
   }
   if (id === 'brawler') {
     // An iron helmet with horns (behind his eyes), brass bracers and a belt.
-    piece(head, [0, 6.6, -0.8], (p) => {
+    tag('head', piece(head, [0, 6.6, -0.8], (p) => {
       box(p, [headW + 1, 2.6, 7], [0, 0, 0], '#6a6a72');
       box(p, [headW + 1.6, 0.8, 7.6], [0, -1.3, 0], '#8a8a92');
       box(p, [1.2, 0.8, 7.4], [0, 1.6, 0], '#8a8a92');
@@ -358,7 +361,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
         box(p, [1.2, 2.6, 1.2], [s * (headW / 2 + 2.2), 2, 0], '#e8dcc0', [0, 0, -s * 0.5]);
         box(p, [0.9, 2, 0.9], [s * (headW / 2 + 2.6), 3.8, 0], '#f4ecd8', [0, 0, -s * 0.1]);
       }
-    });
+    }));
     for (const { forearm } of arms) piece(forearm, [0, -2.2, 0.4], (p) => box(p, [3.4, 2, 3.4], [0, 0, 0], '#c9922a'));
     piece(body, [0, -1.6, 0], (p) => {
       box(p, [W + 0.6, 1.6, L + 0.6], [0, 0, 0], '#5a3418');
@@ -367,20 +370,21 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
   }
   if (id === 'sharpshooter') {
     // A leaf hood and a cape that sways, and a bamboo blowpipe on the back (in the hands when aiming).
-    piece(head, [0, 6, -1.8], () => {}, {
+    tag('head', piece(head, [0, 6, -1.8], () => {}, {
       cloth: (p) => {
         box(p, [headW + 1.2, 1, 5], [0, 0, 0], '#3a7a2a');
         box(p, [headW + 1.2, 6, 1], [0, -2.6, -2.4], '#3a7a2a');
         for (const s of [-1, 1]) box(p, [1, 5, 5], [s * (headW / 2 + 0.6), -2.2, 0], '#3a7a2a');
         box(p, [2, 1.6, 2.4], [0, 1, -1.2], '#2f6a22');
       },
-    });
-    gear.cape = piece(body, [0, 5.6, -L / 2 + 2], () => {}, { cloth: (p) => box(p, [W - 1, 0.6, 10], [0, 0, -4], '#3a7a2a') });
+    }));
+    gear.cape = tag('back', piece(body, [0, 5.6, -L / 2 + 2], () => {}, { cloth: (p) => box(p, [W - 1, 0.6, 10], [0, 0, -4], '#3a7a2a') }));
     gear.pipe = piece(body, [W / 2 - 3, 6.4, -2], (p) => {
       box(p, [1.4, 1.4, 18], [0, 0, 0], '#c9b26a');
       for (const z of [-6, 0, 6]) box(p, [1.8, 1.8, 0.6], [0, 0, z], '#8a7a3a');
     });
     gear.pipe.rotation.set(0.5, 0, 0.3);
+    tag('back', gear.pipe);
     // While aiming, the blowpipe is at the mouth (held by the head, so it lines up with the eyes).
     gear.aimPipe = piece(head, [0, 1.2, 9], (p) => {
       box(p, [1.4, 1.4, 16], [0, 0, 8], '#c9b26a');
@@ -390,13 +394,13 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
   }
   if (id === 'alchemist') {
     // Brass goggles, a belt of glowing vials and a little kettle on the back that steams.
-    piece(head, [0, 6.8, 5.5], (p) => {
+    tag('face', piece(head, [0, 6.8, 5.5], (p) => {
       box(p, [headW + 0.8, 1, 1.4], [0, 0, -2], '#4a2a10');
       for (const s of [-1, 1]) {
         box(p, [3.2, 3.2, 1.6], [s * 2.6, 0.6, 0], '#c9922a');
         box(p, [2.2, 2.2, 0.4], [s * 2.6, 0.6, 0.9], '#5fd8e8');
       }
-    });
+    }));
     piece(body, [0, -1.4, 0], (p) => box(p, [W + 0.6, 1.4, L + 0.6], [0, 0, 0], '#4a2a10'), {
       glow: (p) => {
         for (const [x, color] of [[-4, '#7dff6a'], [0, '#ff5ad0'], [4, '#5ac8ff']]) {
@@ -410,6 +414,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
       box(p, [1.6, 1, 1.6], [0, 6.4, 0], '#2a2a2a');
       box(p, [1.4, 1.4, 4], [0, 3, 4], '#8a8f96', [0.5, 0, 0]);
     });
+    tag('back', gear.kettle);
     gear.potion = piece(arms[0].hand, [0, 1.8, 2.2], () => {}, {
       glow: (p) => {
         box(p, [2.4, 3, 2.4], [0, 0, 0], '#7dff6a');
@@ -420,7 +425,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
   }
   if (id === 'mage') {
     // A tall starry wizard's hat (its brim above the eyes), a purple cape and a staff with a glowing orb.
-    piece(head, [0, 10.8, 1], (p) => {
+    tag('head', piece(head, [0, 10.8, 1], (p) => {
       box(p, [headW + 5, 0.8, 14], [0, 0, 0], '#3a2a8a');
       box(p, [headW - 0.6, 1, 9.4], [0, 1, -0.5], '#d9b03a');
       box(p, [headW - 1, 3, 9], [0, 2.8, -0.5], '#3a2a8a');
@@ -431,13 +436,13 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
       glow: (p) => {
         for (const [x, y, z] of [[-3, 3, 4], [3.5, 5.5, 2.6], [-1.5, 8, 0.6], [4.6, 2.5, 1]]) box(p, [1, 1, 0.4], [x, y, z], '#fff27a');
       },
-    });
-    gear.cape = piece(body, [0, 5.4, -L / 2 + 2], () => {}, {
+    }));
+    gear.cape = tag('back', piece(body, [0, 5.4, -L / 2 + 2], () => {}, {
       cloth: (p) => {
         box(p, [W, 0.6, 11], [0, 0, -4.5], '#4a3aa8');
         box(p, [W + 1, 1.4, 2], [0, 0.4, 1.5], '#d9b03a');
       },
-    });
+    }));
     // The staff stands at his right side, in his hand (held by the body, so it stays upright when he lifts it).
     gear.staff = piece(body, [W / 2 + 1.2, -bodyY + 0.5, L / 2 - 1], (p) => {
       box(p, [1.2, 30, 1.2], [0, 15, 0], '#6a4a2a');
@@ -459,11 +464,11 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     piece(body, [0, 0, 0], (p) => {
       for (let i = -4; i <= 4; i++) box(p, [1.5, 1.5, 1.5], [i * 1.5 * b.width, 4.6 - i * i * 0.2, L / 2 + 0.4], i === 0 ? '#c2402a' : '#4a2410');
     });
-    piece(body, [0, 7.6, -2.5], (p) => {
+    tag('back', piece(body, [0, 7.6, -2.5], (p) => {
       box(p, [W + 5, 3.6, 3.6], [0, 0, 0], '#efe6c8');
       for (const s of [-1, 1]) box(p, [1.4, 4.6, 4.6], [s * (W / 2 + 3), 0, 0], '#a83a2a');
       box(p, [1, 3.9, 3.9], [0, 0, 0], '#a83a2a');
-    });
+    }));
     // The giant he calls up: an ancient toad that rises out of a cloud behind him.
     gear.giant = buildFrog('giant');
     gear.giant.root.position.set(0, 0, -42);
@@ -496,15 +501,15 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
   }
   if (id === 'ninja') {
     // A hood with a face mask (the eyes peek out), a scarf, two swords crossed on the back and a belt with a star.
-    piece(head, [0, 0, 0], () => {}, {
+    tag('head', piece(head, [0, 0, 0], () => {}, {
       cloth: (p) => {
         box(p, [headW + 1, 3.4, 1.2], [0, 1.6, 9.5], '#22232e'); // the mask over the mouth
         for (const s of [-1, 1]) box(p, [1, 6, 10], [s * (headW / 2 + 0.5), 2.6, 4], '#22232e');
         box(p, [headW + 1, 6.4, 1], [0, 2.8, -1.4], '#22232e');
         box(p, [headW + 1, 1, 5], [0, 5.9, 1], '#22232e');
       },
-    });
-    for (const socket of sockets) piece(socket, [0, 3.3, -0.6], () => {}, { cloth: (p) => box(p, [6.2, 1.4, 5], [0, 0, 0], '#22232e') });
+    }));
+    for (const socket of sockets) tag('head', piece(socket, [0, 3.3, -0.6], () => {}, { cloth: (p) => box(p, [6.2, 1.4, 5], [0, 0, 0], '#22232e') }));
     piece(body, [0, 5.8, L / 2 - 3], (p) => box(p, [W + 1, 2, 4], [0, 0, 0], '#3a2a6a'));
     gear.tails = [-1, 1].map((s) => {
       const tail = piece(body, [s * 2, 5.8, L / 2 - 5], (p) => box(p, [1.6, 0.6, 7], [0, 0, -3.5], '#3a2a6a'));
@@ -512,12 +517,12 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
       return tail;
     });
     for (const s of [-1, 1]) {
-      const sword = piece(body, [0, 8, -3.6], (p) => {
+      const sword = tag('back', piece(body, [0, 8, -3.6], (p) => {
         box(p, [1.4, 17, 1], [0, 0, 0], '#1a1a22');
         box(p, [3, 0.6, 2], [0, 8.8, 0], '#c9a23a');
         box(p, [1.2, 6, 1.2], [0, 12.2, 0], '#2a1a14');
         for (const y of [10.4, 12, 13.6]) box(p, [1.5, 0.8, 1.5], [0, y, 0], '#a83a2a', [0, 0.785, 0]);
-      });
+      }));
       sword.rotation.set(-0.15, 0, s * 0.6);
     }
     piece(body, [0, -1.6, 0], (p) => {
@@ -1086,7 +1091,11 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
         lengthOverride = null;
       }
     }
+    for (const group of covered) group.visible = false; // after restGear, which shows the blowpipe again
   }
+
+  // The class's gear in slots a worn item fills (see `cover`).
+  let covered = [];
 
   /**
    * A copy of the frog standing at rest (the Great Tode ultimate): a copy of the live frog froze whatever it was
@@ -1114,7 +1123,15 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     get move() {
       return move;
     },
-    parts: { frame, body, head, jaw, arms, hindLegs }, // for tuning poses from the console
+    parts: { frame, body, head, jaw, arms, hindLegs }, // for tuning poses from the console (and the wardrobe)
+    /** The frog's proportions, so worn items fit every class (WearableModels.js). */
+    fit: { W, H, L, headW, bodyY, legs },
+    /** Hides the class's own gear in these wardrobe slots (a hat replaces the Mage's hat), shows the rest. */
+    cover(slots) {
+      for (const group of covered) group.visible = true;
+      covered = slots.flatMap((slot) => slotGear[slot] ?? []);
+      for (const group of covered) group.visible = false;
+    },
     get moveLength() {
       return (MOVES[move] ?? MOVES.idle).length;
     },

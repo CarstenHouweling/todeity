@@ -9,6 +9,7 @@
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
 //   POST /api/save/:code/garden { public? } → { garden, public }        this save's garden code (and make it public)
 //   POST /api/save/:code/profile { name, color } → { code, progress, profile }   the player tag (name, #tag, colour)
+//   POST /api/save/:code/outfit { outfit } → { code, progress, profile }   what the frog wears (only unlocked items)
 //   GET  /api/garden/:garden             → { name, decor, level, … }     look at someone's garden
 //
 // The save code is a password: whoever has it owns the progress, so it is never shown to anyone else. Visiting a
@@ -27,6 +28,7 @@ import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
 import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, songUnlocked, withRewards } from '../src/components/Rewards.js';
 import { randomInt } from 'node:crypto';
 import { TAG_COLORS, cleanName, nameProblem, newTag, publicName } from '../src/components/PlayerTag.js';
+import { cleanOutfit } from '../src/components/Wearables.js';
 
 const FLAVOURS = [
   'MINT', 'CHAI', 'MATCHA', 'SENCHA', 'OOLONG', 'EARL', 'HONEY', 'LEMON', 'GINGER', 'PEACH', 'PLUM', 'ROSE',
@@ -276,6 +278,15 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     save.updated = now;
     await persist();
     return send(res, 200, { ...view(save), reward });
+  }
+  if (action === 'outfit') {
+    // The wardrobe (Wearables.js): items unlock from the progress, so the server can check them itself.
+    if (overLimit('outfit', ip, 600)) return send(res, 429, { error: 'Slow down a little.' });
+    count('outfit', ip);
+    save.profile.outfit = cleanOutfit(body.outfit, save.progress);
+    save.updated = now;
+    await persist();
+    return send(res, 200, view(save));
   }
   if (action === 'decor') {
     if (overLimit('decor', ip, 600)) return send(res, 429, { error: 'Slow down a little.' });

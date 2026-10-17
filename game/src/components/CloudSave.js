@@ -263,6 +263,20 @@ export async function fetchGarden(code) {
 }
 
 /**
+ * Saves what the frog wears ({ slot: id }, Wearables.js; the caller has already put it in `meta.profile.outfit`).
+ * The server keeps only unlocked items. Offline it stays in this browser.
+ */
+export async function saveOutfit(outfit) {
+  if (cloud.status !== 'online' || !cloud.code || !isPersisting()) return;
+  try {
+    const { data } = await request(`/${encodeURIComponent(cloud.code)}/outfit`, { outfit });
+    if (data.progress) apply(data);
+  } catch {
+    // Kept locally; it goes up with the next change.
+  }
+}
+
+/**
  * Sets the player tag (name and colour; the #tag comes from the server). Checked against the name rules here and
  * on the server. Without a server it's kept in this browser. Resolves with {} or { error }.
  */

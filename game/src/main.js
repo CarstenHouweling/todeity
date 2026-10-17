@@ -32,7 +32,7 @@ import { RemoteTode } from './components/RemoteTode.js';
 import { TouchControls } from './components/TouchControls.js';
 import { canLockLandscape, isFullscreen, landscapeFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveProfile, setGardenLook, setGardenPublic } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveOutfit, saveProfile, setGardenLook, setGardenPublic } from './components/CloudSave.js';
 import { randomName } from './components/PlayerTag.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
@@ -54,6 +54,7 @@ import { GardenHub } from './components/GardenHub.js';
 import { gardenWarmup } from './components/GardenGames.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
 import { EMOTES, bestTier, emoteUnlocked } from './components/Emotes.js';
+import { SLOTS, WEARABLES, cleanOutfit, shownOutfit, unlockedWearables, wearableById, wearableHint, wearableUnlocked } from './components/Wearables.js';
 import { onServerBack, setPresence, startPresence } from './components/Presence.js';
 import { VERSION } from './components/Changelog.js';
 
@@ -493,9 +494,12 @@ function tip(id) {
 function achieve(id) {
   const achievement = unlock(id);
   if (!achievement) return;
-  hud.showAchievement(achievement, keepsakeFor(id));
+  // What it unlocks in the wardrobe too (Wearables.js `unlock.achievement`).
+  const wearable = WEARABLES.find((item) => item.unlock?.achievement === id) ?? null;
+  hud.showAchievement(achievement, keepsakeFor(id), wearable);
   // In a garden the HUD is hidden: say it over the garden bar.
-  if (decorating) hud.gardenFlash(`${achievement.icon} ${achievement.name}! +${achievement.reward} 🍃${keepsakeFor(id) ? ` · new keepsake ${keepsakeFor(id).icon}` : ''}`);
+  if (decorating) hud.gardenFlash(`${achievement.icon} ${achievement.name}! +${achievement.reward} 🍃${keepsakeFor(id) ? ` · new keepsake ${keepsakeFor(id).icon}` : ''}${wearable ? ` · new to wear ${wearable.icon}` : ''}`);
+  if (wearable && decorating) refreshGardenWalk(); // the 👕 count
   play('legendary');
 }
 
@@ -4460,9 +4464,60 @@ hub.world = {
   spring: (item) => garden.spring(item),
   poke: (item, options) => garden.poke(item, options),
 };
-/** Who I am in a garden: name, class, colour, account level (my aura) and best form (my Power Up). */
-const gardenIdentity = () => ({ name: playerName(), cls: chosenClass().id, color: meta.profile?.color, level: accountLevel(meta).level, maxTier: bestTier(meta) });
+/** Who I am in a garden: name, class, colour, account level (my aura), best form (my Power Up) and outfit. */
+const gardenIdentity = () => ({ name: playerName(), cls: chosenClass().id, color: meta.profile?.color, level: accountLevel(meta).level, maxTier: bestTier(meta), outfit: myOutfit() });
 let showEmotes = false;
+
+// --- The wardrobe (Wearables.js, models in WearableModels.js) --------------------------------------------------
+// Tode wears his outfit everywhere (the frame loop dresses him, see shownOutfit). It's saved with the player tag
+// (`meta.profile.outfit`, the server keeps only unlocked items); every frog in the garden sees it (GardenHub
+// `setOutfit`) and co-op teammates get it with my state now and then (`o` in sendState).
+let showWardrobe = false;
+let wardrobeSlot = 'head';
+let outfitTimer = null;
+/** What I wear: only items my progress has unlocked (another save may be loaded since). */
+const myOutfit = () => cleanOutfit(meta.profile?.outfit, meta);
+/** Unlocked wearables I haven't looked at in the wardrobe yet (the 👕 buttons count them). */
+const newWearables = () => unlockedWearables(meta).filter((id) => !(meta.wearablesSeen ?? []).includes(id));
+
+/** Puts an item on, or takes it off when it's already worn. */
+function wear(id) {
+  const item = wearableById(id);
+  if (!item || !wearableUnlocked(item, meta)) return;
+  const outfit = { ...myOutfit() };
+  if (outfit[item.slot] === id) delete outfit[item.slot];
+  else outfit[item.slot] = id;
+  meta.profile = { ...meta.profile, outfit };
+  saveMeta();
+  player.setOutfit(outfit);
+  player.rig?.play('victory', { once: true }); // a little twirl to show it off
+  play('pop');
+  hub.setOutfit(outfit);
+  // Trying things on is a burst of clicks: the server gets the outfit once they settle.
+  clearTimeout(outfitTimer);
+  outfitTimer = setTimeout(() => saveOutfit(myOutfit()), 1500);
+  refreshGardenWalk();
+}
+
+/** The wardrobe panel's contents for the garden bar. */
+function wardrobeInfo() {
+  meta.wearablesSeen = unlockedWearables(meta); // looking counts as seeing
+  saveMeta();
+  const outfit = myOutfit();
+  const achievementName = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.name ?? id;
+  return {
+    slot: wardrobeSlot,
+    slots: SLOTS.map((slot) => ({ ...slot, worn: wearableById(outfit[slot.id])?.icon ?? null })),
+    items: WEARABLES.filter((item) => item.slot === wardrobeSlot).map((item) => ({
+      ...item,
+      worn: outfit[item.slot] === item.id,
+      locked: !wearableUnlocked(item, meta),
+      hint: wearableHint(item, achievementName),
+    })),
+    unlocked: unlockedWearables(meta).length,
+    total: WEARABLES.length,
+  };
+}
 
 /** My emotes: the free ones and those my achievements unlocked, in order (keys 1–9 play the first nine). */
 const myEmotes = () => EMOTES.filter((emote) => emoteUnlocked(emote, meta));
@@ -4495,11 +4550,18 @@ const walkInfo = () => {
     emotes: showEmotes
       ? EMOTES.filter((emote) => !emote.hidden).map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta), hint: emote.how ?? ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name }))
       : null,
+    wardrobe: showWardrobe ? wardrobeInfo() : null,
+    newWear: newWearables().length,
   };
 };
 
 function refreshGardenWalk() {
-  if (decorating && garden.walking) hud.showGardenWalk(walkInfo());
+  if (decorating && garden.walking) {
+    hud.showGardenWalk(walkInfo());
+    // With the wardrobe open the camera comes closer, with the frog below the garden bar.
+    const bar = showWardrobe && hud.menu.querySelector('.garden-bar')?.getBoundingClientRect();
+    garden.dressing(bar ? Math.min(0.85, Math.max(0.55, (bar.bottom + (viewHeight() - bar.bottom) * 0.45) / viewHeight())) : null);
+  }
 }
 
 /** Into a garden as a hopping frog: `code` (null offline), `own`, `owner` (the name on a visited garden). */
@@ -4572,6 +4634,8 @@ function leaveGardenView() {
   hub.leave();
   player.rig?.play('idle'); // an emote still playing stays in the garden
   if (!gardenVisit?.own) garden.load(meta.decor);
+  showWardrobe = false;
+  garden.dressing(null);
   garden.exit();
   decorating = false;
   gardenVisit = null;
@@ -4602,6 +4666,8 @@ function showSongs() {
 /** Your own garden: from hopping around into the editor and back. */
 function editGarden() {
   if (!decorating || !gardenVisit?.own) return;
+  showWardrobe = false;
+  garden.dressing(null);
   garden.enter({ yaw: garden.view.yaw });
   hud.showGarden(gardenState());
 }
@@ -7157,9 +7223,16 @@ function spectate(delta) {
   if (buddy) player.position.lerp(buddy.position, 1 - Math.exp(-5 * delta));
 }
 
+// My outfit goes along with every OUTFIT_SHARE-th state (every 2 s): it doesn't change in a run, and a teammate
+// whose puppet was rebuilt (a reconnect) gets it back soon.
+const OUTFIT_SHARE = 40;
+let outfitShareIn = 0;
+
 function sendState() {
   if (!coop) return;
+  outfitShareIn = (outfitShareIn || OUTFIT_SHARE) - 1;
   share({
+    ...(outfitShareIn === OUTFIT_SHARE - 1 ? { o: myOutfit() } : {}),
     k: 'me',
     x: Math.round(player.position.x),
     y: Math.round(player.position.y),
@@ -7878,8 +7951,27 @@ const MENU_ACTIONS = {
   'garden-edit': editGarden,
   'garden-emotes': () => {
     showEmotes = !showEmotes;
+    showWardrobe = false;
     refreshGardenWalk();
   },
+  'garden-wardrobe': () => {
+    showWardrobe = !showWardrobe;
+    showEmotes = false;
+    refreshGardenWalk();
+  },
+  'wardrobe-slot': ({ slot }) => {
+    if (!SLOTS.some((s) => s.id === slot)) return;
+    wardrobeSlot = slot;
+    refreshGardenWalk();
+  },
+  wear: ({ id }) => wear(id),
+  // The title screen's 👕 Wardrobe: into my garden with the wardrobe open, so Tode shows what he wears.
+  wardrobe: () =>
+    needName(() => {
+      showWardrobe = true;
+      showEmotes = false;
+      openGarden();
+    }),
   emote: ({ id }) => {
     const emote = EMOTES.find((e) => e.id === id);
     if (emote && emoteUnlocked(emote, meta)) hub.playEmote(id);
@@ -8379,6 +8471,8 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
   lap('hud widgets, camera');
+  // The wardrobe's outfit, everywhere: no hat under a form's crest, and no aura in runs (see shownOutfit).
+  player.setOutfit(shownOutfit(myOutfit(), { tier: ascension.tier, run: phase !== 'title' && phase !== 'loading' }));
   if (render) {
     followShadows();
     drawProjectiles();

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Player } from './Player.js';
 import { Ascension, TIERS } from './Ascension.js';
+import { cleanOutfit, shownOutfit } from './Wearables.js';
 
 const SMOOTHING = 14; // how quickly the puppet catches up with network positions
 const LAG_AFTER = 1_000; // ms without their state (sent 20 times a second) before their name tag shows 📶
@@ -64,6 +65,9 @@ export class RemoteTode {
       this.ascension?.setTier(this.tier);
     }
     if (state.tier !== this.tier) this.setTier(state.tier);
+    // Their outfit comes with a state now and then; the run rules for what shows apply here too.
+    if (state.o) this.outfit = cleanOutfit(state.o);
+    this.puppet.setOutfit(shownOutfit(this.outfit ?? {}, { tier: this.tier, run: true }));
   }
 
   setTier(tier) {
