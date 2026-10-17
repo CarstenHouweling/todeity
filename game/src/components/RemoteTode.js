@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Player } from './Player.js';
+import { PlayerBeacon } from './PlayerBeacon.js';
 import { Ascension, TIERS } from './Ascension.js';
 import { cleanOutfit, shownOutfit } from './Wearables.js';
 
@@ -26,13 +27,8 @@ export class RemoteTode {
   async load() {
     await this.puppet.load();
     this.ascension = new Ascension(this.puppet, this.particles, this.effects);
-    // A ring in the player's colour, so teammates are easy to tell apart.
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(14, 17, 32),
-      new THREE.MeshBasicMaterial({ color: this.color, transparent: true, opacity: 0.8, depthWrite: false })
-    );
-    this.ring.position.z = 0.6;
-    this.puppet.group.add(this.ring);
+    // A ring and a see-through silhouette in the player's colour, so teammates are easy to tell apart and to find.
+    this.beacon = new PlayerBeacon(this.puppet, this.color);
     this.scene.add(this.puppet.group);
     this.tag = this.hud.attachNameTag(this.name, this.color);
     this.puppet.group.visible = false;
@@ -94,6 +90,7 @@ export class RemoteTode {
     this.puppet.rig.setLocomotion((this.hop ?? 0) / 5);
     this.puppet.animate(delta);
     this.puppet.shieldBubble.visible = this.puppet.shield && visible;
+    this.beacon.update(true);
     if (visible) this.ascension.update(delta);
     const lagging = this.seen && performance.now() - this.heardAt > LAG_AFTER;
     this.hud.updateNameTag(this.tag, this.position, visible, this.hp, this.maxHp, lagging);
@@ -101,6 +98,7 @@ export class RemoteTode {
 
   dispose() {
     this.ascension?.clearParts();
+    this.beacon?.dispose();
     this.puppet.group.removeFromParent();
     this.hud.removeNameTag(this.tag);
   }

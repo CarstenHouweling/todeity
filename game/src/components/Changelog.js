@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.4',
+    date: '2026-10-17',
+    title: 'Where\'s Tode?',
+    changes: [
+      '🔵 A bright ring under your frog, drawn over auras, shields and sparkles, so you always know where you stand in a busy fight (teammates get one in their own colour)',
+      '👻 When a boss, a big bee or anything solid stands in front of your frog, you see his outline through it',
+      '🏆 Achievements and charms pop up in a column on the right instead of over your frog and the boss bar, two at a time, and they wait while a boss makes its entrance or a banner is up',
+      '🍯 The garden\'s corner beehives fade when your frog is behind them, like the trees',
+    ],
+  },
+  {
     version: '0.29.3',
     date: '2026-10-17',
     title: 'On the board',

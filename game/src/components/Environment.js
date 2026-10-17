@@ -573,7 +573,10 @@ export function createEnvironment() {
       rotation: Math.atan2(-sx, sy),
     }))
   );
-  group.add(instanced(beehive(), hives, { tint: 0 }));
+  // Single props, not one instanced mesh: the near corner's hive stands between the camera and a Tode in that corner,
+  // and only single props fade (`updatePropFade` in main.js).
+  const hiveGeometry = beehive();
+  for (const hive of hives) group.add(single(hiveGeometry, hive));
 
   // Pond
   const pond = createPond();

@@ -33,6 +33,8 @@ const ABILITIES = [
 ];
 const DAMAGE_NUMBER_DURATION = 0.8; // seconds
 const DAMAGE_NUMBER_RISE = 25; // world units
+const TOAST_MAX = 2; // toasts on screen at once
+const TOAST_QUEUE = 6; // toasts waiting at most
 
 function element(className, parent, tag = 'div') {
   const node = document.createElement(tag);
@@ -124,6 +126,9 @@ export class Hud {
     const meter = element('clash-meter', this.clash);
     this.clashFill = element('clash-fill', meter);
     this.toasts = element('toasts', document.body);
+    this.toastQueue = []; // toasts waiting for room (see toast)
+    this.toastsHeld = false; // main.js: a cut-scene is playing
+    this.bannerUntil = 0; // performance.now() when the banner is gone
     this.tip = element('tip', this.root);
     this.combo = element('combo', this.root);
     this.bossIntro = element('boss-intro', document.body);
@@ -424,6 +429,7 @@ export class Hud {
     void this.banner.offsetWidth; // restart the CSS animation
     this.banner.style.animationDuration = `${duration}s`;
     this.banner.classList.add('show');
+    this.bannerUntil = performance.now() + duration * 1000;
   }
 
   /** "Waiting for teammates" between co-op waves; `null` hides it. */
@@ -613,14 +619,32 @@ export class Hud {
     );
   }
 
+  /**
+   * A toast in the column at the side (v0.29.4: they used to stack in the middle, over Tode and the boss bar). At most
+   * `TOAST_MAX` show at once; the rest wait their turn, and nothing new comes in while the game holds them
+   * (`toastsHeld`: boss intros and other cut-scenes, set by main.js) or a banner is up.
+   */
   toast(html, className = '', seconds = 4.2) {
-    // Keep the stack short: a burst of charms shouldn't bury the screen (on phones even shorter).
-    while (this.toasts.children.length >= (isTouch() ? 2 : 4)) this.toasts.firstChild.remove();
     if (isTouch()) seconds = Math.min(seconds, 3);
-    const toast = element(`toast ${className}`, this.toasts);
-    toast.innerHTML = html;
-    setTimeout(() => toast.classList.add('leaving'), seconds * 1000);
-    setTimeout(() => toast.remove(), seconds * 1000 + 600);
+    this.toastQueue.push({ html, className, seconds });
+    // A burst of charms shouldn't keep the column busy for half a minute: the oldest waiting charm goes first.
+    while (this.toastQueue.length > TOAST_QUEUE) {
+      const charm = this.toastQueue.findIndex((t) => t.className.includes('charm-toast'));
+      this.toastQueue.splice(charm >= 0 ? charm : 0, 1);
+    }
+    this.pumpToasts();
+  }
+
+  /** Shows waiting toasts while there's room (every frame from `update`, and when one is added). */
+  pumpToasts() {
+    if (!this.toastQueue.length || this.toastsHeld || performance.now() < this.bannerUntil) return;
+    while (this.toastQueue.length && this.toasts.querySelectorAll('.toast:not(.leaving)').length < TOAST_MAX) {
+      const { html, className, seconds } = this.toastQueue.shift();
+      const toast = element(`toast ${className}`, this.toasts);
+      toast.innerHTML = html;
+      setTimeout(() => toast.classList.add('leaving'), seconds * 1000);
+      setTimeout(() => toast.remove(), seconds * 1000 + 600);
+    }
   }
 
   /** The server refused a run report: its Golden Leaves won't be paid. */
@@ -1868,6 +1892,7 @@ ${ meta.runs > 0 ? '' :
 
   /** Call after rendering, so the camera matrices match the frame. */
   update(delta, enemies) {
+    this.pumpToasts();
     for (const enemy of enemies) {
       if (!enemy.healthBar) continue;
       const { bar, fill } = enemy.healthBar;

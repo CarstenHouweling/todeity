@@ -1901,27 +1901,38 @@ body.run-ended .hud > * {
 body.run-ended .toasts {
   top: auto;
   bottom: calc(16px + var(--safe-bottom));
+  right: auto;
   left: calc(16px + var(--safe-left));
-  transform: none;
+  align-items: flex-start;
 }
 
+/* A column on the right, under the score (v0.29.4). In the middle they covered Tode, the boss bar and the banners.
+   190px clears the top-centre stack (wave, weather, objective, boss bar, enrage) on narrow windows too. */
 .toasts {
   position: fixed;
-  top: calc(110px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
+  top: calc(190px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
   z-index: 20;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
+  max-width: min(330px, 34vw);
   pointer-events: none;
+}
+
+/* Narrow windows: the top-centre stack reaches over the column's side, so it starts lower. */
+@media (max-width: 1000px) {
+  .toasts {
+    top: calc(240px + var(--safe-top));
+  }
 }
 
 .toast {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 260px;
+  min-width: min(240px, 34vw);
   padding: 10px 16px;
   border: 2px solid #ffd76a;
   border-radius: 14px;
@@ -1934,11 +1945,11 @@ body.run-ended .toasts {
 
 .toast.leaving {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateX(16px);
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(-20px) scale(0.9); }
+  from { opacity: 0; transform: translateX(24px) scale(0.95); }
 }
 
 .toast-icon {
@@ -2588,8 +2599,8 @@ body.touch .inventory-summary:not(:empty) {
 body.touch .toasts {
   top: auto;
   bottom: 36%;
+  right: auto;
   left: 8px;
-  transform: none;
   align-items: flex-start;
   max-width: min(260px, 46vw);
 }

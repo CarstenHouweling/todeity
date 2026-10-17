@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { withoutSilhouette } from './PlayerBeacon.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
@@ -1105,7 +1106,7 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     resetPose();
     restGear();
     flickLeft = 0;
-    return root.clone();
+    return withoutSilhouette(root.clone()); // the Great Tode is big enough to find
   }
 
   const rig = {

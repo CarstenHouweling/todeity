@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { additive, createTeapot, disposeTree } from './Ultimates.js';
 import { markEffect } from './Effects.js';
+import { withoutSilhouette } from './PlayerBeacon.js';
 
 /**
  * Skills: abilities Tode learns during a run, picked on every level-up (tea leaves are the experience).
@@ -173,7 +174,7 @@ class MirrorTode extends TimedEffect {
     this.level = level;
     this.shotTimer = 0;
     this.angle = Math.random() * Math.PI * 2;
-    const ghost = ctx.player.model.clone();
+    const ghost = withoutSilhouette(ctx.player.model.clone());
     const material = additive('#ffd36b', 0.55);
     ghost.traverse((child) => {
       if (child.isMesh) child.material = material;

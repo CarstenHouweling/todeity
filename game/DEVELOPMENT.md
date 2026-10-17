@@ -553,6 +553,27 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Readability:** enemy bullets have a dark outline (back-face rim mesh) and draw after all other transparent
   effects. The pause menu's **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
   during play (cut-scenes keep the full show) and drop the spit trails.
+- **Finding Tode** (v0.29.4, `components/PlayerBeacon.js`): in a playtest Golden Tode vanished inside the Queen's
+  shield dome, and the garden's near corner beehive (then an instanced mesh, which `updatePropFade` skips; now four
+  `single` props) hid him. In runs (`BEACON_PHASES`: play, its menus, the clash; not cut-scenes, the title or
+  gardens) every frog gets a **ground ring** (a dark band under a coloured one, renderOrder 30/31, so it draws after
+  every other transparent effect, auras and domes included; it stays on the ground through hops and scales with the
+  form) and a **silhouette**: each mesh in `player.frogMeshes` gets a child with its geometry and a flat
+  `GreaterDepth` material, blended by hand (`CustomBlending`, not `transparent`, so it stays in the opaque pass). The
+  world draws at renderOrder 0, the silhouettes at 1, and everything in the player's group at 2 (`ownOrder`, every
+  frame, since outfits, crests and halos come and go), so a silhouette only tests against the world, never his own
+  body or cape. It shows through anything solid that writes depth (bosses, bees, props that haven't faded); faded
+  props and transparent effects don't write depth, so they never trigger it. Solo the colour is cyan
+  (`PlayerBeacon.SOLO_COLOR`), in co-op the player's room colour (`startRun`), and `RemoteTode` has its own beacon
+  in the teammate's colour (it replaced their plain ring). Copies of the frog drop the silhouettes
+  (`withoutSilhouette`: the Great Tode's `cloneAtRest`, Mirror Tode). About 24 extra draw calls a frog.
+- **Toasts** (v0.29.4, `hud.toast`/`pumpToasts`): a column on the right under the score (`top: 190px`, 240px below
+  1000px wide, where the top-centre stack of wave, weather, modifiers, objective, boss bar and enrage reaches over
+  its side). They used to stack in the middle, over Tode, the banners and the boss bar. At most `TOAST_MAX` (2) show;
+  the rest wait in `toastQueue` (at most `TOAST_QUEUE`, 6, the oldest waiting charm dropped first), and nothing new
+  shows while `hud.toastsHeld` (main.js, `TOAST_HOLD_PHASES`: boss intros, ascensions, travel, story, ending, clash)
+  or a banner is up (`bannerUntil`, set by `showBanner`). `hud.update` pumps the queue every frame. Phones keep their
+  own place (low on the left) and the game-over screen its corner.
 - **Phones and tablets:** twin-stick touch controls (`TouchControls.js`): the left half of the screen is a floating
   move stick, the right half a floating aim stick (both wait faintly in their bottom corners), and dash/bomb/ultimate
   buttons sit in a row above the aim stick. The stick zones (z-index 3) sit above `.menu`, so the controls hide
@@ -876,6 +897,7 @@ server proxies `/ws` and `/api`).
 | File | Responsibility |
 | --- | --- |
 | `main.js` | Game loop, state machine (phases, incl. `travel` between arenas and the boss `clash`), collisions, enemy AI (chasers, stingers, bosses, Bee-zebub's hellfire), abilities, brew effects, waves, arenas (`setArena`, `prepareArena`), menus wiring, dev debug handle. The `ctx` object passes hooks to the modules below. |
+| `components/PlayerBeacon.js` | The ring under a frog and its silhouette through things in front of it, in runs (see Finding Tode). |
 | `components/Player.js` | Tode: movement with acceleration and hop animation, dash charges, shield, revive, gauge, `BASE_STATS` (every stat a brew can change lives here). |
 | `components/Enemy.js` | Bee types (`ENEMY_TYPES`: drone, zipper, brute, stinger, queen, shogun, seraph, empress, beezebub), statuses (burn, chill/freeze), hit flash, death animation, glTF or procedural model. |
 | `components/BeeModels.js` | Procedural bee species per arena and boss regalia, with their flight animation. |
@@ -1080,8 +1102,8 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 ## Ideas / roadmap
 
 - Readability (seen while making the trailers, Oct 14 and 16): mostly fixed in v0.28.4, see Readability under
-  Graphics levels. Left: Omnitode is a silver frog, so on the Sky Citadel's white marble he has little contrast,
-  and the transformation burst can still flash white for a frame or two right after a page load.
+  Graphics levels. Left: Omnitode is a silver frog, so on the Sky Citadel's white marble he has little contrast
+  (the v0.29.4 ring shows where he stands, but the frog itself still blends in), and the transformation burst can still flash white for a frame or two right after a page load.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant

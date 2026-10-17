@@ -29,6 +29,7 @@ import { fetchScores, playerName, savePlayerName, submitScore } from './componen
 import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
 import { fetchRooms, Net } from './components/Net.js';
 import { RemoteTode } from './components/RemoteTode.js';
+import { PlayerBeacon } from './components/PlayerBeacon.js';
 import { TouchControls } from './components/TouchControls.js';
 import { canLockLandscape, isFullscreen, landscapeFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
@@ -370,6 +371,11 @@ buildWorld(SOLO_TILES);
 
 const player = new Player();
 scene.add(player.group);
+// A ring under Tode and his silhouette through whatever stands in front of him, in runs (see PlayerBeacon.js).
+const beacon = new PlayerBeacon(player);
+// Phases with the run's field on screen: play, its menus and the beam clash (not the cut-scenes).
+const TOAST_HOLD_PHASES = new Set(['bossIntro', 'ascending', 'travel', 'story', 'ending', 'clash']);
+const BEACON_PHASES = new Set([...PLAYING, 'paused', 'choosing', 'skill', 'ultimate', 'chest', 'clash']);
 
 const camera = createCamera();
 player.group.add(camera);
@@ -7347,6 +7353,8 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   setArena(ARENAS[0]);
   player.reset();
   player.downed = false;
+  // Co-op: my colour in the room, as teammates see my ring; solo the beacon's own.
+  beacon.setColor((coopRun && net.players.find((p) => p.id === net.id)?.color) || PlayerBeacon.SOLO_COLOR);
   runClass = daily ? classOfTheDay(todayKey()) : chosenClass();
   player.setClass(runClass.id);
   clearCompanions();
@@ -8456,6 +8464,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     ascension.update(delta);
     player.rig.inPlace = PLAYING.has(phase) || phase === 'clash' || (decorating && hub.active);
     player.animate(delta);
+    beacon.update(BEACON_PHASES.has(phase) && !player.downed);
     // On the title screen the frog shows off now and then.
     if (phase === 'title' && !decorating && (titleMoveIn -= delta) <= 0) {
       titleMoveIn = 7 + Math.random() * 4;
@@ -8468,6 +8477,8 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   // A menu over play (the co-op pause menu keeps the run going) hides the sticks, or their zones would take its taps.
   touch.update(PLAYING.has(phase) && !player.downed && !hud.menuOpen && !hud.modalOpen, player.gauge >= 100, Boolean(player.ultimate), phase === 'title' && decorating && garden.walking && !hud.modalOpen);
   hud.root.classList.toggle('quiet', ['title', 'loading', 'story', 'ending'].includes(phase));
+  // New toasts wait while a cut-scene plays (they used to cover a boss's entrance and the transformations).
+  hud.toastsHeld = TOAST_HOLD_PHASES.has(phase);
   hud.setPauseShown(PLAYING.has(phase));
   // A run played upright on a phone (a co-op guest, or turned mid-run): once a run, a reminder to turn it.
   if (phase === 'fighting' && !portraitHinted && !portraitChosen && portraitPhone()) {
