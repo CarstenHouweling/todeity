@@ -2,7 +2,7 @@
 // Runs on any Node 18+ host (Azure App Service, a VM, locally). Its only dependency is `ws`.
 //
 //   GET  /api/scores?board=all|daily|depth|speed&date=YYYY-MM-DD&limit=10
-//   POST /api/scores  { name, score, wave, level, tier, kills, time, clear, victory, daily, steep }
+//   POST /api/scores  { name, tag, score, wave, level, tier, kills, time, clear, victory, daily, steep }
 //   /api/save…        cloud saves with easy save codes (see saves.js)
 //
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
@@ -92,12 +92,24 @@ const ORDERS = {
   speed: (a, b) => a.clear - b.clear || a.at - b.at,
 };
 
+// Every run is submitted by itself now (v0.29.3), so a board keeps one entry per frog: its best. A frog is its
+// name and #tag (PlayerTag.js); entries from before tags were sent only match by name among themselves.
+const frogKey = (entry) => `${String(entry.name).toLocaleLowerCase()}#${entry.tag ?? ''}`;
+
+/** `rank`: this run's place (null when it isn't the frog's best, or didn't make the board); `best`: the frog's place. */
 function insert(board, entry, order = ORDERS.score) {
-  board.push(entry);
+  const key = frogKey(entry);
+  let best = entry;
+  for (let i = board.length - 1; i >= 0; i--) {
+    if (frogKey(board[i]) !== key) continue;
+    if (order(board[i], best) < 0) best = board[i];
+    board.splice(i, 1);
+  }
+  board.push(best);
   board.sort(order);
   board.length = Math.min(board.length, KEEP);
-  const rank = board.indexOf(entry);
-  return rank >= 0 ? rank + 1 : null;
+  const place = board.indexOf(best) + 1 || null;
+  return { rank: best === entry ? place : null, best: place };
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -123,6 +135,7 @@ function parseEntry(body) {
     steep: clampInt(body.steep, 0, 40), // Steeping vows taken (they multiply the score)
     gentle: Boolean(body.gentle) || undefined, // a Gentle Brew run (half the score; marked 🌿 on the boards)
     cls: CLASS_IDS.includes(body.cls) ? body.cls : 'tode', // the frog that played (src/components/Classes.js)
+    tag: /^\d{4}$/.test(body.tag) ? body.tag : undefined, // the player tag's #tag: one entry per frog (see insert)
     at: Date.now(),
     id: newId(),
   };
@@ -192,26 +205,30 @@ async function handleScores(req, res, url) {
     const size = clampInt(body.coop, 0, 4);
     if (size >= 2) {
       entry.team = (Array.isArray(body.team) ? body.team : []).slice(0, size).map((name) => cleanName(name));
-      const coopRank = insert(boards[`coop${size}`], entry);
+      const coop = insert(boards[`coop${size}`], entry);
       await saveScores();
-      return send(res, 201, { coopRank });
+      return send(res, 201, { coopRank: coop.rank, best: { coop: coop.best } });
     }
 
-    const rank = insert(boards.all, entry);
-    const depthRank = insert(boards.depth, { ...entry }, ORDERS.depth);
+    const all = insert(boards.all, entry);
+    const depth = insert(boards.depth, { ...entry }, ORDERS.depth);
     // Bee-zebub's clear time counts however the run ended: a run that went on into endless and fell still beat him.
     const beatBeezebub = entry.clear > 0 && entry.clear <= entry.time && entry.wave >= 21;
-    const speedRank = beatBeezebub ? insert(boards.speed, { ...entry }, ORDERS.speed) : null;
-    let dailyRank = null;
+    const speed = beatBeezebub ? insert(boards.speed, { ...entry }, ORDERS.speed) : {};
+    let daily = {};
     if (body.daily) {
       const date = today();
       boards.daily[date] ??= [];
-      dailyRank = insert(boards.daily[date], { ...entry });
+      daily = insert(boards.daily[date], { ...entry });
       // Keep only the last two weeks of daily boards.
       for (const old of Object.keys(boards.daily).sort().slice(0, -14)) delete boards.daily[old];
     }
     await saveScores();
-    return send(res, 201, { rank, dailyRank, depthRank, speedRank });
+    // The …Rank fields: this run's place (null when the frog has a better one); `best`: where the frog stands.
+    return send(res, 201, {
+      rank: all.rank, dailyRank: daily.rank ?? null, depthRank: depth.rank, speedRank: speed.rank ?? null,
+      best: { all: all.best, daily: daily.best ?? null, depth: depth.best, speed: speed.best ?? null },
+    });
   }
 
   return send(res, 405, { error: 'Method not allowed.' });

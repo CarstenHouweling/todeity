@@ -1765,7 +1765,7 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, grazes = 0, coop = 0, host = true, team = null }) {
+  showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, grazes = 0, coop = 0, host = true, team = null, autoSubmit = false }) {
     const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
@@ -1793,10 +1793,9 @@ ${ meta.runs > 0 ? '' :
       ${
         coop >= 2 && !host
           ? `<p class="sub submit-score">👥 Your host submits the team's score to the ${coop}-frog co-op board.</p>`
-          : `<form class="submit-score">
-        <input id="player-name" maxlength="16" placeholder="${coop >= 2 ? 'Team or your name' : 'Your name'}" value="${escapeHtml(name)}" autocomplete="nickname" />
-        <button class="menu-button" type="submit">🏆 Submit ${coop >= 2 ? `team score (${(team ?? []).map((member) => escapeHtml(member)).join(' · ')})` : 'score'}</button>
-      </form>`
+          : autoSubmit
+            ? `<form class="submit-score"><p class="sub">🏆 Submitting ${coop >= 2 ? "the team's score" : 'your score'} as <b>${escapeHtml(name)}</b>…</p></form>`
+            : `<form class="submit-score">${this.submitFields(name, coop, team)}</form>`
       }
       <div class="board-slot"></div>
       <div class="menu-buttons">
@@ -1815,12 +1814,21 @@ ${ meta.runs > 0 ? '' :
     if (offer) offer.innerHTML = '<p>🌿 <b>Gentle Brew is on.</b> Press ↻ Play again. (Turn it off on the title screen.)</p>';
   }
 
-  /** Shows the result of a score submission and the board on the game-over screen. */
-  showSubmitted(message, scores, rank, board = 'all') {
+  /** The game-over screen's name field and submit button (frogs without a name; or a submit that failed). */
+  submitFields(name, coop = 0, team = null) {
+    return `<input id="player-name" maxlength="16" placeholder="${coop >= 2 ? 'Team or your name' : 'Your name'}" value="${escapeHtml(name)}" autocomplete="nickname" />
+        <button class="menu-button" type="submit">🏆 Submit ${coop >= 2 ? `team score (${(team ?? []).map((member) => escapeHtml(member)).join(' · ')})` : 'score'}</button>`;
+  }
+
+  /**
+   * Shows the result of a score submission and the board on the game-over screen. `name`: who it went in as;
+   * `retry`: it failed, so the name field comes back with this name in it.
+   */
+  showSubmitted(message, scores, rank, board = 'all', { name = null, retry = null } = {}) {
     const form = this.menu.querySelector('.submit-score');
-    if (form) form.innerHTML = `<p class="sub">${message}</p>`;
+    if (form) form.innerHTML = `<p class="sub">${message}${name ? ` <small>(as ${escapeHtml(name)})</small>` : ''}</p>${retry === null ? '' : this.submitFields(retry)}`;
     const slot = this.menu.querySelector('.board-slot');
-    if (slot) slot.innerHTML = this.scoreTable(scores, rank, board);
+    if (slot && retry === null) slot.innerHTML = this.scoreTable(scores, rank, board);
   }
 
   /** `endless`: offer to keep going (not in the Daily Brew, whose run ends with Bee-zebub). */

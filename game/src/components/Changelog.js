@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.3',
+    date: '2026-10-17',
+    title: 'On the board',
+    changes: [
+      '🏆 Your runs go on the leaderboards by themselves, under your name: no more typing it and pressing Submit (frogs without a name still type one the first time)',
+      '🐸 The boards keep each frog\'s best run, so one busy frog can\'t fill the top ten; a run that doesn\'t beat yours says where your best stands',
+      '👕 Trying things on in the wardrobe no longer makes your frog twirl at every click',
+    ],
+  },
+  {
     version: '0.29.2',
     date: '2026-10-17',
     title: 'Still waters',

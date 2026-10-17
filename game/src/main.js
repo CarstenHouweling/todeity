@@ -4490,7 +4490,6 @@ function wear(id) {
   meta.profile = { ...meta.profile, outfit };
   saveMeta();
   player.setOutfit(outfit);
-  player.rig?.play('victory', { once: true }); // a little twirl to show it off
   play('pop');
   hub.setOutfit(outfit);
   // Trying things on is a burst of clicks: the server gets the outfit once they settle.
@@ -7604,7 +7603,10 @@ function endRun({ victory = false } = {}) {
   lastBuild = runBuild();
   // An early death outside the Daily Brew and co-op offers Gentle Brew (players who never got past the second arena).
   const offerGentle = !gentle && !coop && !isDaily() && !victory && wave < 10 && meta.bestWave < 10;
-  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild, offerGentle });
+  // Frogs with a name go on the boards by themselves (a co-op team through its host); others type one first.
+  const autoSubmit = Boolean(playerName()) && lastRun.host;
+  hud.showGameOver({ ...lastRun, isRecord, time: timeAlive, leaves, line, name: playerName(), build: lastBuild, offerGentle, autoSubmit });
+  if (autoSubmit) submitRun(playerName(), { auto: true });
 }
 
 function gameOver() {
@@ -7617,6 +7619,7 @@ function gameOver() {
 let lastRun = null;
 let lastBuild = null;
 let submitted = false;
+let lastSubmitAt = 0; // the server takes one score per 10 s (POST_INTERVAL): quick runs wait their turn
 
 /** Everything Tode gathered this run, for the game-over screen and the share card. */
 function runBuild() {
@@ -7709,8 +7712,10 @@ function shareSave() {
   hud.setShareStatus('Saved!');
 }
 
-async function submitRun(name) {
-  if (!lastRun || submitted) return;
+/** `auto`: sent by itself at the end of the run (endRun), under the player's name. */
+async function submitRun(name, { auto = false } = {}) {
+  const run = lastRun;
+  if (!run || submitted) return;
   const cleanName = name.trim().slice(0, 16);
   if (!cleanName) {
     hud.menu.querySelector('#player-name')?.focus();
@@ -7718,20 +7723,32 @@ async function submitRun(name) {
   }
   submitted = true;
   savePlayerName(cleanName);
-  play('click');
-  const result = await submitScore({ ...lastRun, name: cleanName });
+  if (!auto) play('click');
+  // The #tag keeps frogs with the same name apart: the boards hold each frog's best run.
+  const tag = cleanName === meta.profile?.name ? meta.profile.tag : undefined;
+  const wait = lastSubmitAt + 10_500 - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastSubmitAt = Date.now();
+  const result = await submitScore({ ...run, name: cleanName, tag });
+  // Already playing again: the run is on the boards, there's just no game-over screen to show it on.
+  const shown = () => lastRun === run && phase === 'gameover';
+  if (!shown()) return;
   if (result.error) {
     submitted = false;
-    hud.showSubmitted(result.error, null);
+    hud.showSubmitted(result.error, null, null, 'all', { retry: cleanName });
     return;
   }
   // Show the board this run shines on: the team's co-op board, the speed board for a Bee-zebub kill, else score
   // (or the Daily Brew).
-  const board = lastRun.coop >= 2 ? `coop${lastRun.coop}` : lastRun.daily ? 'daily' : lastRun.clear ? 'speed' : 'all';
-  const rank = board.startsWith('coop') ? result.coopRank : { daily: result.dailyRank, speed: result.speedRank, all: result.rank }[board];
+  const board = run.coop >= 2 ? `coop${run.coop}` : run.daily ? 'daily' : run.clear ? 'speed' : 'all';
+  const key = board.startsWith('coop') ? 'coop' : board;
+  const rank = key === 'coop' ? result.coopRank : { daily: result.dailyRank, speed: result.speedRank, all: result.rank }[key];
+  const best = result.best?.[key]; // where my best run stands (servers before v0.29.3 don't say)
   const scores = await fetchScores(board, 10);
-  const where = board.startsWith('coop') ? `the ${lastRun.coop}-frog co-op board` : { daily: "today's Daily Brew", speed: 'the fastest Bee-zebub board', all: 'the leaderboard' }[board];
-  hud.showSubmitted(rank ? `You're #${rank} on ${where}! 🎉` : `Score submitted to ${where}.`, scores, rank, board);
+  if (!shown()) return;
+  const where = key === 'coop' ? `the ${run.coop}-frog co-op board` : { daily: "today's Daily Brew", speed: 'the fastest Bee-zebub board', all: 'the leaderboard' }[key];
+  const message = rank ? `You're #${rank} on ${where}! 🎉` : best ? `Your best run stays #${best} on ${where}.` : `Score submitted to ${where}.`;
+  hud.showSubmitted(message, scores, rank ?? best, board, { name: cleanName });
   if (rank && rank <= 3) play('victory');
 }
 

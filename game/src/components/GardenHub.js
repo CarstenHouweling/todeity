@@ -402,9 +402,8 @@ export class GardenHub {
     } else if (data.k === 'wave') {
       this.frogs.get(from)?.puppet.rig.play('victory', { once: true });
     } else if (data.k === 'outfit') {
-      const frog = this.frogs.get(from); // changed clothes: a little twirl to show them off
+      const frog = this.frogs.get(from); // changed clothes (no twirl: trying things on is a burst of clicks)
       if (frog) frog.outfit = cleanOutfit(data.o);
-      frog?.puppet.rig.play('victory', { once: true });
     } else if (data.k === 'emote') {
       const frog = this.frogs.get(from);
       const emote = emoteById(data.id);

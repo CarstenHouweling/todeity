@@ -1459,10 +1459,17 @@ canvas.game {
 
 .submit-score {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
   margin-top: 14px;
   cursor: default;
+}
+
+/* A failed submit: the message above the name field that came back */
+.submit-score > p {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .submit-score input {

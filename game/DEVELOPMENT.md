@@ -82,7 +82,7 @@ in every browser; what touches the server is made to survive the gap:
 
 Still lost in a deploy: anything the host sends while the server is away (one-off events like a boss intro or a
 shrine; snapshots and the wave catch up), Pantry purchases made during the gap (they are undone, the leaves come
-back), and a leaderboard submit during the gap (the button can be pressed again). Two runs queued while the server
+back), and a leaderboard submit during the gap (the name field comes back with a 🏆 Submit button to try again). Two runs queued while the server
 is away can trip the playtime check for the second. Deploy when few people play (the admin page's Who's online).
 
 ### Admin
@@ -469,7 +469,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. Checked in a
   2-tab co-op run: each side sees the other's outfit, and a teammate reaching tier 2 loses the hat on both screens. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
   any known items, `cleanOutfit(o)`), a change is an `outfit` event (`hub.setOutfit`; the server remembers it for frogs
-  who join later), and puppets twirl when they change. **Models:** voxel boxes like the frogs, hung on the rig's
+  who join later). No twirl on a change, neither for Tode nor for puppets (v0.29.3): trying things on is a burst of
+  clicks. **Models:** voxel boxes like the frogs, hung on the rig's
   head and body joints (`rig.parts`), sized from `rig.fit` (head width, body size) so every class fits; wings flap,
   the halo bobs, the balloon sways on its string, auras are one instanced mesh of 22 bits (falling, rising or
   orbiting; plain voxels or shapes built from them, `AURA_SHAPES`: hearts, notes, leaves). Capes are `drapedCape`
@@ -658,7 +659,16 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the game falls back to local progress. Forged requests can still cheat; this only stops storage edits.
   **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time; any run with a `clear`, also one that died later in endless) and a seeded
-  **Daily Brew**. The run timer (top right) only counts
+  **Daily Brew**. **Auto-submit** (v0.29.3): `endRun` submits every run by itself when the frog has a name
+  (`playerName()`: the player tag, else the name last typed) and isn't a co-op guest (the host submits the team);
+  the game-over screen says "Submitting… as Name" and then the result. Frogs without a name get the name field and
+  🏆 Submit as before, and a failed submit brings the field back to retry. `submitRun` waits out the server's 10 s per
+  IP (`POST_INTERVAL`) itself, so quick runs don't get "Slow down"; a submit still pending when Play again is pressed
+  goes through without touching the next run's screens. **One entry per frog** per board (`insert` in server.js):
+  the frog is its name plus the player tag's `#tag` (sent as `tag` when the name is the tag's), and only its best run
+  stays. The response's `…Rank` fields are this run's place (null when the frog has a better one); `best` says where
+  the frog stands, so the game-over screen shows "Your best run stays #N". Entries from before v0.29.3 have no tag
+  and only match each other by name, so old duplicates age out rather than merge. The run timer (top right) only counts
   fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`.
 
 ## Promo material
