@@ -471,9 +471,26 @@ function mergeStill(inner) {
   if (anim) {
     const before = new Map();
     inner.traverse((o) => before.set(o, state(o)));
+    // What the probing changes, to put back afterwards: left at the last probe, the cannon's steam puff hung high
+    // over the spout and its height field (GardenPhysics.js, sampled from a fresh model) bounced every shot back.
+    const rest = [];
+    inner.traverse((o) => {
+      const m = o.material;
+      rest.push([o, o.position.clone(), o.rotation.clone(), o.scale.clone(), o.visible, m?.emissiveIntensity, m?.opacity, m?.color?.clone()]);
+    });
     for (const [t, night] of [[0.37, false], [1.91, true], [4.3, false], [7.7, true], [13.1, false]]) {
       anim(t, night);
       inner.traverse((o) => before.get(o) !== state(o) && moving.add(o));
+    }
+    for (const [o, position, rotation, scale, visible, emissiveIntensity, opacity, color] of rest) {
+      o.position.copy(position);
+      o.rotation.copy(rotation);
+      o.scale.copy(scale);
+      o.visible = visible;
+      const m = o.material;
+      if (m && emissiveIntensity !== undefined) m.emissiveIntensity = emissiveIntensity;
+      if (m && opacity !== undefined) m.opacity = opacity;
+      if (m && color) m.color.copy(color);
     }
   }
   // Parts are merged within the closest thing that moves them (a swaying crown, a bending stem), or the trinket.

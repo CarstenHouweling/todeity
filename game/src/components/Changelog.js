@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.1',
+    date: '2026-10-17',
+    title: 'Fire!',
+    changes: [
+      '💥 The teapot cannon in the garden fires frogs the way its spout points again, instead of bouncing them back the way they came',
+      '👕 21 more things to wear (54 in all): a flower crown, a beekeeper\'s hat, antlers, heart shades, an eye patch, flight goggles, a hero\'s medal, a flower lei, a snail shell, a steam jetpack, a party balloon, fairy wings, and auras of hearts, music notes, falling leaves, static sparks and a rainbow ring. Rosy Cheeks are free',
+      '🦸 Capes drape over the back and sway like cloth, with a pointed tail, instead of sticking out like a plank',
+      '🏊 Swimming in the garden pond is a calmer paddle',
+      '🐸 Every wearable checked on every class: the medal is bigger and the snail shell has its spiral',
+    ],
+  },
+  {
     version: '0.29.0',
     date: '2026-10-17',
     title: 'Dress up your frog',

@@ -17,7 +17,10 @@ import { duckMusicFor } from './Sound.js';
  * (`rend` with the scores). Leaves can lie on the roof, on trinkets or over the pond. Alone it's a race against your
  * best (`hub.hooks.onRecord`).
  */
-const SWIM = { speed: 0.55, sink: 7, ripple: 0.3, still: 1.4 };
+// `paddle`: [base, swing, beat] of the swimming legs (the run pose's legs and arms, see rig.setLocomotion); it was
+// 0.55 ± 0.45 at 9 rad/s, a full run cycle flailing in the water.
+const SWIM = { speed: 0.55, sink: 7, bob: 0.4, ripple: 0.3, still: 1.4, paddle: [0.28, 0.17, 5.5] };
+const paddling = (time) => SWIM.paddle[0] + SWIM.paddle[1] * Math.sin(time * SWIM.paddle[2]);
 const CANNONBALL = -430; // falling faster than this into the water is a cannonball
 const SOAK = 95; // a cannonball soaks frogs this close
 const SKIP = { first: 14, step: 26, shrink: 0.82, height: 0.28, look: 70 };
@@ -108,7 +111,7 @@ export class GardenPond {
   }
 
   get sink() {
-    return SWIM.sink - Math.sin(this.hub.time * 3) * 0.8;
+    return SWIM.sink - Math.sin(this.hub.time * 2.2) * SWIM.bob;
   }
 
   /** How fast my frog may hop now (slower in the water). */
@@ -123,7 +126,7 @@ export class GardenPond {
     this.swimming = level && hub.z <= 1 && inPond(pos.x, pos.y);
     if (this.swimming && !was && hub.time - this.splashedAt > 0.3) this.wade(pos, true);
     if (this.swimming) {
-      this.paddle = speed > 8 ? 0.55 + 0.45 * Math.sin(hub.time * 9) : 0;
+      this.paddle = speed > 8 ? paddling(hub.time) : 0;
       if ((this.rippleIn -= delta) <= 0) {
         this.rippleIn = speed > 8 ? SWIM.ripple : SWIM.still;
         this.ripple(pos, speed > 8 ? 24 : 16);
@@ -141,7 +144,7 @@ export class GardenPond {
     if (!wet) return;
     const moving = frog.position.distanceToSquared(frog.last) > (8 * delta) ** 2;
     frog.puppet.model.position.z = frog.puppet.groundOffset - this.sink;
-    frog.puppet.rig.setLocomotion(moving ? 0.55 + 0.45 * Math.sin(this.hub.time * 9) : 0);
+    frog.puppet.rig.setLocomotion(moving ? paddling(this.hub.time) : 0);
     if ((frog.rippleIn = (frog.rippleIn ?? 0) - delta) <= 0) {
       frog.rippleIn = moving ? SWIM.ripple : SWIM.still;
       this.ripple(frog.position, moving ? 24 : 16);

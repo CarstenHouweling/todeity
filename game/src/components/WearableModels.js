@@ -142,6 +142,60 @@ const MODELS = {
     });
   },
 
+  flowercrown(rig, f) {
+    piece(rig.parts.head, [0, HAT_Y - 0.2, 2.5], (add) => {
+      const colors = ['#ff7aa8', '#ffd23f', '#ffffff', '#c58aff', '#ff9a3a'];
+      for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2;
+        const x = Math.cos(angle) * (f.headW / 2 - 0.5);
+        const z = Math.sin(angle) * 4.6;
+        add([2.2, 1.2, 2.2], [x, 0.8, z], colors[i % colors.length]);
+        add([0.9, 1.3, 0.9], [x, 1.3, z], '#ffe680');
+        add([1.6, 0.6, 1.6], [x * 0.92, 0.2, z * 0.92], '#4f9a2e');
+      }
+    });
+  },
+  lilypad(rig, f) {
+    piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
+      add([f.headW + 3, 0.7, 13], [0, 0.35, 0], '#3f9d3a');
+      add([4, 0.75, 4], [f.headW / 2 - 1, 0.4, 4.5], '#5fbf6a'); // the notch, a lighter wedge
+      add([1, 2.4, 1], [-1.5, 1.6, -1], '#ff9ec7');
+      add([2.6, 1.2, 2.6], [-1.5, 3, -1], '#ffd1e3');
+      add([1, 1, 1], [-1.5, 3.8, -1], '#ffe680');
+    });
+  },
+  beehat(rig, f) {
+    piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
+      add([f.headW + 7, 0.6, 16], [0, 0.3, 0], '#efe6c8');
+      add([f.headW - 1, 4.4, 9], [0, 2.6, -0.5], '#efe6c8');
+      add([f.headW - 0.6, 1, 9.4], [0, 1.2, -0.5], '#3a2a1a');
+      // The veil hanging round the brim.
+      for (const s of [-1, 1]) add([0.3, 5, 14], [s * (f.headW / 2 + 3.3), -2.3, 0], '#5a5a50', { material: 'cloth' });
+      add([f.headW + 6.6, 5, 0.3], [0, -2.3, -7.8], '#5a5a50', { material: 'cloth' });
+      add([1.6, 1.2, 1], [f.headW / 2 - 1, 3, 4.3], '#ffcf3a'); // a little bee on the hat
+      add([1.8, 0.4, 1.1], [f.headW / 2 - 1, 3, 4.3], '#2a1a0a');
+    });
+  },
+  toque(rig, f) {
+    piece(rig.parts.head, [0, HAT_Y - 0.6, 2], (add) => {
+      add([f.headW - 1, 2.6, 8.6], [0, 1.3, 0], '#ffffff');
+      add([f.headW + 1.2, 3.6, 10.4], [0, 4.4, 0], '#f8f8f4');
+      add([f.headW + 2, 2.6, 11.2], [0, 7.2, 0], '#ffffff');
+      for (const x of [-3.4, 0, 3.4]) add([2.6, 2, 2.6], [x, 8.8, 0.5], '#f4f4ee');
+    });
+  },
+  antlers(rig, f) {
+    piece(rig.parts.head, [0, HAT_Y - 1.4, 0.8], (add) => {
+      for (const s of [-1, 1]) {
+        const x = s * (f.headW / 2 - 1);
+        add([1.4, 6, 1.4], [x + s * 1, 2.6, 0], '#a8784a', { rotation: [0, 0, -s * 0.35] });
+        add([1.2, 3.4, 1.2], [x + s * 3.4, 5.6, 0], '#a8784a', { rotation: [0, 0, -s * 0.9] });
+        add([1.1, 3.4, 1.1], [x + s * 2, 7, 0.4], '#a8784a', { rotation: [0.2, 0, -s * 0.15] });
+        add([1, 2.6, 1], [x + s * 0.4, 5.2, 0.6], '#a8784a', { rotation: [0.3, 0, s * 0.4] });
+      }
+    });
+  },
+
   // --- Face ---------------------------------------------------------------------------------------
   specs(rig, f) {
     piece(rig.parts.head, [0, EYE_Y, EYE_Z], (add) => {
@@ -194,6 +248,46 @@ const MODELS = {
       for (const s of [-1, 1]) add([1.2, 1.2, 0.4], [s * ex, 1.6, 0.5], '#ffe680', { material: 'glow' });
     });
     return { update: (time) => (visor.children.at(-1).visible = Math.sin(time * 6) > -0.6) };
+  },
+
+  blush(rig, f) {
+    // (On the Ninja's face mask, which covers the cheeks.)
+    piece(rig.parts.head, [0, 2.6, rig.id === 'ninja' ? 9.7 : 8.4], (add) => {
+      for (const s of [-1, 1]) add([2.6, 1.4, 1.2], [s * (f.headW / 2 - 1.6), 0, 0.6], '#ff8aa8');
+    });
+  },
+  heartshades(rig, f) {
+    piece(rig.parts.head, [0, EYE_Y, EYE_Z + 0.2], (add) => {
+      const ex = eyeX(f);
+      for (const s of [-1, 1]) {
+        // A voxel heart over each eye: two bumps on top, a point below.
+        for (const b of [-1, 1]) add([2.4, 2.2, 0.6], [s * ex + b * 1.2, 0.9, 0], '#ff3a6a', { material: 'shiny' });
+        add([4.2, 1.8, 0.6], [s * ex, -0.6, 0], '#ff3a6a', { material: 'shiny' });
+        add([1.8, 1.4, 0.6], [s * ex, -1.9, 0], '#ff3a6a', { material: 'shiny' });
+        add([0.6, 0.6, 6], [s * (ex + 2.5), 1, -3], '#ff3a6a');
+      }
+      add([2 * ex - 4, 0.6, 0.6], [0, 1, 0], '#ff3a6a');
+    });
+  },
+  eyepatch(rig, f) {
+    piece(rig.parts.head, [-eyeX(f), EYE_Y, EYE_Z + 0.2], (add) => {
+      add([4.6, 4.2, 0.7], [0, 0, 0], '#1a1a1a');
+      add([f.headW + 1.4, 0.7, 0.7], [eyeX(f), 2.4, -1.2], '#1a1a1a', { rotation: [0, 0, -0.18] });
+      add([0.7, 0.7, 9], [eyeX(f) * 2 + 2.6, 1.6, -5], '#1a1a1a');
+      add([0.7, 0.7, 9], [-2.6, 1.6, -5], '#1a1a1a');
+    });
+  },
+  goggles(rig, f) {
+    piece(rig.parts.head, [0, EYE_Y + 0.2, EYE_Z], (add) => {
+      const ex = eyeX(f);
+      for (const s of [-1, 1]) {
+        add([5, 4.6, 1.4], [s * ex, 0, 0], '#8a5a2a');
+        add([3.8, 3.4, 0.5], [s * ex, 0, 0.8], '#7fd8f0', { material: 'shiny' });
+        add([1, 0.8, 0.3], [s * ex - 0.9, 0.8, 1.1], '#ffffff', { material: 'glow' });
+      }
+      add([f.headW + 1.6, 1.2, 1], [0, 0.2, -4], '#5a3a1a');
+      for (const s of [-1, 1]) add([0.8, 1.2, 4.4], [s * (f.headW / 2 + 0.6), 0.2, -2], '#5a3a1a');
+    });
   },
 
   // --- Body ---------------------------------------------------------------------------------------
@@ -264,25 +358,54 @@ const MODELS = {
     });
   },
 
+  medal(rig, f) {
+    // Big enough to read under the chin: a blue ribbon round the neck and a gold star medal on the chest.
+    const top = backTop(f);
+    piece(rig.parts.body, [0, 0, f.L / 2 - 3.4], (add) => {
+      add([f.W + 0.8, 0.8, 4.4], [0, top - 0.4, 0], '#3a6ad9', { material: 'cloth' });
+      for (const s of [-1, 1]) add([0.8, 4.4, 4.4], [s * (f.W / 2 + 0.4), top - 2.6, 0], '#3a6ad9', { material: 'cloth' });
+    });
+    piece(rig.parts.body, [0, 1.5 - f.H / 2 + 1.6, f.L / 2 + 0.9], (add) => {
+      for (const s of [-1, 1]) add([1.4, 3.4, 0.6], [s * 0.9, 2, -0.2], '#3a6ad9', { rotation: [0, 0, s * 0.3], material: 'cloth' });
+      add([4.2, 4.2, 0.9], [0, -0.6, 0], '#ffcf3a', { material: 'shiny' });
+      add([4.2, 4.2, 0.9], [0, -0.6, 0], '#ffcf3a', { rotation: [0, 0, Math.PI / 4], material: 'shiny' });
+      add([2, 2, 0.5], [0, -0.6, 0.55], '#fff2a0', { material: 'shiny' });
+    }, [-0.35, 0, 0]);
+  },
+  lei(rig, f) {
+    const top = backTop(f);
+    piece(rig.parts.body, [0, 0, f.L / 2 - 3.6], (add) => {
+      const colors = ['#ff6a9a', '#ffd23f', '#ffffff', '#ff9a3a', '#c58aff'];
+      let i = 0;
+      // Over the shoulders and round the front of the neck.
+      for (let x = -f.W / 2; x <= f.W / 2 + 0.01; x += 2.2) add([2, 1.6, 2], [x, top - 0.6, 0], colors[i++ % colors.length]);
+      for (const s of [-1, 1]) for (let y = top - 2.4; y > top - 6; y -= 1.8) add([1.6, 1.8, 2], [s * (f.W / 2 + 0.6), y, 0.6], colors[i++ % colors.length]);
+      for (let x = -f.W / 2 + 1; x <= f.W / 2 - 1 + 0.01; x += 2.2) add([2, 1.8, 1.4], [x, top - 6.2, 3], colors[i++ % colors.length]);
+    });
+  },
+  charmbelt(rig, f) {
+    piece(rig.parts.body, [0, -1.4, 0], (add) => {
+      add([f.W + 0.8, 1.6, f.L + 0.8], [0, 0, 0], '#6a3a1a');
+      add([2.6, 2.2, 0.6], [0, 0, f.L / 2 + 0.6], '#e8c050', { material: 'shiny' });
+      const charms = [['#5ac8ff', -4], ['#ff5a7a', -1.8], ['#7ed957', 2], ['#c58aff', 4.2]];
+      for (const [color, x] of charms) add([1.2, 1.6, 1.2], [x * f.W / 14, -1.4, f.L / 2 + 0.7], color, { material: 'glow' });
+    });
+  },
+  apron(rig, f) {
+    piece(rig.parts.body, [0, 0.6, f.L / 2 + 0.5], (add) => {
+      add([f.W - 3, f.H - 1, 0.6], [0, -0.8, 0], '#f4f1ea', { material: 'cloth' });
+      add([f.W - 5, 2.4, 0.7], [0, -2.4, 0.05], '#7fb8e8', { material: 'cloth' });
+      add([2.4, 1.8, 0.8], [0, 1.6, 0.1], '#b06a2a'); // a little teacup on the bib
+      for (const s of [-1, 1]) add([0.7, 0.7, f.L], [s * (f.W / 2 - 1.5), 2 + f.H / 2 - 1.4, -f.L / 2], '#f4f1ea', { material: 'cloth' });
+    });
+  },
+
   // --- Back ---------------------------------------------------------------------------------------
   cape(rig, f) {
-    const cape = piece(rig.parts.body, [0, backTop(f) - 0.4, -f.L / 2 + 3], (add) => {
-      add([f.W, 0.6, 12], [0, 0, -5], '#d9443a', { material: 'cloth' });
-      add([f.W + 0.4, 0.7, 1.6], [0, 0.1, -10.6], '#a8262a', { material: 'cloth' });
-      add([f.W + 1, 1.4, 2], [0, 0.4, 1], '#ffcf3a', { material: 'shiny' });
-    });
-    return { update: (time) => (cape.rotation.x = -0.85 + Math.sin(time * 2.2) * 0.12) };
+    return drapedCape(rig, f, { cloth: '#d9443a', lining: '#a8262a', hem: '#ffcf3a', clasp: '#ffcf3a', hang: 9 });
   },
   royalcape(rig, f) {
-    const cape = piece(rig.parts.body, [0, backTop(f) - 0.4, -f.L / 2 + 3.5], (add) => {
-      add([f.W + 1, 0.6, 15], [0, 0, -6.5], '#7a2ab8', { material: 'cloth' });
-      add([f.W + 1.4, 0.7, 1.4], [0, 0.05, -13.4], '#ffcf3a', { material: 'cloth' });
-      for (const s of [-1, 1]) add([1, 0.7, 15], [s * (f.W / 2 + 0.4), 0.05, -6.5], '#ffcf3a', { material: 'cloth' });
-      add([f.W + 2.4, 2.4, 3], [0, 0.8, 0.8], '#f4f1ea');
-      for (const x of [-3, 0, 3]) add([0.8, 0.8, 0.8], [x, 1.2, 2.4], '#2a2a2a');
-      add([2, 2, 2], [0, 0.4, -7], '#fff2b0', { rotation: [0, Math.PI / 4, 0], material: 'glow' });
-    });
-    return { update: (time) => (cape.rotation.x = -0.9 + Math.sin(time * 1.8) * 0.1) };
+    return drapedCape(rig, f, { cloth: '#7a2ab8', lining: '#4a1a78', hem: '#ffcf3a', clasp: '#ffcf3a', hang: 13, trim: '#ffcf3a', fur: '#f4f1ea', gem: '#fff2b0' });
   },
   teapack(rig, f) {
     piece(rig.parts.body, [0, backTop(f) + 2.4, -2.2], (add) => {
@@ -334,9 +457,154 @@ const MODELS = {
   },
 };
 
+Object.assign(MODELS, {
+  balloon(rig, f) {
+    // A balloon on a string tied to the back, bobbing above the frog.
+    const string = piece(rig.parts.body, [1.5, backTop(f), -2], (add) => add([0.3, 15, 0.3], [0, 7.5, 0], '#f4f1ea'));
+    const balloon = piece(string, [0, 15, 0], (add) => {
+      add([7, 8, 7], [0, 4.6, 0], '#ff3a5a', { material: 'shiny' });
+      add([5, 10, 5], [0, 4.6, 0], '#ff3a5a', { material: 'shiny' });
+      add([9, 5, 5], [0, 4.6, 0], '#ff3a5a', { material: 'shiny' });
+      add([5, 5, 9], [0, 4.6, 0], '#ff3a5a', { material: 'shiny' });
+      add([1.6, 1.2, 1.6], [0, 0, 0], '#c2262a');
+      add([1.4, 1.4, 0.4], [-1.6, 6.8, 3.6], '#ffffff', { material: 'glow' });
+    });
+    return {
+      update(time) {
+        string.rotation.z = -0.2 + Math.sin(time * 1.3) * 0.12;
+        string.rotation.x = -0.15 + Math.sin(time * 0.9) * 0.08;
+        balloon.rotation.y = Math.sin(time * 0.7) * 0.4;
+      },
+    };
+  },
+  fairy(rig, f) {
+    const wings = [-1, 1].map((s) =>
+      piece(rig.parts.body, [s * 0.8, backTop(f) + 0.4, -1.8], (add) => {
+        add([5, 9, 0.35], [s * 3, 5.2, 0], '#bff4ff', { material: 'cloth' });
+        add([3.4, 5, 0.37], [s * 2.4, -0.8, 0], '#e0d0ff', { material: 'cloth' });
+        add([0.5, 9, 0.4], [s * 5.5, 5.2, 0], '#9fd8ff', { material: 'cloth' });
+        for (const [x, y] of [[2.4, 7], [3.8, 3.6], [2, -1.2]]) add([0.9, 0.9, 0.45], [s * x, y, 0], '#ffffff', { material: 'glow' });
+      }, [-0.3, 0, 0])
+    );
+    return { update: (time) => wings.forEach((wing, i) => (wing.rotation.y = (i ? 1 : -1) * (0.3 + 0.35 * Math.sin(time * 9)))) };
+  },
+  jetpack(rig, f) {
+    const top = backTop(f);
+    const flames = [];
+    piece(rig.parts.body, [0, top + 2, -2.6], (add) => {
+      for (const s of [-1, 1]) {
+        add([3.4, 7, 3.4], [s * 2.2, 0, 0], '#c9922a', { material: 'shiny' });
+        add([3.8, 1, 3.8], [s * 2.2, 3.4, 0], '#8a5a2a', { material: 'shiny' });
+        add([2.6, 1.4, 2.6], [s * 2.2, -4, 0], '#4a4a52', { material: 'shiny' });
+      }
+      add([3, 4, 2.4], [0, 0.6, 0.4], '#8a8f96', { material: 'shiny' });
+      add([1, 1, 1], [0, 1.6, 1.8], '#ff5a3a', { material: 'glow' });
+    });
+    for (const s of [-1, 1]) {
+      flames.push(piece(rig.parts.body, [s * 2.2, top - 3, -2.6], (add) => {
+        add([1.8, 2.4, 1.8], [0, -1.2, 0], '#ffb020', { material: 'glow' });
+        add([1, 1.6, 1], [0, -2.8, 0], '#fff2a0', { material: 'glow' });
+      }));
+    }
+    return { update: (time) => flames.forEach((flame, i) => flame.scale.set(1, 0.7 + 0.35 * Math.abs(Math.sin(time * 17 + i * 2)), 1)) };
+  },
+  shell(rig, f) {
+    piece(rig.parts.body, [0, backTop(f) + 4.8, -1.8], (add) => {
+      // A rounded shell on its side (a cross of boxes), with a square voxel spiral on both flat faces.
+      const w = Math.min(9, f.W * 0.62);
+      add([w, 10, 7], [0, 0, 0], '#e0a868');
+      add([w, 7, 10], [0, 0, 0], '#e0a868');
+      add([w - 1, 8.6, 8.6], [0, 0, 0], '#d9985a');
+      const path = [[-4, -4], [4, -4], [4, 4], [-3, 4], [-3, -2], [2, -2], [2, 2], [-1, 2], [-1, 0], [0.4, 0]];
+      for (const side of [-1, 1]) {
+        for (let i = 1; i < path.length; i++) {
+          const [z0, y0] = path[i - 1];
+          const [z1, y1] = path[i];
+          const length = Math.abs(z1 - z0) + Math.abs(y1 - y0) + 0.8;
+          add([0.4, y0 === y1 ? 0.8 : length, z0 === z1 ? 0.8 : length], [side * (w / 2 + 0.1), (y0 + y1) / 2, (z0 + z1) / 2], '#8a5a2a');
+        }
+      }
+      add([w + 0.4, 1.4, 9], [0, -4.8, 0], '#8a5a2a');
+    });
+  },
+});
+
+/**
+ * A cape that drapes like cloth: a collar with clasps at the neck, a panel lying along the back, then two hanging
+ * panels that flare a little and sway in a wave (the lower one follows the upper a moment later). One flat slab
+ * hinged at the back looked like a plank. `look`: colours, `hang` (length of the hanging part), `trim` (side edges),
+ * `fur` (a collar), `gem` (a glowing jewel on the back).
+ */
+function drapedCape(rig, f, look) {
+  const top = backTop(f);
+  const neck = f.L / 2 - 3;
+  const along = f.L - 3.5; // from the neck to the rump
+  const cloth = { material: 'cloth' };
+  piece(rig.parts.body, [0, top - 0.6, neck], (add) => {
+    if (look.fur) add([f.W + 2.4, 2.6, 3.4], [0, 0.6, 0.4], look.fur);
+    else add([f.W + 1, 1.2, 2], [0, 0.4, 0.4], look.cloth, cloth);
+    for (const s of [-1, 1]) add([2, 2, 1.2], [s * (f.W / 2 - 0.4), 0.6, 1.6], look.clasp, { material: 'shiny' });
+  });
+  const back = piece(rig.parts.body, [0, top + 0.25, neck - 0.6], (add) => {
+    add([f.W - 1, 0.5, along], [0, 0, -along / 2], look.cloth, cloth);
+    add([f.W - 1.2, 0.5, along], [0, -0.2, -along / 2], look.lining, cloth);
+    if (look.trim) for (const s of [-1, 1]) add([0.8, 0.55, along], [s * (f.W / 2 - 0.4), 0.02, -along / 2], look.trim, cloth);
+    if (look.gem) add([2, 2, 0.8], [0, 0.6, -along * 0.45], look.gem, { rotation: [Math.PI / 2, 0, Math.PI / 4], material: 'glow' });
+  }, [0.04, 0, 0]);
+  const upperLength = look.hang * 0.55;
+  const lowerLength = look.hang * 0.45;
+  const upper = piece(back, [0, 0, -along], (add) => {
+    add([f.W, 0.5, upperLength], [0, 0, -upperLength / 2], look.cloth, cloth);
+    add([f.W - 0.2, 0.5, upperLength], [0, -0.2, -upperLength / 2], look.lining, cloth);
+    if (look.trim) for (const s of [-1, 1]) add([0.8, 0.55, upperLength], [s * (f.W / 2), 0.02, -upperLength / 2], look.trim, cloth);
+  });
+  const lower = piece(upper, [0, 0, -upperLength], (add) => {
+    add([f.W + 1.2, 0.5, lowerLength], [0, 0, -lowerLength / 2], look.cloth, cloth);
+    add([f.W + 1, 0.5, lowerLength], [0, -0.2, -lowerLength / 2], look.lining, cloth);
+    add([f.W + 1.4, 0.6, 1.2], [0, 0.02, -lowerLength + 0.5], look.hem, cloth);
+    if (look.trim) for (const s of [-1, 1]) add([0.8, 0.55, lowerLength], [s * (f.W / 2 + 0.6), 0.02, -lowerLength / 2], look.trim, cloth);
+    // A pointed tail in the middle of the hem, stepped like the voxels.
+    add([f.W * 0.5, 0.5, 2], [0, 0, -lowerLength - 1], look.cloth, cloth);
+    add([f.W * 0.22, 0.5, 1.6], [0, 0, -lowerLength - 2.6], look.cloth, cloth);
+    add([f.W * 0.52, 0.6, 0.8], [0, 0.02, -lowerLength - 1.6], look.hem, cloth);
+  });
+  return {
+    update(time) {
+      const wave = Math.sin(time * 2.1);
+      upper.rotation.x = -1.4 + wave * 0.07;
+      lower.rotation.x = 0.1 + Math.sin(time * 2.1 - 0.9) * 0.12; // flares out a little, a beat behind
+    },
+  };
+}
+
 // --- Auras: a swirl of little voxels around the frog, one instanced mesh ---------------------------------
 const AURA_COUNT = 22;
 const AURA_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
+/** Shaped bits (built from unit voxels, about 1 across) for the auras that need more than a cube. */
+const shape = (draw) => {
+  const boxes = [];
+  draw((size, position) => box(boxes, size, position, '#ffffff'));
+  const geometry = mergeGeometries(boxes);
+  geometry.deleteAttribute('color');
+  return geometry;
+};
+const AURA_SHAPES = {
+  heart: shape((add) => {
+    add([0.5, 0.45, 0.3], [-0.25, 0.2, 0]);
+    add([0.5, 0.45, 0.3], [0.25, 0.2, 0]);
+    add([0.8, 0.35, 0.3], [0, -0.15, 0]);
+    add([0.35, 0.3, 0.3], [0, -0.4, 0]);
+  }),
+  note: shape((add) => {
+    add([0.45, 0.35, 0.3], [-0.15, -0.4, 0]);
+    add([0.15, 1, 0.3], [0.05, 0.1, 0]);
+    add([0.4, 0.15, 0.3], [0.25, 0.55, 0]);
+  }),
+  leaf: shape((add) => {
+    add([1, 0.12, 0.5], [0, 0, 0]);
+    add([0.6, 0.12, 0.8], [0, 0, 0]);
+  }),
+};
 const AURA_MATERIAL = new THREE.MeshBasicMaterial({ color: '#ffffff' });
 /**
  * `motion`: 'fall' (from above, drifting), 'rise' (up from the ground), 'orbit' (circling, bobbing); `size`: [x,y,z];
@@ -350,13 +618,23 @@ const AURAS = {
   fireflies: { motion: 'orbit', colors: ['#e8ff6a', '#c8ff4a', '#fff27a'], size: [1, 1, 1], speed: 0.7, twinkle: true },
   sparkle: { motion: 'orbit', colors: ['#ffe680', '#ffcf3a', '#fff6c8'], size: [1.1, 1.1, 1.1], speed: 1.4, twinkle: true, spin: 4 },
   stardust: { motion: 'orbit', colors: ['#c8b0ff', '#9ff4ff', '#ffffff', '#ff9ef0'], size: [0.9, 0.9, 0.9], speed: 0.5, twinkle: true, ring: true },
+  hearts: { motion: 'rise', shape: 'heart', colors: ['#ff5a8a', '#ff8aa8', '#ff3a6a'], size: [1.6, 1.6, 1.6], speed: 7, wobble: 2.5, face: true },
+  notes: { motion: 'orbit', shape: 'note', colors: ['#3a2a6a', '#5a3aa8', '#1a1a3a'], size: [1.7, 1.7, 1.7], speed: 0.6, face: true },
+  leaves: { motion: 'fall', shape: 'leaf', colors: ['#e8801a', '#f0a020', '#c2402a', '#d9b03a'], size: [1.8, 1.8, 1.8], spin: 2.4, speed: 7 },
+  sparks: { motion: 'orbit', colors: ['#bfe8ff', '#ffffff', '#7fd8ff'], size: [0.5, 2.2, 0.5], speed: 2.6, twinkle: true, spin: 9 },
+  rainbow: { motion: 'orbit', colors: ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5fd85a', '#4ab8ff', '#9a6aff'], size: [1.2, 1.2, 1.2], speed: 0.9, ring: true, rainbow: true },
 };
 
 function aura(rig, look) {
-  const mesh = new THREE.InstancedMesh(AURA_GEOMETRY, AURA_MATERIAL, AURA_COUNT);
+  const mesh = new THREE.InstancedMesh(AURA_SHAPES[look.shape] ?? AURA_GEOMETRY, AURA_MATERIAL, AURA_COUNT);
   mesh.frustumCulled = false;
   const color = new THREE.Color();
   const bits = Array.from({ length: AURA_COUNT }, (_, i) => {
+    if (look.rainbow) {
+      // An even ring, its colours in order.
+      mesh.setColorAt(i, color.set(look.colors[Math.floor((i / AURA_COUNT) * look.colors.length)]));
+      return { angle: (i / AURA_COUNT) * Math.PI * 2, radius: 22, phase: 0, height: 0.5, tilt: 0 };
+    }
     mesh.setColorAt(i, color.set(look.colors[i % look.colors.length]));
     return { angle: Math.random() * Math.PI * 2, radius: 14 + Math.random() * 18, phase: Math.random(), height: Math.random(), tilt: Math.random() * Math.PI };
   });
@@ -372,7 +650,7 @@ function aura(rig, look) {
       bits.forEach((bit, i) => {
         let k = 1;
         if (look.motion === 'orbit') {
-          const angle = bit.angle + time * look.speed * (i % 2 ? 1 : -0.8);
+          const angle = bit.angle + time * look.speed * (look.rainbow || i % 2 ? 1 : -0.8); // (the rainbow keeps its order)
           const radius = look.ring ? 22 + Math.sin(time + bit.phase * 6) * 2 : bit.radius;
           position.set(Math.cos(angle) * radius, 4 + bit.height * (look.ring ? 6 : 30) + Math.sin(time * 1.5 + bit.phase * 6) * 2, Math.sin(angle) * radius);
         } else {
@@ -384,7 +662,8 @@ function aura(rig, look) {
           k = Math.min(1, t * 6, (1 - t) * 6); // fade in and out at the ends
         }
         if (look.twinkle) k *= 0.35 + 0.65 * Math.max(0, Math.sin(time * 5 + bit.phase * 20));
-        euler.set(bit.tilt + time * (look.spin ?? 0), time * (look.spin ?? 0) * 0.7, 0);
+        if (look.face) euler.set(0, Math.atan2(position.x, position.z) + Math.sin(time * 2 + bit.phase * 6) * 0.3, 0); // upright, facing out
+        else euler.set(bit.tilt + time * (look.spin ?? 0), time * (look.spin ?? 0) * 0.7, 0);
         rotation.setFromEuler(euler);
         scale.set(look.size[0] * k * 1.7, look.size[1] * k * 1.7, look.size[2] * k * 1.7); // (bigger: they read at garden distance)
         mesh.setMatrixAt(i, matrix.compose(position, rotation, scale));
@@ -437,7 +716,7 @@ export function dressFrog(rig, outfit = {}) {
       for (const object of added) {
         object.removeFromParent();
         object.traverse((child) => {
-          if (child.isMesh && child.geometry !== AURA_GEOMETRY) child.geometry.dispose();
+          if (child.isMesh && child.geometry !== AURA_GEOMETRY && !Object.values(AURA_SHAPES).includes(child.geometry)) child.geometry.dispose();
           if (child.isInstancedMesh) child.dispose();
         });
       }

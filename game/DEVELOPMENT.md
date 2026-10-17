@@ -406,7 +406,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   trinket. What moves is found by running `userData.anim` at five moments, day and night, and comparing transforms,
   visibility and material values. All 27 trinkets: about 220 meshes → 119, a full garden 424 draw calls → 306 (with
   the shadow pass). A part that only moves on an event (the trampoline's pad after a bounce) isn't seen moving, so
-  its builder lists it in `userData.moving`. Check a trinket still animates after changing it.
+  its builder lists it in `userData.moving`. Check a trinket still animates after changing it. **Since v0.29.1** the
+  probing puts every part back as it was: until then the parts stayed at the last probe (13.1 s), and trinket height
+  fields (`trinketField` in GardenPhysics.js, sampled from a fresh model) caught them there. The cannon's steam puff
+  hung high over the spout as a solid bump, so a shot hit it on its first frame and bounced back (the `bonk` in
+  `GardenHub.update`): the cannon fired frogs backwards.
 - **The playground** (v0.24): the house and trinkets are solid (`GardenPhysics.js`: height fields sampled once by
   raycasting down, `hub.world.heightAt`; walls stop you unless they're within `STEP_UP`, tops can be stood on).
   `BOUNCE` (trampoline, Fairy Ring) throws frogs up; the Teapot Cannon fires them along its facing (`CANNON`); the
@@ -434,7 +438,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the screen out white.
 - **Garden games** (v0.28, `components/GardenGames.js`, wired into `GardenHub`): **the pond** (`GardenPond`,
   `POND` in Environment.js, `inPond`): a frog on the lawn's level inside the water swims (`SWIM`: 55% speed, sunk
-  in, paddling, ripples). Every screen works that out for every frog from its position, so nothing extra is sent. A
+  in, paddling, ripples). Since v0.29.1 the paddle is calmer (`SWIM.paddle`: the run pose at 0.28 ± 0.17 and 5.5 rad/s,
+  `paddling()`, for my frog and the puppets alike; it was 0.55 ± 0.45 at 9 rad/s) and the bob smaller (`SWIM.bob`). Every screen works that out for every frog from its position, so nothing extra is sent. A
   landing faster than `CANNONBALL` is a `splash` event: a big splash, and frogs within `SOAK` are washed back on
   their own screens. A boop with nothing else in reach and water ahead skips a stone (`skip`); its path
   (`skipPath`) follows from the throw, so the `skip` event replays it exactly. A koi leaps every 6–14 s (each screen
@@ -447,8 +452,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   boops** (`MouseRight` in Input.js; `TitleGarden.down` ignores it while walking, so it doesn't turn the camera),
   and the walking camera starts at `WALK_VIEW` (410 away; it was 300, too close when joining).
 - **Wardrobe** (v0.29.0, `components/Wearables.js` for the items and rules, shared with the server;
-  `components/WearableModels.js` for the models): 33 wearables in five slots (hats, face, body, back, aura), one per
-  slot. Three are free (Leaf Cap, Round Specs, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
+  `components/WearableModels.js` for the models): 54 wearables in five slots (14 hats, 9 face, 9 body, 10 back, 12
+  auras; 21 added in v0.29.1), one per slot. Four are free (Leaf Cap, Round Specs, Rosy Cheeks, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
   the server can work out itself (`unlock`: an achievement, an account level or the best form), so nothing new is
   stored per item. The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
   `saveOutfit` in CloudSave.js, sent 1.5 s after the last click; the server keeps only unlocked items with
@@ -461,8 +466,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   2-tab co-op run: each side sees the other's outfit, and a teammate reaching tier 2 loses the hat on both screens. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
   any known items, `cleanOutfit(o)`), a change is an `outfit` event (`hub.setOutfit`; the server remembers it for frogs
   who join later), and puppets twirl when they change. **Models:** voxel boxes like the frogs, hung on the rig's
-  head and body joints (`rig.parts`), sized from `rig.fit` (head width, body size) so every class fits; capes sway,
-  wings flap, the halo bobs, auras are one instanced mesh of 22 voxels (falling, rising or orbiting). A filled slot
+  head and body joints (`rig.parts`), sized from `rig.fit` (head width, body size) so every class fits; wings flap,
+  the halo bobs, the balloon sways on its string, auras are one instanced mesh of 22 bits (falling, rising or
+  orbiting; plain voxels or shapes built from them, `AURA_SHAPES`: hearts, notes, leaves). Capes are `drapedCape`
+  (v0.29.1; a single slab hinged at the back looked like a plank): a collar with clasps, a panel along the back and two
+  hanging panels that flare and sway in a wave, with a pointed tail on the hem. Every item was checked on all seven
+  classes from the front, at an angle and from behind, plus whole outfits (v0.29.1): a model that only shows on some
+  classes needs a per-class tweak (`rig.id`, like the Rosy Cheeks over the Ninja's mask). A filled slot
   hides the class's own gear there (`rig.cover`, using the `slotGear` tags in buildFrog: the Mage's hat, the Brawler's
   helmet, the Ninja's hood, the Alchemist's goggles, capes, the kettle, the scroll, the swords, the blowpipe).
   **UI:** 👕 Wardrobe in the garden bar opens a panel (`hud.wardrobePanel`: slot tabs with what's worn, then the
