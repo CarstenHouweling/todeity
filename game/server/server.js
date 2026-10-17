@@ -373,7 +373,10 @@ function handleSocketMessage(client, raw) {
   } catch {
     return;
   }
-  if (message.t === 'create') {
+  if (message.t === 'ping') {
+    // The connection indicator in co-op (Net.js) measures the round trip.
+    sendTo(client.ws, { t: 'pong', n: Number(message.n) || 0 });
+  } else if (message.t === 'create') {
     leaveRoom(client);
     createRoom(client, message.name, Boolean(message.public));
   } else if (message.t === 'quick') {

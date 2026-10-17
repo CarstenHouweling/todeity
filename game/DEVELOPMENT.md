@@ -732,6 +732,12 @@ server proxies `/ws` and `/api`).
   (the host sends it before its own travel). Brimstone Rings are events (`k: 'fring'`), simulated by everyone.
 - **Restarts:** a dropped connection or a server restart doesn't end the run; everyone reconnects into the same
   room (see Deploying while people play).
+- **Connection indicator** (v0.27.2): `Net` pings the server every 1.5 s while in a room (the server answers `pong`
+  at once) and `net.quality()` gives good / weak (≥250 ms) / bad (≥600 ms, or 64 KB waiting to be sent) / lost
+  (reconnecting); an unanswered ping counts with its age, so a stall shows at once. `updateConnection()` in main.js
+  shows `hud.setConnection` at the top during a co-op run, hidden while good; it gets worse at once and better only
+  after 3 s. A teammate whose state (20/s) hasn't arrived for 1 s gets a 📶 on their name tag (`RemoteTode`
+  `LAG_AFTER`), whichever side's connection is to blame.
 - **Limits.** Browsers pause background tabs, so the host must keep the game visible. No joining a run that has
   started. Knockback from a guest's skills (tornado pull, tongue) only shows on their own screen.
 

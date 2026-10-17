@@ -365,6 +365,9 @@ export class Player {
     this.channeling = false; // firing the beam: slower, but still moving
     this.shield = false;
     this.shieldTimer = 0;
+    // Only update() hides the bubble, and it doesn't run on the title screen or in a garden: a run that ended with
+    // the shield up kept it drawn there.
+    this.shieldBubble.visible = false;
     this.gauge = 0; // ultimate charge, 0–100
     this.ultimate = null;
     this.group.position.set(0, 0, 0);

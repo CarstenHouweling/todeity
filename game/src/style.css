@@ -1505,6 +1505,34 @@ canvas.game {
   font-weight: 700;
 }
 
+.connection {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.connection[hidden] {
+  display: none;
+}
+
+.connection.weak {
+  color: #ffd166;
+}
+
+.connection.bad,
+.connection.lost {
+  color: #ff6b6b;
+  animation: connection-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes connection-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .name-tag {
   display: flex;
   flex-direction: column;

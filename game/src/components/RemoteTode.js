@@ -3,6 +3,7 @@ import { Player } from './Player.js';
 import { Ascension, TIERS } from './Ascension.js';
 
 const SMOOTHING = 14; // how quickly the puppet catches up with network positions
+const LAG_AFTER = 1_000; // ms without their state (sent 20 times a second) before their name tag shows 📶
 
 /**
  * Another player's Tode in co-op: a puppet driven by the state messages that player sends
@@ -18,6 +19,7 @@ export class RemoteTode {
     this.hp = 0;
     this.maxHp = 5;
     this.seen = false;
+    this.heardAt = 0; // performance.now() of their last state
   }
 
   async load() {
@@ -45,6 +47,7 @@ export class RemoteTode {
   }
 
   applyState(state) {
+    this.heardAt = performance.now();
     this.target.set(state.x, state.y, 0);
     if (!this.seen) this.puppet.position.copy(this.target);
     this.seen = true;
@@ -88,7 +91,8 @@ export class RemoteTode {
     this.puppet.animate(delta);
     this.puppet.shieldBubble.visible = this.puppet.shield && visible;
     if (visible) this.ascension.update(delta);
-    this.hud.updateNameTag(this.tag, this.position, visible, this.hp, this.maxHp);
+    const lagging = this.seen && performance.now() - this.heardAt > LAG_AFTER;
+    this.hud.updateNameTag(this.tag, this.position, visible, this.hp, this.maxHp, lagging);
   }
 
   dispose() {

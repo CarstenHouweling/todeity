@@ -7000,6 +7000,8 @@ function leaveCoop({ keepConnection = false } = {}) {
   pendingIntro = null;
   coopMenuOpen = false;
   hud.setWaiting(null);
+  shownConnection = 'good';
+  hud.setConnection('good');
   if (!keepConnection && net.inRoom) net.leave();
 }
 
@@ -7072,9 +7074,25 @@ function sendState() {
   });
 }
 
+// The connection badge (Net.quality()): a worse level shows at once, a better one only once it held a while, so
+// a shaky connection doesn't make the badge flicker.
+const CONNECTION_RANK = { good: 0, weak: 1, bad: 2, lost: 3 };
+const CONNECTION_HOLD = 3_000; // ms
+let shownConnection = 'good';
+let connectionWorseAt = 0;
+
+function updateConnection() {
+  const { level, rtt } = net.quality();
+  const now = performance.now();
+  if (CONNECTION_RANK[level] >= CONNECTION_RANK[shownConnection]) connectionWorseAt = now;
+  if (CONNECTION_RANK[level] >= CONNECTION_RANK[shownConnection] || now - connectionWorseAt > CONNECTION_HOLD) shownConnection = level;
+  hud.setConnection(shownConnection, rtt);
+}
+
 /** Once per frame: teammates' puppets, our own state, the host's bee snapshots, then send. */
 function updateCoop(realDelta, delta) {
   if (!coop) return;
+  updateConnection();
   for (const remote of coop.remotes.values()) remote.update(delta);
   if (player.downed && PLAYING.has(phase)) spectate(realDelta);
 

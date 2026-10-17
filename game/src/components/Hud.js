@@ -101,6 +101,9 @@ export class Hud {
       return arrow;
     });
     this.waiting = element('waiting', this.top);
+    // Co-op: shown only while the connection to the server is weak, bad or lost (setConnection).
+    this.connection = element('connection', this.top);
+    this.connection.hidden = true;
     this.boss = element('boss-bar', this.top);
     this.bossName = element('boss-name', this.boss);
     this.bossFill = element('boss-fill', element('boss-track', this.boss));
@@ -427,6 +430,17 @@ export class Hud {
     this.waiting.textContent = ready === null ? '' : `⏳ Waiting for teammates… ${ready}/${total} ready`;
   }
 
+  /** Co-op: our connection to the server, `level` 'good' (hidden), 'weak', 'bad' or 'lost'; `rtt` in ms. */
+  setConnection(level, rtt = 0) {
+    this.connection.hidden = level === 'good';
+    if (level === 'good') return;
+    // In steps of 50 ms, so the text doesn't change every frame.
+    const ms = `${Math.round(rtt / 50) * 50} ms`;
+    const text = { weak: `📶 Weak connection · ${ms}`, bad: `📶 Bad connection · ${ms} · hits may not land`, lost: '📡 Reconnecting…' }[level];
+    setText(this.connection, text);
+    setProp(this.connection, 'className', `connection ${level}`);
+  }
+
   // --- Co-op name tags ---------------------------------------------------------------
 
   attachNameTag(name, color) {
@@ -434,14 +448,20 @@ export class Hud {
     const label = element('name-tag-name', tag);
     label.textContent = name;
     label.style.color = color;
+    // We haven't heard from this teammate for a moment (their connection, or ours).
+    const lag = element('name-tag-lag', label, 'span');
+    lag.textContent = ' 📶';
+    lag.title = 'Bad connection';
+    lag.hidden = true;
     const bar = element('name-tag-bar', tag);
-    return { tag, fill: element('name-tag-fill', bar) };
+    return { tag, fill: element('name-tag-fill', bar), lag };
   }
 
-  updateNameTag({ tag, fill }, position, visible, hp, maxHp) {
+  updateNameTag({ tag, fill, lag }, position, visible, hp, maxHp, lagging = false) {
     const shown = visible && this.place(tag, position, 42);
     tag.style.display = shown ? '' : 'none';
     if (shown) fill.style.width = `${(Math.max(0, hp) / Math.max(1, maxHp)) * 100}%`;
+    if (lag.hidden === lagging) lag.hidden = !lagging;
   }
 
   removeNameTag({ tag }) {

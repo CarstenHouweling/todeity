@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.27.2',
+    date: '2026-10-17',
+    title: 'Can you hear me now?',
+    changes: [
+      '📶 Co-op shows when your connection struggles: a badge at the top for a weak or bad connection (with its delay) or while reconnecting, and a 📶 over a teammate you haven\'t heard from for a moment',
+      '🛡 The petal shield\'s bubble no longer stays around your frog after a run ends with it up',
+    ],
+  },
+  {
     version: '0.27.1',
     date: '2026-10-16',
     title: 'The hive adapts',

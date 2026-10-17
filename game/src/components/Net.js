@@ -5,8 +5,16 @@
 // blips), we don't give up: `reconnecting` is emitted, the socket is opened again with backoff for up to RESUME_FOR,
 // and a `resume` message asks for our old room, id and host back. `resumed` follows when it worked; `disconnected`
 // when it never did, or `closed` when the room is gone for good.
+//
+// **Connection quality:** a ping every PING_EVERY ms measures the round trip to the server (the server answers
+// `pong` right away). `quality()` turns it into good / weak / bad / lost for the co-op HUD's badge.
 
 const RESUME_FOR = 150_000; // ms to keep trying (an App Service restart takes about a minute)
+const PING_EVERY = 1_500;
+// Round trips (ms) above which the connection counts as weak or bad: hits then reach the host late, bees jump.
+const WEAK_RTT = 250;
+const BAD_RTT = 600;
+const BAD_BUFFER = 64 * 1024; // bytes waiting to go out: the upload can't keep up
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The public rooms that can be joined: { rooms: [{ code, host, players, max }], playing }, or null without a server. */
@@ -31,6 +39,40 @@ export class Net {
     this.listeners = new Set();
     this.outbox = new Map(); // to → messages
     this.resuming = null; // { until, session } while getting back into the room after a drop
+    this.rtt = 0; // smoothed round trip to the server in ms (0: not measured yet)
+    this.pings = new Map(); // ping number → when it was sent
+    this.pingNumber = 0;
+    setInterval(() => this.ping(), PING_EVERY);
+  }
+
+  ping() {
+    if (!this.connected || !this.inRoom) return;
+    // Pings that were never answered are measured by their age in quality(); don't let them pile up.
+    if (this.pings.size > 8) this.pings.delete(this.pings.keys().next().value);
+    this.pings.set(++this.pingNumber, performance.now());
+    this.send({ t: 'ping', n: this.pingNumber });
+  }
+
+  pong(n) {
+    const sent = this.pings.get(n);
+    if (sent === undefined) return;
+    // Older pings that were never answered got lost with the old socket.
+    for (const number of this.pings.keys()) if (number <= n) this.pings.delete(number);
+    const sample = performance.now() - sent;
+    this.rtt = this.rtt ? this.rtt * 0.7 + sample * 0.3 : sample;
+  }
+
+  /**
+   * How well we reach the server: 'good', 'weak', 'bad' or 'lost' (reconnecting), with the round trip in ms.
+   * An unanswered ping counts with its age, so a connection that just stalled shows at once.
+   */
+  quality() {
+    if (this.resuming || (this.inRoom && !this.connected)) return { level: 'lost', rtt: 0 };
+    // (only once a pong came back: a server from before v0.27.2 never answers)
+    const oldest = this.rtt ? this.pings.values().next().value : undefined;
+    const rtt = Math.max(this.rtt, oldest === undefined ? 0 : performance.now() - oldest);
+    const level = rtt >= BAD_RTT || this.ws?.bufferedAmount > BAD_BUFFER ? 'bad' : rtt >= WEAK_RTT ? 'weak' : 'good';
+    return { level, rtt: Math.round(rtt) };
   }
 
   get connected() {
@@ -76,6 +118,7 @@ export class Net {
       ws.onopen = () => {
         clearTimeout(timeout);
         this.ws = ws;
+        this.pings.clear(); // the old socket's pings never come back
         resolve();
       };
       ws.onerror = () => {
@@ -122,6 +165,7 @@ export class Net {
   }
 
   receive(message) {
+    if (message.t === 'pong') return this.pong(message.n);
     if (message.t === 'joined') {
       this.id = message.id;
       this.hostId = message.hostId;
@@ -213,5 +257,7 @@ export class Net {
     this.players = [];
     this.started = false;
     this.outbox.clear();
+    this.pings.clear();
+    this.rtt = 0;
   }
 }
