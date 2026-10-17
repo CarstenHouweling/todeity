@@ -720,8 +720,37 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   sky (the title's orbit, parts of the travel cut-scene) or a box as big as the field falls back to the whole field
   (`fitShadows`, also called when the field changes). Solo, the view covers most of an arena: the Underworld's box
   goes from 1380² to ~930², with 9% fewer shadow draw calls and texels 0.67 → 0.44 units (sharper). The gain grows with
-  co-op maps (a 4-player Underworld is 57 tiles, a 1860² box). `game.shadowFollow = false` compares with the old box;
+  co-op maps (a 4-player Underworld is 57 tiles, a 1860² box). Measured in a 3-player run (Underworld, 51 tiles, the
+  whole-field box 1680², ~200 bees, frogs spread over the map): shadow draw calls on the host 243 → 170, on the
+  guests 230 → 90 and 239 → 23; all draw calls 595 → 520, 459 → 319, 512 → 296. Compared at an identical frame
+  (fitted first, then the whole-field box without a step) in the 3-player garden, where shadows show: 0.02% of
+  pixels differ, by at most 40 of 765 (sharper edges); switching shadows off changes 0.9% by up to 80, so nothing
+  visible lost its shadow. In the Underworld the sun's shadows barely show at all (off: 0.01% of pixels, at most 15). `game.shadowFollow = false` compares with the old box;
   `game.shadowBox` shows the current one.
+- **Readability** (v0.28.4): bloom (threshold 0.93) runs before exposure, so anything brighter than linear 0.93
+  glows, and a bright arena's exposure (Sky Citadel 1.7) makes every glow brighter still. Measured with the share of
+  blown-out pixels (all channels ≥ 245) and the brightness on Tode (a 24 px box on his body), before → after:
+  - *Auras:* the flame shells and swirl ribbons fade where they pass in front of Tode (`todeWindow` in
+    Ascension.js: view space around the middle of his body, in his scaled units, so it holds from any angle); the
+    flame sparks' pure whites are warm near-whites under the threshold; lightning arcs start at the edge of his body,
+    and Radiant's come half as often; the crest glows at 0.45 (was 0.8); tier bloom 0.75/0.6/0.5 → 0.6/0.5/0.45 for
+    Radiant, God of Tea and Omnitode. Garden at noon, brightness on Tode at tiers 2–5: 192/250/183/180 → a median of
+    161/180/169/180 (Radiant was pure white).
+  - *Bright arenas:* an arena's `postfx.tierBloom` scales the tier's bloom (Sky Citadel 0.6). The Citadel at golden
+    hour, tier 4: centre of the screen 5.1% → 0.4% blown, brightness 221 → 183.
+  - *Bullets:* `Bullets.setCore` with an arena's `bulletCore` (`tint` toward the bullet colour, `glow`): the
+    Underworld 0.45/1.05 and the Sky Citadel 0.7/0.95; the other arenas keep the white-hot 2.2. Around bullets in the
+    Underworld: 37–46% → ~0–3% blown; in the Sky Citadel they read as blue orbs instead of white on white.
+  - *Steeping Beam:* core layer 0.8 → 0.65 opacity and its steady bloom spike 0.45 → 0.3: Sky Citadel at tier 4,
+    5.3% → 4.0% of the screen blown, most of that the beam's own core.
+  - *Transformation:* the charge's bloom ramp 1.2 → 0.7, the burst's spike 1.4 → 0.7, its sparks and inner
+    rings warm near-white, and the charge's lightning thinner and rarer. Eight God of Tea transformations in the garden
+    right after a page load, peak % blown / frames over 30%: 95/4 71/2 44/2 94/5 39/1 18/0 13/0 15/0 → 71/2 33/1 56/2
+    22/0 23/0 4/0 3/0 4/0 (the first runs after a load are the brightest).
+  - *Callouts* ("Steeped!") sit below Tode at 68% of the screen (62% on short screens, between his feet and the
+    ability bar), not over him at 40%.
+  To measure: `gl.readPixels` right after `game.postfx.render(0)`; Tode blinking after a hit hides his model on
+  some frames, so clear the bees first.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
   shader that caps point size and fades points near the camera.
@@ -964,7 +993,11 @@ Co-op profiling (Oct 16, v0.26.2, three tabs on a Mac, wave 21 with ~200 bees an
 network 0.3); a guest 17 ms (render 10.6: its arena bees are 6 meshes and ~7k triangles each, 1,200+ draw calls).
 At Low the garden bee is one skinned mesh of 3,200 triangles. What's left, biggest first: draw calls (bees, 90+
 spits as separate meshes, arena props), the DOM health bars and damage numbers, effects and particles. (v0.28.3
-batched the spits and stopped the labels' forced layouts; bees are now most of the draw calls, about 4 each with
+batched the spits and stopped the labels' forced layouts. Measured again Oct 17 with the same setup, wave 21 with
+~130–210 bees, ~60–160 spits in flight and fast spit builds, High, frogs spread over the 51-tile Underworld: host
+5.9–6.8 ms a frame (render CPU 3.9, bees 0.8–1.6, health bars and damage numbers 0.25–0.4, spits 0.2–0.35, network
+0.1), guests 4.0–4.5 ms (render 3.0–3.3) where they were 17. Teammates' spits land in the instanced batches (every
+batched spit drawn, none left over), also after a guest's tab closes mid-volley and when the world is cleared. Bees are now most of the draw calls, about 4 each with
 the shadow pass. v0.28.3 also fits the sun's shadow box to the view, see Graphics levels. Next candidate: instancing the bees.) A phone is
 several times slower. To set it up: `npm run server`, three tabs on the dev server, create a private room in one
 and join with its code in the others (`#coop-code`, `[data-action="coop-join"]`), start, then drive each tab in
@@ -995,11 +1028,9 @@ at wave 16 once. Humans will find the bullet patterns harder than the bot does. 
 
 ## Ideas / roadmap
 
-- Readability seen while making the trailers (Oct 14 and Oct 16): the Sky Citadel at golden hour plus a high
-  ascension form washes out to near white, and so do the God of Tea cut-scene's burst in the garden and a Steeping
-  Beam in a bright arena (toned down in v0.24.9, still a haze). Tode himself is hard to spot inside the Golden and God
-  of Tea auras. The Underworld's bullets bloom into big white blobs. Kill-combo callouts ("Steeped!") sit right over
-  Tode in the middle of the screen.
+- Readability (seen while making the trailers, Oct 14 and 16): mostly fixed in v0.28.4, see Readability under
+  Graphics levels. Left: Omnitode is a silver frog, so on the Sky Citadel's white marble he has little contrast,
+  and the transformation burst can still flash white for a frame or two right after a page load.
 - More variety: new bee behaviours per arena (not only looks), more brews and charms.
 - Co-op: Steeping is solo only and the Bitter Shrine doesn't appear (it changes the host's waves).
 - Arenas are only seen from the gameplay camera's steep angle (sky domes show in the travel cut-scenes); a giant

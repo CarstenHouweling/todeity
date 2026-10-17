@@ -76,7 +76,7 @@ class SteepingBeam {
     cylinder.translate(0.5, 0, 0);
     // Additive layers stack: kept dim enough that the beam (and the boss in it) stays readable instead of a white-out.
     this.layers = [
-      { mesh: new THREE.Mesh(cylinder, additive('#fff6dc', 0.8)), width: 6 },
+      { mesh: new THREE.Mesh(cylinder, additive('#fff6dc', 0.65)), width: 6 },
       { mesh: new THREE.Mesh(cylinder.clone(), additive('#ffc23a', 0.45)), width: 15 },
       { mesh: new THREE.Mesh(cylinder.clone(), additive('#ff7a1a', 0.16)), width: 28 },
     ];
@@ -134,7 +134,7 @@ class SteepingBeam {
     for (const { mesh, width: base } of this.layers) mesh.scale.set(BEAM_LENGTH, base * width * BEAM_WIDTH, base * width * BEAM_WIDTH);
     this.orb.scale.setScalar(11 * width * BEAM_WIDTH);
     ctx.shake(4);
-    ctx.postfx.pulse({ bloom: 0.45, aberration: 0.35 });
+    ctx.postfx.pulse({ bloom: 0.3, aberration: 0.35 }); // more washed a bright arena out (the Sky Citadel, a high tier)
 
     this.tick -= delta;
     if (this.tick <= 0) {

@@ -57,9 +57,12 @@ export const ARENAS = [
     from: 11,
     gfx: 2,
     bullet: '#5fc8ff',
+    bulletCore: { tint: 0.7, glow: 0.95 }, // white-hot cores bloomed into white glows on the white marble
     palette: { sky: '#bfe4ff', sun: '#fffaf0', sunIntensity: 0.95, hemiSky: '#eaf6ff', hemiGround: '#b0a28a', hemi: 0.45, ambient: 0.15 },
     exposure: 1.7,
-    postfx: { bloom: 0.12 },
+    // `tierBloom` scales the ascension tier's bloom: on this white marble, under the brightest exposure, a high
+    // tier's glow washed the screen out to near white.
+    postfx: { bloom: 0.12, tierBloom: 0.6 },
     weathers: ['clear', 'gale', 'storm'],
     build: buildSkyCitadel,
   },
@@ -84,6 +87,7 @@ export const ARENAS = [
     from: 21,
     gfx: 4,
     bullet: '#ff5a10',
+    bulletCore: { tint: 0.45, glow: 1.05 }, // see Bullets.setCore
     palette: { sky: '#3a0a05', sun: '#ff9a5a', sunIntensity: 1.5, hemiSky: '#ff7a4a', hemiGround: '#5a1505', hemi: 0.85, ambient: 0.32 },
     exposure: 1.4,
     postfx: { bloom: 0.3, warp: 0.06, aberration: 0.1 },

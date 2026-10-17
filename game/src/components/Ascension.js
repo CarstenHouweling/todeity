@@ -42,7 +42,7 @@ const STAGES = [
     crest: { color: '#ffe680', glow: '#ffc000', size: 1.3 },
     swirls: { count: 3, colors: ['#ffe680', '#ffffff', '#9fd8ff'], radius: 30, height: 80, turns: 2, speed: 2.2, width: 1.5, opacity: 0.5 },
     inflow: { rate: 30, colors: ['#ffe680', '#ffffff', '#9fd8ff'] },
-    arc: { color: '#bfe8ff', every: 0.035, reach: 46 },
+    arc: { color: '#bfe8ff', every: 0.055, reach: 46 },
     debris: 10,
     groundGlow: '#ffc000',
   },
@@ -80,21 +80,23 @@ const LOOKS = [
   { scale: 1, gold: 0, glow: 0, metal: 0, bloom: 0.35, warp: 0, aberration: 0 },
   { scale: 1.05, gold: 0.1, glow: 0.12, metal: 0, bloom: 0.45, warp: 0, aberration: 0 },
   { scale: 1.12, gold: 0.25, glow: 0.24, metal: 0.15, bloom: 0.6, warp: 0, aberration: 0 },
-  { scale: 1.2, gold: 0.5, glow: 0.3, metal: 0.55, bloom: 0.75, warp: 0.12, aberration: 0.15 },
-  { scale: 1.3, gold: 0.7, glow: 0.35, metal: 0.4, bloom: 0.6, warp: 0.55, aberration: 0.45 },
-  { scale: 1.38, gold: 0.6, glow: 0.18, metal: 0.6, bloom: 0.5, warp: 0.6, aberration: 0.5 },
+  { scale: 1.2, gold: 0.5, glow: 0.3, metal: 0.55, bloom: 0.6, warp: 0.12, aberration: 0.15 },
+  { scale: 1.3, gold: 0.7, glow: 0.35, metal: 0.4, bloom: 0.5, warp: 0.55, aberration: 0.45 },
+  { scale: 1.38, gold: 0.6, glow: 0.18, metal: 0.6, bloom: 0.45, warp: 0.6, aberration: 0.5 },
 ];
 
 const GOLD = new THREE.Color('#ffc93c');
 const DIVINE = new THREE.Color('#ffc4b4'); // the god form's rose-gold glow
 const CELESTIAL = new THREE.Color('#d8e4ff'); // the infinite form's silver glow
 const bodyGlow = (tier) => (tier === 5 ? CELESTIAL : tier === 4 ? DIVINE : GOLD);
+// Pure white sparks (linear 1.0) cross the bloom threshold (0.93): a hundred of them a second around Tode bloomed
+// into a white haze. The warm near-whites stay just under it.
 const FLAMES = [
   ['#ffe680', '#ffc93c', '#ffffff'],
   ['#ffffff', '#cfefff', '#9fd8ff'],
-  ['#ffe066', '#ffb020', '#ff8a1f', '#ffffff'],
-  ['#fff2a8', '#ffd040', '#ffffff', '#9fd8ff'],
-  ['#ff3b5c', '#ff8a2a', '#ffd36b', '#ffffff'],
+  ['#ffe066', '#ffb020', '#ff8a1f', '#fff0c0'],
+  ['#fff2a8', '#ffd040', '#fff0c0', '#9fd8ff'],
+  ['#ff3b5c', '#ff8a2a', '#ffd36b', '#ffe8d0'],
   ['#c8d8ff', '#c8b0ff', '#9ff4ff', '#8fa8ff'],
 ];
 const PARTICLES_PER_SECOND = [6, 24, 110, 130, 150, 140];
@@ -148,15 +150,33 @@ const NOISE = /* glsl */ `
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
   }`;
+// Tode's window: the aura's flames and swirls fade where they pass in front of his body, so he reads through his
+// own aura (stacked additive layers in front of him washed him out to a white blob at the higher tiers). Measured in
+// view space around the middle of his body, in his own (scaled) units, so it holds from any camera angle.
+const WINDOW_VERTEX = /* glsl */ `
+  varying vec3 vWindow;
+  void computeWindow(vec4 viewPosition) {
+    vec4 middle = modelViewMatrix * vec4(0.0, 0.0, 12.0, 1.0);
+    vWindow = (viewPosition.xyz - middle.xyz) / length(modelViewMatrix[0].xyz);
+  }`;
+const WINDOW_FRAGMENT = /* glsl */ `
+  varying vec3 vWindow;
+  float todeWindow() {
+    float inside = 1.0 - smoothstep(10.0, 19.0, length(vWindow.xy * vec2(1.0, 0.85)));
+    float inFront = smoothstep(-2.0, 4.0, vWindow.z);
+    return 1.0 - 0.85 * inside * inFront;
+  }`;
 const auraVertex = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vView;
   varying vec3 vLocal;
+  ${WINDOW_VERTEX}
   void main() {
     vLocal = position;
     vNormal = normalize(normalMatrix * normal);
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     vView = normalize(-viewPosition.xyz);
+    computeWindow(viewPosition);
     gl_Position = projectionMatrix * viewPosition;
   }`;
 const auraFragment = /* glsl */ `
@@ -170,6 +190,7 @@ const auraFragment = /* glsl */ `
   varying vec3 vView;
   varying vec3 vLocal;
   ${NOISE}
+  ${WINDOW_FRAGMENT}
   void main() {
     // pow() of a slightly negative base is NaN on some GPUs, and bloom smears NaN pixels into flickering
     // black boxes, so keep the base in [0, 1] (and avoid normalizing a zero-length normal).
@@ -185,7 +206,7 @@ const auraFragment = /* glsl */ `
     float body = smoothstep(0.0, 0.06, h) * (1.0 - smoothstep(0.75, 1.0, h));
     // Mostly at the silhouette, see-through in the middle so Tode stays visible; colours stay under the bloom
     // threshold (stacked additive layers would wash the screen out).
-    float alpha = (rim * 0.9 + 0.06) * tongues * body * opacity;
+    float alpha = (rim * 0.9 + 0.06) * tongues * body * opacity * todeWindow();
     gl_FragColor = vec4(color * (0.55 + rim * 0.35), clamp(alpha, 0.0, 1.0));
   }`;
 
@@ -226,6 +247,7 @@ const swirlFragment = /* glsl */ `
   uniform float fire;
   varying vec2 vUv;
   ${NOISE}
+  ${WINDOW_FRAGMENT}
   void main() {
     // Streaks racing up the spiral; fire ribbons flicker and tear.
     float streak = fract(vUv.x * 4.0 - time);
@@ -233,15 +255,18 @@ const swirlFragment = /* glsl */ `
     float torn = mix(1.0, smoothstep(0.25, 0.7, noise(vec2(vUv.x * 30.0 - time * 6.0, vUv.y * 4.0))), fire);
     float ends = smoothstep(0.0, 0.12, vUv.x) * (1.0 - smoothstep(0.8, 1.0, vUv.x));
     float edge = 1.0 - abs(vUv.y - 0.5) * 2.0;
-    float alpha = (0.2 + glow) * torn * ends * (0.4 + 0.6 * edge) * opacity;
+    float alpha = (0.2 + glow) * torn * ends * (0.4 + 0.6 * edge) * opacity * todeWindow();
     vec3 hot = mix(color, vec3(1.0, 0.95, 0.8), glow * 0.4 * fire);
     gl_FragColor = vec4(hot * (0.55 + 0.35 * glow), clamp(alpha, 0.0, 1.0));
   }`;
 const swirlVertex = /* glsl */ `
   varying vec2 vUv;
+  ${WINDOW_VERTEX}
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    computeWindow(viewPosition);
+    gl_Position = projectionMatrix * viewPosition;
   }`;
 
 class Helix extends THREE.Curve {
@@ -285,7 +310,8 @@ function swirlRibbons({ count, colors, radius, height, turns, speed, width, opac
 /** Spiky crest on Tode's head, like flame-shaped hair. Local -Y is where he looks. */
 function crest({ color, glow, size }) {
   const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({ color, emissive: glow, emissiveIntensity: 0.8, flatShading: true });
+  // A soft glow: brighter, the crest bloomed into a glare over his face.
+  const material = new THREE.MeshStandardMaterial({ color, emissive: glow, emissiveIntensity: 0.45, flatShading: true });
   const spikes = [
     [0, 0, 9, -0.35],
     [-4, 1, 7, -0.6],
@@ -686,14 +712,15 @@ export class Ascension {
       });
     }
 
-    // Crackling lightning around him: jagged arcs hugging his body and leaping into the aura.
+    // Crackling lightning around him: jagged arcs leaping from the edge of his body into the aura.
     const { arc } = stage;
     if (arc) {
       this.arcTimer -= delta;
       if (this.arcTimer <= 0) {
         this.arcTimer = arc.every * (0.6 + Math.random() * 0.8);
         const angle = Math.random() * Math.PI * 2;
-        const from = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * 9, Math.sin(angle) * 9, 3 + Math.random() * 30));
+        // From the edge of his body outward (arcs across him bloomed over him).
+        const from = player.position.clone().add(new THREE.Vector3(Math.cos(angle) * 16, Math.sin(angle) * 16, 3 + Math.random() * 30));
         const to = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * arc.reach, (Math.random() - 0.5) * arc.reach, (Math.random() - 0.2) * arc.reach * 0.7));
         this.effects.bolt(from, to, { color: arc.color, width: 1.2, life: 0.1, jitter: 6 });
       }

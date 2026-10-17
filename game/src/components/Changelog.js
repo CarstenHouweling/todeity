@@ -3,6 +3,17 @@
 
 export const CHANGELOG = [
   {
+    version: '0.28.4',
+    date: '2026-10-17',
+    title: 'See the frog',
+    changes: [
+      '🐸 Tode shows through his own aura: the flames and swirls thin out where they pass in front of him, so the Golden, Radiant and God of Tea forms no longer hide him in a white glow',
+      '☁️ The Sky Citadel no longer washes out to white when a high form glows on its white marble, and the Steeping Beam and the transformation burst are a little gentler on the eyes',
+      '🔴 The Underworld\'s bullets are crisp orange orbs instead of big white blobs, and the Sky Citadel\'s are blue instead of white on white',
+      '💬 Combo callouts like "Steeped!" pop up below Tode instead of on top of him',
+    ],
+  },
+  {
     version: '0.28.3',
     date: '2026-10-17',
     title: 'Smoother everywhere',

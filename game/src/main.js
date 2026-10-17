@@ -4922,6 +4922,7 @@ function setArena(next) {
   map.visible = environment.group.visible = divinity.root.visible = garden;
   for (const [id, built] of builtArenas) built.group.visible = id === next.id;
   weather.setArena(garden ? null : next);
+  bullets.setCore(next.bullet, next.bulletCore);
   applyRenderer(next.gfx, { renderer, exposure: next.exposure });
   applyCharacterGraphics();
   applyArenaFx();
@@ -6411,10 +6412,11 @@ function updateAscending(delta) {
     if (Math.random() < delta * 14) {
       particles.burst(player.position, { count: 2, colors: ['#8a7a6a', '#6a5a4a', '#a89880'], ring: 40 + Math.random() * 80, speed: 5, up: 40, gravity: -25, size: 2.6, height: 1, life: 1.6 });
     }
-    if (ascendingTo >= 2 && Math.random() < delta * (4 + charge * 10)) {
+    // (Fewer and thinner than they were: with the camera zoomed in, a bolt in front of it whited out the screen.)
+    if (ascendingTo >= 2 && Math.random() < delta * (4 + charge * 4)) {
       const angle = Math.random() * Math.PI * 2;
       const ground = player.position.clone().add(new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).multiplyScalar(30 + Math.random() * 90));
-      effects.bolt(ground.clone().add(new THREE.Vector3(0, 0, 400)), ground.setZ(1), { color, width: 3, life: 0.15, jitter: 18 });
+      effects.bolt(ground.clone().add(new THREE.Vector3(0, 0, 400)), ground.setZ(1), { color, width: 2, life: 0.15, jitter: 18 });
       play('zap');
     }
     if (Math.random() < delta * 3) effects.ring(player.position, { radius: 60 + charge * 140, color, duration: 0.4 });
@@ -6422,7 +6424,8 @@ function updateAscending(delta) {
       updateAscending.roared = true;
       play('roar');
     }
-    postfx.pulse({ bloom: charge * 1.2, aberration: charge * 0.6, warp: charge * 0.4 });
+    // (Bloom up to 1.2 on top of the tier's turned the last half second of the charge into a white screen.)
+    postfx.pulse({ bloom: charge * 0.7, aberration: charge * 0.6, warp: charge * 0.4 });
   } else if (ascension.tier !== ascendingTo) {
     updateAscending.roared = false;
     ascension.setTier(ascendingTo);
@@ -6431,15 +6434,17 @@ function updateAscending(delta) {
     const { banner, sub, name } = TIERS[ascendingTo];
     hud.setForm(name, ascendingTo);
     hud.showBanner(banner, sub, 2.4, 'ascend');
+    // The burst glows in the form's colour: with pure white sparks and rings and a stronger bloom (1.4) it was a
+    // white screen for a moment, worst in the bright garden.
     postfx.flash(color, 0.8);
-    postfx.pulse({ bloom: 1.4, warp: 1.2, aberration: 1.2 });
+    postfx.pulse({ bloom: 0.7, warp: 1.2, aberration: 1.2 });
     postfx.shatter(0.45 + ascendingTo * 0.1, 0.6);
     shake = 26;
     play('boom');
     for (const [radius, duration] of [[320, 1], [220, 0.7], [140, 0.45]]) {
-      effects.ring(player.position, { radius, color: radius > 200 ? color : '#ffffff', duration, thickness: 0.22 });
+      effects.ring(player.position, { radius, color: radius > 200 ? color : '#fff0c0', duration, thickness: 0.22 });
     }
-    particles.burst(player.position, { count: 110, colors: ['#ffffff', color, '#ffe680'], speed: 360, up: 240, size: 2.6, life: 1, glow: true });
+    particles.burst(player.position, { count: 110, colors: ['#fff0c0', color, '#ffe680'], speed: 360, up: 240, size: 2.6, life: 1, glow: true });
     // A pillar of light shoots into the sky.
     ascendPillar = new THREE.Mesh(new THREE.CylinderGeometry(26, 40, 900, 32, 1, true).rotateX(Math.PI / 2).translate(0, 0, 450), additive(color, 0.6));
     ascendPillar.position.copy(player.position);
@@ -8364,7 +8369,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   const boost = arena.postfx ?? {};
   const soft = decorating ? 0.35 : 1; // a Power Up in a garden: the camera is close, reality bends less
   postfx.setTargets({
-    bloom: look.bloom + (boost.bloom ?? 0),
+    bloom: look.bloom * (boost.tierBloom ?? 1) + (boost.bloom ?? 0),
     warp: look.warp * soft + (boost.warp ?? 0),
     aberration: look.aberration * soft + (boost.aberration ?? 0),
   });

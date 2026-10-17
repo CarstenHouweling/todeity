@@ -44,6 +44,15 @@ export class Bullets {
     this.time = 0;
   }
 
+  /**
+   * The core's look in an arena: `tint` takes in some of the arena's bullet colour, `glow` is how far past white it
+   * goes (the bloom threshold is 0.93). The Underworld's stronger bloom turned white-hot 2.2 cores into big white
+   * blobs, and on the Sky Citadel's white marble they were white on white, so those arenas tint them (`bulletCore`).
+   */
+  setCore(color, { tint = 0, glow = 2.2 } = {}) {
+    this.core.material.color.set('#ffffff').lerp(new THREE.Color(color), tint).multiplyScalar(glow);
+  }
+
   spawn(origin, direction, { speed = 230, radius = 4, damage = 1, range = 700, color = '#c070ff', stretch = 1.6 } = {}) {
     if (this.list.length >= this.max) return null;
     const length = Math.hypot(direction.x, direction.y) || 1;

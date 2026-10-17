@@ -1143,9 +1143,10 @@ canvas.game {
   text-shadow: 0 0 14px #ffd36b, 0 0 28px #ff8a00, 0 2px 0 rgba(0, 0, 0, 0.5);
 }
 
+/* Below Tode (he stands in the middle of the screen): at 40% callouts covered him right when a fight got busy. */
 .callout {
   position: absolute;
-  top: 40%;
+  top: 68%;
   left: 50%;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -2135,6 +2136,11 @@ body.run-ended .toasts {
 /* Short screens (phones in landscape): shrink menus, popups and HUD widgets, and let menus scroll.
    World-anchored labels and the objective arrows are placed in screen pixels, so they are left unscaled. */
 @media (max-height: 500px) {
+  /* Between Tode's feet and the ability bar, which takes up more of a short screen. */
+  .callout {
+    top: 62%;
+  }
+
   .menu {
     overflow-y: auto;
     justify-content: safe center;
