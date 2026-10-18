@@ -4070,33 +4070,262 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
   }
 }
 
+/* The garden bar (v0.29.9): one slim row along the top, a sheet under it when emotes, the wardrobe or ⋯ More are
+   open. It used to be a big panel with a line of help and eleven buttons that covered half a phone's screen. */
 .garden-bar {
   pointer-events: auto;
   position: relative;
   z-index: 6;
-  width: min(900px, 100%);
-  padding: 8px 12px;
-  border-radius: 16px;
+  box-sizing: border-box;
+  width: min(1100px, 100%);
+  padding: 6px 8px;
+  border-radius: 18px;
   background: rgba(10, 30, 15, 0.72);
 }
 
-.garden-bar h2 {
-  margin: 0 0 2px;
-  font-size: 19px;
+.garden-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
-.garden-bar h2 small {
+.garden-where {
+  overflow: hidden;
+  max-width: 260px;
+  padding: 0 6px;
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.garden-where small {
+  margin-left: 2px;
   font-size: 13px;
   opacity: 0.8;
 }
 
-.garden-bar .sub {
-  margin: 0 0 6px;
-  font-size: 13px;
+.garden-acts {
+  display: flex;
+  gap: 2px;
+  margin: 0 auto;
 }
 
-.garden-bar .garden-tools {
+.garden-act {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 58px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.garden-act .ga-icon {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  width: 42px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.13);
+  font-size: 21px;
+  line-height: 1;
+}
+
+.garden-act:hover .ga-icon {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.garden-act.on .ga-icon {
+  background: rgba(255, 211, 107, 0.3);
+  box-shadow: 0 0 0 2px #ffd36b;
+}
+
+.garden-act.invite .ga-icon {
+  background: linear-gradient(#ffcf4a, #f0a020);
+}
+
+.garden-act.ready .ga-icon {
+  background: linear-gradient(#a8ee7a, #5fbf3a);
+}
+
+.ga-badge {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: #ffcf4a;
+  color: #3b2a14;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.garden-exit {
+  display: flex;
+  gap: 6px;
+  margin-left: auto; /* right-aligned, also when it wraps onto a row of its own (phones held upright) */
+}
+
+.garden-pill {
+  height: 40px;
+  padding: 0 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(10, 30, 15, 0.5);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.garden-pill:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.garden-pill.solo {
+  border-color: #ffe08a;
+  background: linear-gradient(#ffd75a, #f2a628);
+  color: #3b2a14;
+  font-weight: 800;
+  box-shadow: 0 3px 0 #b0700a;
+}
+
+.garden-pill.solo:hover {
+  background: linear-gradient(#ffdb78, #f5b440);
+}
+
+.garden-status {
+  margin: 6px 6px 2px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.garden-sheet {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  max-height: 46dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.garden-sheet .emote-grid {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Emotes: big, easy buttons for the unlocked ones (a pick closes the sheet); the locked ones only on request. */
+.emote-sheet {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+  margin-top: 0;
+}
+
+.emote-sheet .emote {
+  position: relative;
+  padding: 8px 2px 6px;
+}
+
+.emote-sheet .emote span {
+  font-size: 30px;
+}
+
+.emote-sheet .emote small {
+  font-size: 12px;
+}
+
+.emote-sheet .emote kbd {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.garden-sheet > .link-button {
+  display: block;
+  margin: 6px auto 0;
+}
+
+.locked-grid .emote small.wear-hint {
+  margin-top: 2px;
+  font-size: 9px;
+  opacity: 0.85;
+}
+
+.more-tools {
+  justify-content: center;
+  margin: 0;
+}
+
+.garden-help {
+  margin: 8px 6px 2px;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Phones (and narrow windows): icons only, and the touch targets stay full size (no zoom on short screens). */
+@media (max-width: 820px), (max-height: 500px) {
+  .menu.garden-walk > * {
+    zoom: 1;
+  }
+
+  .garden-act {
+    min-width: 0;
+    padding: 2px;
+  }
+
+  .garden-act small {
+    display: none;
+  }
+
+  .garden-act .ga-icon {
+    width: 44px;
+    height: 40px;
+  }
+
+  .garden-where {
+    max-width: 30vw;
+    font-size: 14px;
+  }
+
+  .garden-where b {
+    display: none;
+  }
+
+  .garden-pill {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+
+  .garden-sheet {
+    max-height: 52dvh;
+  }
+
+  .emote-sheet {
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  }
 }
 
 .garden-tool.invite {

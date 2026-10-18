@@ -4491,7 +4491,10 @@ hub.world = {
 };
 /** Who I am in a garden: name, class, colour, account level (my aura), best form (my Power Up) and outfit. */
 const gardenIdentity = () => ({ name: playerName(), cls: chosenClass().id, color: meta.profile?.color, level: accountLevel(meta).level, maxTier: bestTier(meta), outfit: myOutfit() });
+// The garden bar's sheets (v0.29.9): one open at a time under the bar. Emotes close again after a pick.
 let showEmotes = false;
+let showLockedEmotes = false; // the emote sheet also lists the locked ones, with how they unlock
+let showMore = false; // ⋯ More: editing, sharing, visiting, day or night, the song and the controls
 
 // --- The wardrobe (Wearables.js, models in WearableModels.js) --------------------------------------------------
 // Tode wears his outfit everywhere (the frame loop dresses him, see shownOutfit). It's saved with the player tag
@@ -4573,12 +4576,26 @@ const walkInfo = () => {
     rush: hub.rush.running,
     public: Boolean(cloud.gardenPublic),
     emotes: showEmotes
-      ? EMOTES.filter((emote) => !emote.hidden).map((emote) => ({ ...emote, locked: !emoteUnlocked(emote, meta), hint: emote.how ?? ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name }))
+      ? EMOTES.filter((emote) => !emote.hidden).map((emote) => ({
+          ...emote,
+          locked: !emoteUnlocked(emote, meta),
+          hint: emote.how ?? ACHIEVEMENTS.find((a) => a.id === emote.unlock)?.name,
+          key: myEmotes().indexOf(emote) + 1, // 1–9 play it (gardenKeys)
+        }))
       : null,
+    lockedEmotes: showLockedEmotes,
+    more: showMore,
     wardrobe: showWardrobe ? wardrobeInfo() : null,
     newWear: newWearables().length,
   };
 };
+
+/** ⋯ More closes when one of its buttons opens something else (a popup, the song list). */
+function closeMoreSheet() {
+  if (!showMore) return;
+  showMore = false;
+  refreshGardenWalk();
+}
 
 function refreshGardenWalk() {
   if (decorating && garden.walking) {
@@ -4598,6 +4615,7 @@ function enterGarden({ code, own, owner = null }) {
   decorating = true;
   gardenVisit = { code, own, owner };
   settingOff = false;
+  showMore = false; // (🏡 My garden from ⋯ More while visiting)
   player.rig?.play('idle'); // a title-screen move still playing (a thrown vial, a summoned toad) ends here
   hub.enter({ code, own, ...gardenIdentity() });
   if (own) hub.look = myLook(); // sent to visitors as they come in
@@ -4660,6 +4678,7 @@ function leaveGardenView() {
   player.rig?.play('idle'); // an emote still playing stays in the garden
   if (!gardenVisit?.own) garden.load(meta.decor);
   showWardrobe = false;
+  showMore = false;
   garden.dressing(null);
   garden.exit();
   decorating = false;
@@ -4692,6 +4711,7 @@ function showSongs() {
 function editGarden() {
   if (!decorating || !gardenVisit?.own) return;
   showWardrobe = false;
+  showMore = false;
   garden.dressing(null);
   garden.enter({ yaw: garden.view.yaw });
   hud.showGarden(gardenState());
@@ -7999,12 +8019,21 @@ const MENU_ACTIONS = {
   'garden-edit': editGarden,
   'garden-emotes': () => {
     showEmotes = !showEmotes;
-    showWardrobe = false;
+    showWardrobe = showMore = false;
     refreshGardenWalk();
   },
   'garden-wardrobe': () => {
     showWardrobe = !showWardrobe;
-    showEmotes = false;
+    showEmotes = showMore = false;
+    refreshGardenWalk();
+  },
+  'garden-more': () => {
+    showMore = !showMore;
+    showEmotes = showWardrobe = false;
+    refreshGardenWalk();
+  },
+  'emotes-locked': () => {
+    showLockedEmotes = !showLockedEmotes;
     refreshGardenWalk();
   },
   'wardrobe-slot': ({ slot }) => {
@@ -8017,12 +8046,16 @@ const MENU_ACTIONS = {
   wardrobe: () =>
     needName(() => {
       showWardrobe = true;
-      showEmotes = false;
+      showEmotes = showMore = false;
       openGarden();
     }),
   emote: ({ id }) => {
     const emote = EMOTES.find((e) => e.id === id);
-    if (emote && emoteUnlocked(emote, meta)) hub.playEmote(id);
+    if (!emote || !emoteUnlocked(emote, meta)) return;
+    hub.playEmote(id);
+    // The sheet closes again, so the frog doing it is in view (1–9 play emotes without it).
+    showEmotes = false;
+    refreshGardenWalk();
   },
   'garden-boop': () => hub.boop(),
   'garden-rush': () => hub.rush.start(),
@@ -8058,7 +8091,10 @@ const MENU_ACTIONS = {
     refreshGardenTray();
     refreshGardenWalk();
   },
-  'garden-music': () => showSongs(),
+  'garden-music': () => {
+    closeMoreSheet();
+    showSongs();
+  },
   'garden-song': ({ song }) => {
     if (!songUnlocked(song, meta) || (decorating && gardenVisit && !gardenVisit.own)) return;
     meta.gardenSong = song;
@@ -8069,9 +8105,13 @@ const MENU_ACTIONS = {
   },
   'garden-reset': () => garden.resetView(),
   'garden-plan': () => garden.planView(),
-  'garden-share': shareGarden,
+  'garden-share': () => {
+    closeMoreSheet();
+    shareGarden();
+  },
   'garden-visit': async () => {
     // (also on the title screen) The popup opens at once; the public gardens fill in when the server answers.
+    closeMoreSheet();
     hud.showGardenVisitForm(null, null);
     const gardens = await fetchGardens();
     hud.setVisitGardens(gardens);

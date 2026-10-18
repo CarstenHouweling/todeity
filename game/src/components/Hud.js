@@ -1192,58 +1192,97 @@ export class Hud {
   }
 
   /**
-   * Hopping around a garden (GardenHub.js): who's here, what to do, and the party buttons. `info`: { own, owner,
-   * frogs, online, inviting, partyCount, readyCount, countdown, leaderName, ready, night, touch }.
+   * Hopping around a garden (GardenHub.js), v0.29.9: one slim bar along the top, so the garden stays in view. The
+   * garden and who's here on the left; emotes, the wardrobe, boop (phones have 🥊 instead), Leaf Rush, the party
+   * buttons and ⋯ More in the middle; Solo run and Leave on the right. One sheet at a time opens under it: the
+   * emotes, the wardrobe or More (editing, sharing, visiting, day or night, the song, the controls). `info`: { own,
+   * owner, frogs, online, offline, inviting, partyCount, readyCount, countdown, leaderName, ready, night, song,
+   * touch, rush, public, emotes, lockedEmotes, more, wardrobe, newWear }.
    */
   showGardenWalk(info) {
-    const tool = (action, label, extra = '') => `<button type="button" class="garden-tool ${extra}" data-action="${action}">${label}</button>`;
-    const hint = info.inviting
-      ? `Your circle is open: frogs who hop in join your party (${info.partyCount + 1}/4). When they're all ✋ ready, off you go!`
+    const act = (action, icon, label, { on = false, extra = '', badge = '' } = {}) =>
+      `<button type="button" class="garden-act${on ? ' on' : ''}${extra}" data-action="${action}" title="${label}" aria-label="${label}"><span class="ga-icon">${icon}</span><small>${label}</small>${badge}</button>`;
+    const party = info.leaderName
+      ? act('garden-ready', '✋', info.ready ? 'Ready ✓' : 'Ready', { on: info.ready, extra: ' ready' })
+      : act('garden-invite', info.inviting ? '✖' : '🚩', info.inviting ? 'Stop inviting' : 'Invite', { on: info.inviting, extra: info.inviting ? '' : ' invite' });
+    const actions = [
+      act('garden-emotes', '😀', 'Emotes', { on: Boolean(info.emotes) }),
+      act('garden-wardrobe', '👕', 'Wardrobe', { on: Boolean(info.wardrobe), badge: info.newWear ? `<em class="ga-badge">${info.newWear}</em>` : '' }),
+      info.touch ? '' : act('garden-boop', '👉', 'Boop'),
+      act('garden-rush', '🍃', info.rush ? 'Rush on!' : 'Leaf Rush', { on: info.rush }),
+      party,
+      info.inviting && info.readyCount ? act('garden-go', '▶', `Go now (${info.readyCount + 1})`, { extra: ' ready' }) : '',
+      act('garden-more', '⋯', 'More', { on: info.more }),
+    ].join('');
+    const status = info.inviting
+      ? `🚩 Your circle is open: frogs who hop in join your party (${info.partyCount + 1}/4). When they're all ✋ ready, off you go!`
       : info.leaderName
         ? info.ready
-          ? `Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
+          ? `✋ Ready! Waiting for ${escapeHtml(info.leaderName)}'s party to set off…`
           : `You're in ${escapeHtml(info.leaderName)}'s party. Press ✋ Ready to play together.`
-        : info.touch
-          ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), 🥊 to boop a frog or a trinket (or skip a stone at the pond), drag the right side to look around.'
-          : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), right-click or B to boop frogs and trinkets (or skip a stone at the pond), 1–9 to emote, L for a Leaf Rush. 🚩 Invite others to play together.';
-    const buttons = [
-      info.own ? tool('garden-edit', '✏️ Edit garden') : '',
-      info.own && info.online ? tool('garden-public', info.public ? '🌍 Public' : '🔒 Private', info.public ? 'on' : '') : '',
-      info.leaderName ? tool('garden-ready', info.ready ? '✋ Ready ✓' : '✋ Ready', 'ready') : tool('garden-invite', info.inviting ? '✖ Stop inviting' : '🚩 Invite to play', info.inviting ? '' : 'invite'),
-      info.inviting && info.readyCount ? tool('garden-go', `▶ Go now (${info.readyCount + 1})`, 'ready') : '',
-      tool('garden-emotes', '😀 Emotes', info.emotes ? 'on' : ''),
-      tool('garden-wardrobe', `👕 Wardrobe${info.newWear ? ` <em class="new-count">${info.newWear}</em>` : ''}`, info.wardrobe ? 'on' : ''),
-      tool('garden-boop', '👉 Boop'),
-      tool('garden-rush', info.rush ? '🍃 Rush on!' : '🍃 Leaf Rush', info.rush ? 'on' : ''),
-      tool('garden-visit', '👀 Visit'),
-      info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
-      tool('garden-night', info.night ? '🌙' : '☀️'),
-      tool('garden-music', `🎵 ${info.song?.icon ?? ''}`),
-      tool('garden-leave', '✓ Leave', 'primary'),
-    ].join('');
+        : '';
     const where = info.own ? 'Your garden' : `${escapeHtml(info.owner ?? 'A frog')}'s garden`;
-    const who = info.online ? `🐸 ${info.frogs} here` : info.offline ? 'offline: just you' : 'connecting…';
+    const who = info.online ? `🐸 ${info.frogs}` : info.offline ? 'offline' : 'connecting…';
+    const sheet = info.emotes ? this.emoteSheet(info) : info.wardrobe ? this.wardrobePanel(info.wardrobe) : info.more ? this.gardenMore(info) : '';
     this.showMenu(
       'garden-walk',
       `<div class="garden-bar">
-        <h2>🏡 ${where} <small>${who}</small></h2>
-        <p class="sub">${hint}</p>
-        <div class="garden-tools">${buttons}</div>
-        ${
-          info.emotes
-            ? `<div class="emote-grid">${info.emotes
-                .map(
-                  (e, i) => `<button type="button" class="emote ${e.locked ? 'locked' : ''}" ${e.locked ? 'disabled' : `data-action="emote" data-id="${e.id}"`} title="${e.name}${e.locked ? ` · unlock: ${escapeHtml(e.hint ?? '')}` : ''}"><span>${e.locked ? '🔒' : e.icon}</span><small>${e.name}</small></button>`
-                )
-                .join('')}</div>`
-            : ''
-        }
-        ${info.wardrobe ? this.wardrobePanel(info.wardrobe) : ''}
+        <div class="garden-top">
+          <span class="garden-where" title="${where}">🏡 <b>${where}</b> <small>${who}</small></span>
+          <div class="garden-acts">${actions}</div>
+          <div class="garden-exit">
+            <button type="button" class="garden-pill solo" data-action="start" title="Leave the garden and start a solo run">Solo run</button>
+            <button type="button" class="garden-pill" data-action="garden-leave">Leave</button>
+          </div>
+        </div>
+        ${status ? `<p class="garden-status">${status}</p>` : ''}
+        ${sheet ? `<div class="garden-sheet">${sheet}</div>` : ''}
       </div>
       <div class="garden-flash" hidden></div>
       <div class="rush-board" hidden></div>
       ${info.countdown ? `<div class="garden-countdown">${info.countdown}</div>` : ''}`
     );
+  }
+
+  /** The emote sheet: big buttons for the unlocked emotes (with their 1–9 key), the locked ones only on request. */
+  emoteSheet({ emotes, lockedEmotes, touch }) {
+    const open = emotes.filter((emote) => !emote.locked);
+    const locked = emotes.filter((emote) => emote.locked);
+    const key = (emote) => (!touch && emote.key > 0 && emote.key <= 9 ? emote.key : 0);
+    const buttons = open
+      .map(
+        (emote) =>
+          `<button type="button" class="emote" data-action="emote" data-id="${emote.id}" title="${emote.name}${key(emote) ? ` (${key(emote)})` : ''}"><span>${emote.icon}</span><small>${emote.name}</small>${key(emote) ? `<kbd>${key(emote)}</kbd>` : ''}</button>`
+      )
+      .join('');
+    const lockedGrid = lockedEmotes
+      ? `<div class="emote-grid locked-grid">${locked
+          .map(
+            (emote) =>
+              `<button type="button" class="emote locked" disabled title="${emote.name} · unlock: ${escapeHtml(emote.hint ?? '')}"><span>🔒</span><small>${emote.name}</small><small class="wear-hint">${escapeHtml(emote.hint ?? '')}</small></button>`
+          )
+          .join('')}</div>`
+      : '';
+    return `<div class="emote-grid emote-sheet">${buttons}</div>
+      ${locked.length ? `<button type="button" class="link-button" data-action="emotes-locked">${lockedEmotes ? 'Hide the locked emotes' : `🔒 ${locked.length} more to unlock`}</button>` : ''}
+      ${lockedGrid}`;
+  }
+
+  /** ⋯ More in the garden bar: the garden's own settings and places to go, and the controls. */
+  gardenMore(info) {
+    const tool = (action, label, extra = '') => `<button type="button" class="garden-tool ${extra}" data-action="${action}">${label}</button>`;
+    const help = info.touch
+      ? 'Left stick to hop, 🦘 to jump (you can land on other frogs!), 🥊 to boop a frog or a trinket (or skip a stone at the pond), drag the right side to look around.'
+      : 'WASD to hop, Space to jump (onto frogs, the roof, the trampoline…), right-click or B to boop frogs and trinkets (or skip a stone at the pond), 1–9 to emote, L for a Leaf Rush, F to invite, N for day or night.';
+    return `<div class="garden-tools more-tools">${[
+      info.own ? tool('garden-edit', '✏️ Edit garden') : '',
+      info.own && info.online ? tool('garden-public', info.public ? '🌍 Public garden' : '🔒 Private garden', info.public ? 'on' : '') : '',
+      info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
+      tool('garden-visit', '👀 Visit a garden'),
+      tool('garden-night', info.night ? '🌙 Night' : '☀️ Day'),
+      tool('garden-music', `${info.song?.icon ?? '🎵'} ${info.song?.name ?? 'Song'}`),
+    ].join('')}</div>
+      <p class="sub garden-help">${help}</p>`;
   }
 
   /**

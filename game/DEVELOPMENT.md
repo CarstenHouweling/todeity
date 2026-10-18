@@ -396,6 +396,17 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   controls have a garden mode (move stick, a jump button in the bottom-right corner with BOOP to its left; the right half turns the
   camera). The garden toolbar (`.menu.garden-walk`, z-index 5) sits above the stick zones (z-index 3) so its
   buttons get taps; the menu itself passes touches through, and the round corner buttons stack above the jump button.
+- **The garden bar** (v0.29.9, `hud.showGardenWalk`): one slim row along the top. The garden and who's here on the
+  left; 😀 Emotes, 👕 Wardrobe, 👉 Boop (not on touch screens, which have 🥊), 🍃 Leaf Rush, the party button
+  (🚩 Invite / ✖ Stop inviting, or ✋ Ready in someone's party; ▶ Go now when frogs are ready) and ⋯ More in the
+  middle; a gold **Solo run** (the `start` action: `startRun` leaves the garden first) and Leave on the right. One sheet
+  at a time opens under it (`showEmotes`, `showWardrobe`, `showMore` in main.js): the emote sheet has big buttons for
+  the unlocked emotes (with their 1–9 key on a keyboard) and closes after a pick, the locked ones only on request
+  (`showLockedEmotes`, with how they unlock); ⋯ More (`hud.gardenMore`) holds Edit garden, Public/Private, Share or My
+  garden, Visit a garden, day or night, the song, and the controls help that used to sit in the bar; its buttons that
+  open something else close it (`closeMoreSheet`). A party's status line shows under the bar. Phones (and windows up
+  to 820 px wide, or 500 px tall) show icons only at full touch size (the garden bar skips the short-screen zoom).
+  Before, a heading, a line of help and eleven buttons, with the emote grid inside, covered half a phone's screen.
 - **Garden walking keeps its pace** (v0.26.2): the frame loop caps the game's step at 0.1 s, so below 10 fps a frog
   hopped slower (visitors on weaker phones in a busy garden reported it). `gardenKeys` now runs `hub.update` on the
   frame's real time (up to `WALK_FRAME_MAX`, 0.25 s) in `WALK_STEP` slices; `frame()` gets that time as `elapsed`.
@@ -422,7 +433,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   raycasting down, `hub.world.heightAt`; walls stop you unless they're within `STEP_UP`, tops can be stood on).
   `BOUNCE` (trampoline, Fairy Ring) throws frogs up; the Teapot Cannon fires them along its facing (`CANNON`); the
   Tea Ball is shared physics (whoever touches it kicks it and sends a `ball` event; everyone simulates). Emotes
-  (`Emotes.js`, keys 1–9, 😀 panel; most unlock with achievements) and boops (B, or BOOP left of the jump button on
+  (`Emotes.js`, keys 1–9, the 😀 sheet; most unlock with achievements) and boops (B, or BOOP left of the jump button on
   phones). **Boops** (v0.26, `boop()`): the frog in reach gets a `boop` event (a shove on its own screen), or a
   `five` (high five) if it is waving; with no frog in reach the ball gets a big kick, or the nearest trinket within
   `BOOP.poke` a `poke` event: everyone wobbles it (`garden.poke`, `item.poke` in TitleGarden.update) and plays its
@@ -489,7 +500,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   classes needs a per-class tweak (`rig.id`, like the Rosy Cheeks over the Ninja's mask). A filled slot
   hides the class's own gear there (`rig.cover`, using the `slotGear` tags in buildFrog: the Mage's hat, the Brawler's
   helmet, the Ninja's hood, the Alchemist's goggles, capes, the kettle, the scroll, the swords, the blowpipe).
-  **UI:** 👕 Wardrobe in the garden bar opens a panel (`hud.wardrobePanel`: slot tabs with what's worn, then the
+  **UI:** 👕 Wardrobe in the garden bar opens a sheet (`hud.wardrobePanel`: slot tabs with what's worn, then the
   slot's items; locked ones show how they unlock; on phones one sideways-scrolling row). While it's open the camera
   comes closer and looks past the frog so he stands below the panel (`garden.dressing(below)`, `goal.shift`). The
   title dock's 👕 Wardrobe (next to 🏡 My garden, after the first run) opens your garden with the panel open; both
