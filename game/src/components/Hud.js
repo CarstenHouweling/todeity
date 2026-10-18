@@ -35,6 +35,7 @@ const DAMAGE_NUMBER_DURATION = 0.8; // seconds
 const DAMAGE_NUMBER_RISE = 25; // world units
 const TOAST_MAX = 2; // toasts on screen at once
 const TOAST_QUEUE = 6; // toasts waiting at most
+const CARD_TAP_DELAY = 450; // ms after a menu opens before its cards take clicks (they fade in over ~0.5 s)
 
 function element(className, parent, tag = 'div') {
   const node = document.createElement(tag);
@@ -189,6 +190,9 @@ export class Hud {
     this.menu.hidden = true;
     this.menu.addEventListener('click', (event) => {
       const target = event.target.closest('[data-action]');
+      // A card pick waits until the cards have faded in: a quick double tap picked a brew, and the second tap then
+      // took a card of the menu that replaced it (the Bitter Shrine's Epic pick, the next skill) unseen.
+      if (target?.classList.contains('card') && performance.now() - this.menuShownAt < CARD_TAP_DELAY) return;
       if (target) this.onAction(target.dataset.action, target.dataset);
       else if (this.menuClickAction) this.onAction(this.menuClickAction);
     });
@@ -767,6 +771,7 @@ export class Hud {
     this.menu.className = `menu ${className}`;
     this.menu.innerHTML = html;
     this.menu.hidden = false;
+    this.menuShownAt = performance.now();
     this.menuClickAction = clickAction;
     // The game-over screen stands alone: the run's HUD (wave line, boss bar, ability bar, tips) hides behind it.
     document.body.classList.toggle('run-ended', this.menuName === 'game-over');
@@ -1612,9 +1617,10 @@ ${ meta.runs > 0 ? '' :
       .join('');
     const reroll = rerolls > 0 && !bonus ? `<button class="menu-button" data-action="reroll">🔄 Reroll (${rerolls})</button>` : '';
     const title = bonus ? '⛰️ The Bitter Shrine rewards you' : `Wave ${wave} cleared!`;
+    const note = bonus ? '<p class="sub">You survived the enraged hive: a bonus Epic pick</p>' : '';
     this.showMenu(
       'powerups',
-      `<h2>${title}</h2>${this.dialogue(brewDialogue(offers, memory))}<div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
+      `<h2>${title}</h2>${note}${this.dialogue(brewDialogue(offers, memory))}<div class="cards">${cards}</div><div class="menu-buttons">${reroll}</div>`
     );
     this.typeDialogue();
   }

@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.8',
+    date: '2026-10-18',
+    title: 'Look before you sip',
+    changes: [
+      '⛰️ A quick double tap on a brew no longer picks the Bitter Shrine\'s Epic reward for you before you\'ve seen it: cards only take taps once they\'ve appeared, and the reward says what it is',
+    ],
+  },
+  {
     version: '0.29.7',
     date: '2026-10-18',
     title: 'Room to scroll',

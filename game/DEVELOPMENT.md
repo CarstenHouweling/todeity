@@ -538,7 +538,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Shrines** (`components/Shrines.js`, `setupShrine` in main.js): from wave 2, about a third of the non-boss waves get one (each usable once);
   stand on it for 0.9 s. Shrine of Chance: 1 heart for a charm (50%), two (15%) or nothing. Bitter
   Shrine (solo): the wave gets elites, frenzy, 50% more bees and a squad, then an extra Epic brew pick
-  (`bonusPicks`, `offerBrews(true)`). Cursed Leaves: a `CURSES` brew (PowerUps.js, kind `curse`) with a drawback.
+  (`bonusPicks`, `offerBrews(true)`) right after the regular one, titled "The Bitter Shrine rewards you". Card
+  menus ignore clicks for `CARD_TAP_DELAY` (450 ms, Hud.js) after they open (v0.29.8): on a tablet a quick double
+  tap on the regular brew picked one of the Epic cards with the second tap, before they had even faded in, so
+  players thought the reward never came. The same guard covers skill picks that follow one another. Cursed Leaves: a `CURSES` brew (PowerUps.js, kind `curse`) with a drawback.
 - **Memory** (`meta.lastRun`, `meta.bosses`, `meta.blendPicks`; `rememberRun`/`boss` in Meta.js): at a run's first
   brew offer the speaking spirit talks about the last run (its killer, depth, a god form, a victory, the Steep, a
   favourite Blend); later offers sometimes mention the favourite. Bosses taunt at their entrance from `bossTaunt`
