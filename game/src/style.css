@@ -4032,8 +4032,23 @@ body.touch .steep-badge {
 .garden-set.done { background: color-mix(in srgb, var(--set) 30%, transparent); box-shadow: 0 0 10px var(--set); }
 .garden-set.on { border-color: #ffd36b; }
 
+/* A finger on a trinket: sideways scrolls the tray (the browser's), up drags the trinket out (main.js trayPress). */
 .trinket {
-  touch-action: none; /* a finger on a trinket drags it out of the tray instead of scrolling */
+  touch-action: pan-x;
+}
+
+/* Touch screens: the trinkets in one row that scrolls sideways. */
+body.touch .trinkets {
+  display: flex;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+}
+
+body.touch .trinkets > * {
+  flex: none;
+  width: 76px;
 }
 
 .trinket img {

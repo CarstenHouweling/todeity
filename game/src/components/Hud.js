@@ -1083,7 +1083,8 @@ export class Hud {
   /**
    * Editing your garden (v0.29.9, like the garden bar): the tools in a slim bar along the top with Done, a hint line
    * while a trinket is held or picked, and at the bottom a low tray with the sets and your trinkets to drag onto the
-   * lawn (the ones still to find only on request, `state.locked`). `state`: { held, selected, snap, night, canUndo,
+   * lawn (the ones still to find only on request, `state.locked`; a tapped set chip, `gardenSetInfo`, filters it to
+   * that set). `state`: { held, selected, snap, night, canUndo,
    * collapsed, locked } from the garden. Later changes go through `refreshGarden`, which keeps the trinket buttons
    * (one may be under a finger mid-drag).
    */
@@ -1101,6 +1102,11 @@ export class Hud {
     const toggle = missing.length
       ? `<button type="button" class="trinket-toggle" data-action="garden-locked">${state.locked ? 'Hide the ones to find' : `❔ ${missing.length} to find`}</button>`
       : '';
+    // A tapped set chip filters the tray to that set's trinkets, the ones still to find included (with how).
+    const filter = SETS.find((set) => set.id === this.gardenSetInfo);
+    const list = filter
+      ? `<button type="button" class="trinket-toggle" data-action="garden-set" data-set="${filter.id}">✖ All trinkets</button>${filter.parts.map((id) => button(trinketById(id))).join('')}`
+      : `${mine.map(button).join('')}${toggle}${state.locked ? missing.map(button).join('') : ''}`;
     this.showMenu(
       'garden-mode',
       `<div class="garden-bar">
@@ -1114,7 +1120,7 @@ export class Hud {
       <div class="garden-flash" hidden></div>
       <div class="garden-tray ${state.collapsed ? 'collapsed' : ''}">
         <div class="garden-sets"></div>
-        <div class="trinkets">${mine.map(button).join('')}${toggle}${state.locked ? missing.map(button).join('') : ''}</div>
+        <div class="trinkets">${list}</div>
       </div>`
     );
     this.refreshGarden(state);

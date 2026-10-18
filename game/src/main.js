@@ -4401,12 +4401,46 @@ function refreshGardenTray() {
   if (decorating && garden.editing) hud.refreshGarden(gardenState());
 }
 
-// The tray: pressing a trinket starts dragging it (the click that follows does nothing more).
+// The tray: pressing a trinket with the mouse starts dragging it (the click that follows does nothing more). A finger
+// waits to see what it does: sideways scrolls the tray (the browser takes that, `touch-action: pan-x`), up towards
+// the lawn drags the trinket out, and a tap picks it up for the next tap on the lawn. Before v0.29.9 a finger on a
+// trinket always grabbed it, so the tray couldn't be swiped.
+const TRAY_PULL = 10; // px a finger moves before it counts as a swipe or a pull
+let trayPress = null; // { id, down } while a finger rests on a tray trinket
+
 hud.menu.addEventListener('pointerdown', (event) => {
   const button = event.target.closest('[data-trinket]');
   if (!button || !garden.editing) return;
-  event.preventDefault();
-  garden.beginTray(button.dataset.trinket, event);
+  if (event.pointerType === 'mouse') {
+    event.preventDefault();
+    garden.beginTray(button.dataset.trinket, event);
+    return;
+  }
+  trayPress = { id: button.dataset.trinket, down: event };
+});
+window.addEventListener('pointermove', (event) => {
+  if (!trayPress || event.pointerId !== trayPress.down.pointerId) return;
+  const dx = event.clientX - trayPress.down.clientX;
+  const dy = event.clientY - trayPress.down.clientY;
+  if (Math.hypot(dx, dy) < TRAY_PULL) return;
+  const press = trayPress;
+  trayPress = null;
+  if (Math.abs(dy) > Math.abs(dx) && garden.editing) {
+    garden.beginTray(press.id, press.down);
+    garden.move(event); // the trinket follows the finger from here on (TitleGarden's own listeners)
+  }
+});
+window.addEventListener('pointerup', (event) => {
+  if (!trayPress || event.pointerId !== trayPress.down.pointerId) return;
+  const press = trayPress;
+  trayPress = null;
+  if (!garden.editing) return;
+  // A tap: picked up, set down by the next tap on the lawn.
+  garden.beginTray(press.id, press.down);
+  garden.gesture = null;
+});
+window.addEventListener('pointercancel', (event) => {
+  if (trayPress && event.pointerId === trayPress.down.pointerId) trayPress = null; // the browser scrolled the tray
 });
 
 // A garden's look, chosen by its owner: day or night, and a song (GARDEN_SONGS). Your own is kept in `meta` (and in
@@ -4714,6 +4748,7 @@ function editGarden() {
   if (!decorating || !gardenVisit?.own) return;
   showWardrobe = false;
   showMore = false;
+  hud.gardenSetInfo = null; // the tray starts with every trinket
   garden.dressing(null);
   garden.enter({ yaw: garden.view.yaw });
   hud.showGarden(gardenState());
@@ -8130,10 +8165,11 @@ const MENU_ACTIONS = {
     trayCollapsed = !trayCollapsed;
     refreshGardenTray();
   },
-  // A set chip in the editor's tray: what the set needs shows in the hint line (again: hidden).
+  // A set chip in the editor's tray: the tray shows just that set's trinkets and the hint line what it needs (again:
+  // everything).
   'garden-set': ({ set }) => {
     hud.gardenSetInfo = hud.gardenSetInfo === set ? null : set;
-    refreshGardenTray();
+    if (decorating && garden.editing) hud.showGarden(gardenState());
   },
   'garden-locked': () => {
     showLockedTrinkets = !showLockedTrinkets;
