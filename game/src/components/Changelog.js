@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.7',
+    date: '2026-10-18',
+    title: 'Room to scroll',
+    changes: [
+      '📱 On tablets a long game-over screen (a big leaderboard) scrolls, and Play again, Share, Pantry and Title stay pinned at the bottom: you can no longer get stuck there',
+      '🍵 Brew, skill and ultimate picks and the other full-screen menus scroll too when they don\'t fit',
+    ],
+  },
+  {
     version: '0.29.6',
     date: '2026-10-18',
     title: 'Stay a while',

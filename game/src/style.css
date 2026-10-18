@@ -356,18 +356,41 @@ canvas.game {
 }
 
 /* Menus: title, power-ups, game over */
+/* A menu taller than the screen (game over with a long leaderboard, brew cards on a tablet held upright) scrolls on
+   every screen size. Until v0.29.7 only short screens scrolled: on a tablet the game-over buttons fell off the
+   bottom and the player was stuck. */
 .menu {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
   padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   background: rgba(10, 30, 15, 0.55);
   color: #fff;
   text-align: center;
   cursor: pointer;
+}
+
+/* Centres the menu while it fits; when it doesn't, it starts at its top instead of being cut off above and below.
+   (`justify-content: safe center` does the same, but older iPads don't know it.) */
+.menu::before,
+.menu::after {
+  content: '';
+  margin: auto 0;
+}
+
+.menu.title-screen::before,
+.menu.title-screen::after,
+.menu.garden-mode::before,
+.menu.garden-mode::after,
+.menu.garden-walk::before,
+.menu.garden-walk::after {
+  display: none;
 }
 
 .menu[hidden] {
@@ -961,7 +984,8 @@ canvas.game {
    players never have to discover the scroll to leave. No bar behind it: the buttons float over the list on their
    own (solid, with a shadow), and the row lets touches through to the list around them. */
 .menu .panel > .menu-buttons:last-child,
-.modal .panel > .menu-buttons:last-child {
+.modal .panel > .menu-buttons:last-child,
+.menu.game-over > .menu-buttons {
   position: sticky;
   bottom: 0;
   z-index: 1;
@@ -970,13 +994,15 @@ canvas.game {
 }
 
 .menu .panel > .menu-buttons:last-child .menu-button,
-.modal .panel > .menu-buttons:last-child .menu-button {
+.modal .panel > .menu-buttons:last-child .menu-button,
+.menu.game-over > .menu-buttons .menu-button {
   pointer-events: auto;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
 .menu .panel > .menu-buttons:last-child .menu-button:not(.primary),
-.modal .panel > .menu-buttons:last-child .menu-button:not(.primary) {
+.modal .panel > .menu-buttons:last-child .menu-button:not(.primary),
+.menu.game-over > .menu-buttons .menu-button:not(.primary) {
   background: #2a4a30;
 }
 
@@ -2157,12 +2183,6 @@ body.run-ended .toasts {
   /* Between Tode's feet and the ability bar, which takes up more of a short screen. */
   .callout {
     top: 62%;
-  }
-
-  .menu {
-    overflow-y: auto;
-    justify-content: safe center;
-    touch-action: pan-y;
   }
 
   .menu.title-screen {

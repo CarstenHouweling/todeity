@@ -612,9 +612,16 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   text fields excluded). `-webkit-tap-highlight-color: transparent` stops the blue flash over the clickable title
   menu on Android, and `-webkit-touch-callout: none` the long-press menu. Long menus and popups
   scroll, but their last `.menu-buttons` row (Back, Done, Close) is sticky at the bottom, so it's always on screen:
-  the buttons float on their own (solid, with a shadow), with no bar behind them.
+  the buttons float on their own (solid, with a shadow), with no bar behind them. The game-over screen's buttons
+  (`.menu.game-over > .menu-buttons`) are pinned the same way.
+- **Every menu scrolls** (v0.29.7): `.menu` itself is a scroll box (`overflow-y: auto`, `touch-action: pan-y`) on
+  every screen size. Menus without a `.panel` (game over, victory, brew/skill/ultimate picks, the chest) used to
+  scroll only on short screens, so on a tablet a long leaderboard pushed the game-over buttons off the screen and the
+  player was stuck. Centring is done by `::before`/`::after` spacers with auto margins (with `justify-content:
+  flex-start`), so a menu taller than the screen starts at its top instead of being cut off above (`safe center` is
+  too new for older iPads). The title screen and the garden menus hide the spacers.
 - **Short screens** (phones in landscape, `max-height: 500px` at the end of `style.css`): menus, popups and HUD
-  widgets are shrunk with CSS `zoom` and menus scroll. World-anchored labels and objective arrows are positioned in
+  widgets are shrunk with CSS `zoom` (and the menu scrolls as a whole, panels included). World-anchored labels and objective arrows are positioned in
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too. Two
   spirits talking at once (a Duo exchange) sit side by side there (`.dialogue:has(.speech + .speech)`, v0.29.5):
   stacked, they pushed the brew offer's Reroll button off the bottom of the screen.
