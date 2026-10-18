@@ -770,6 +770,7 @@ export class Hud {
     document.body.classList.toggle('run-ended', this.menuName === 'game-over');
     // The title has no corner buttons (sound is in its ⚙️ Settings, screenshots are C): they would sit on its dock.
     document.body.classList.toggle('title-open', this.menuName === 'title-screen');
+    document.body.classList.remove('run-paused');
   }
 
   hideMenu() {
@@ -779,7 +780,7 @@ export class Hud {
     this.menu.hidden = true;
     this.menu.innerHTML = '';
     this.menuClickAction = null;
-    document.body.classList.remove('run-ended', 'title-open');
+    document.body.classList.remove('run-ended', 'title-open', 'run-paused');
   }
 
   get menuOpen() {
@@ -890,12 +891,6 @@ export class Hud {
   }
 
   /** A menu button that switches fullscreen; nothing where the browser can't do it. */
-  fullscreenButton() {
-    if (needsHomeScreen()) return '<button class="menu-button" data-action="fullscreen-help">⛶ Fullscreen</button>';
-    if (!canFullscreen()) return '';
-    return `<button class="menu-button" data-action="toggle-fullscreen">⛶ Fullscreen: ${isFullscreen() ? 'on' : 'off'}</button>`;
-  }
-
   /** Whether Tode spits by himself on a computer (the title's controls and the spit slot's key say so). */
   get autoSpit() {
     return this.autoSpitOn;
@@ -1420,10 +1415,10 @@ export class Hud {
   }
 
   /**
-   * Settings (the title's ⚙️): the pause menu's options plus Gentle Brew and fullscreen. `autoSpit` is null on
-   * touch screens, where Tode always spits by himself.
+   * Settings (⚙️ on the title and in the pause menu). `autoSpit` is null on touch screens, where Tode always spits
+   * by himself; `inRun` (the pause menu) leaves out Gentle Brew, which only applies from the next run.
    */
-  showSettings({ sound, graphics, calmFx, showFps, autoSpit }) {
+  showSettings({ sound, graphics, calmFx, showFps, autoSpit, inRun = false }) {
     const text = (label, note) => `<span class="setting-text"><b>${label}</b>${note ? `<small>${note}</small>` : ''}</span>`;
     const toggle = (action, on, label, note = '') =>
       `<div class="setting">${text(label, note)}<button type="button" class="switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="${label}" data-action="${action}"><i></i></button></div>`;
@@ -1440,8 +1435,8 @@ export class Hud {
     this.showModal(
       'settings',
       `<h2>⚙️ Settings</h2>
-      <h3>Playing</h3>
-      ${toggle('toggle-gentle', meta.gentle, '🌿 Gentle Brew', `${GENTLE_TEXT} Solo runs only.`)}
+      ${inRun && autoSpit === null ? '' : '<h3>Playing</h3>'}
+      ${inRun ? '' : toggle('toggle-gentle', meta.gentle, '🌿 Gentle Brew', `${GENTLE_TEXT} Solo runs only.`)}
       ${autoSpit === null ? '' : choice('💧 Spit', 'By himself, or while you hold the left mouse button', [['Auto', autoSpit, 'data-action="toggle-autospit"'], ['Hold', !autoSpit, 'data-action="toggle-autospit"']])}
       <h3>Sound</h3>
       ${toggle('toggle-music', sound.music, '🎵 Music')}
@@ -1784,7 +1779,12 @@ export class Hud {
     this.typeDialogue();
   }
 
-  showPause({ build, ultimate, form, sound, coop, keepsake, steep, calmFx, graphics, showFps, autoSpit, frogClass }) {
+  /**
+   * The pause menu (v0.29.9, like the title): the run at the top left with What's new and ⚙️ Settings across from it,
+   * a big Resume in the middle with Restart and Quit under it, then the build in its own scrolling box (so a big
+   * build never pushes Resume out of reach). The settings live in the same popup as on the title.
+   */
+  showPause({ build, ultimate, form, coop, keepsake, steep, frogClass, wave }) {
     const brews = build.length
       ? build
           .map(
@@ -1794,31 +1794,34 @@ export class Hud {
           .join('')
       : '<p class="sub">No brews yet. Clear a wave to choose one.</p>';
     const ult = ultimate ? `<p class="sub">Ultimate: ${ULTIMATES[ultimate].icon} <b>${ULTIMATES[ultimate].name}</b></p>` : '';
-    // The buttons come first and the build scrolls in its own box, so a big build never pushes Resume out of reach.
+    const details = [`Wave ${wave}`, keepsake ? `${keepsake.icon} ${keepsake.name}` : '', steep ? `🔥 Steep ${steep}` : ''].filter(Boolean).join(' · ');
     this.showMenu(
       'pause',
       `
-      <div class="panel">
+      <div class="title-top">
+        <div class="run-card">${frogClass ? this.classFace(frogClass) : ''}<span><b>${frogClass ? `${frogClass.name} · ` : ''}${form}</b><small>${details}</small></span></div>
+        <div class="title-corner">
+          <button type="button" class="title-pill" data-action="changelog">📜 v${VERSION}<span class="long"> · What's new</span></button>
+          <button type="button" class="title-round" data-action="settings" title="Settings" aria-label="Settings">⚙️</button>
+        </div>
+      </div>
+      <div class="pause-main">
         <h2>${coop ? 'Menu' : 'Paused'}</h2>
         ${coop ? '<p class="sub">The run keeps going for your teammates while this menu is open.</p>' : ''}
-        <div class="menu-buttons">
-          <button class="menu-button primary" data-action="resume">▶ Resume</button>
-          <button class="menu-button" data-action="toggle-music">🎵 Music: ${sound.music ? 'on' : 'off'}</button>
-          <button class="menu-button" data-action="toggle-sfx">🔊 Effects: ${sound.sfx ? 'on' : 'off'}</button>
-          <button class="menu-button" data-action="toggle-calm">✨ Effects: ${calmFx ? 'calm' : 'full'}</button>
-          <button class="menu-button" data-action="cycle-graphics" title="Low runs smoothly on older phones: no bloom, shadows or antialiasing">🖥 Graphics: ${GRAPHICS_LABELS[graphics]}</button>
-          <button class="menu-button" data-action="toggle-fps">📈 FPS counter: ${showFps ? 'on' : 'off'}</button>
-          ${autoSpit == null ? '' : `<button class="menu-button" data-action="toggle-autospit">💧 Spit: ${autoSpit ? 'auto' : 'hold LMB'}</button>`}
-          ${this.fullscreenButton()}
-          <button class="menu-button" data-action="changelog">📜 What's new <small>v${VERSION}</small></button>
-          ${coop ? '' : '<button class="menu-button" data-action="restart">↻ Restart run</button>'}
-          <button class="menu-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
+        <button class="start-button" data-action="resume">Resume</button>
+        <div class="pause-actions">
+          ${coop ? '' : '<button type="button" class="quiet-button" data-action="restart">↻ Restart run</button>'}
+          <button type="button" class="quiet-button" data-action="title">${coop ? '🚪 Leave co-op' : '⌂ Quit to title'}</button>
         </div>
-        <p class="sub">${frogClass ? `${frogClass.icon} ${frogClass.name} · ` : ''}${form}${keepsake ? ` · ${keepsake.icon} ${keepsake.name}` : ''}${steep ? ` · 🔥 Steep ${steep}` : ''}</p>
+      </div>
+      <section class="pause-build">
+        <h3>Your build</h3>
         ${ult}
         <div class="build">${brews}</div>
-      </div>`
+      </section>`
     );
+    // Solo the run stands still: its HUD (banners, callouts, score) hides behind the menu. Co-op keeps it.
+    document.body.classList.toggle('run-paused', !coop);
   }
 
   /**

@@ -7849,16 +7849,12 @@ function showPauseMenu() {
   hud.showPause({
     keepsake,
     steep,
-    calmFx: settings.calmFx,
-    graphics: settings.graphics,
-    showFps: settings.showFps,
-    autoSpit: touch.enabled ? null : settings.autoSpit,
     build,
     ultimate: player.ultimate,
     form: TIERS[ascension.tier].name,
-    sound: soundSettings(),
     coop: Boolean(coop),
     frogClass: runClass,
+    wave,
   });
 }
 
@@ -8273,9 +8269,10 @@ function refreshMenu() {
   if (hud.modalIs('settings')) openSettings();
 }
 
-/** The title's ⚙️ Settings popup, drawn from the current settings. */
+/** The ⚙️ Settings popup (title and pause menu), drawn from the current settings. */
 function openSettings() {
   hud.showSettings({
+    inRun: hud.menuName === 'pause',
     sound: soundSettings(),
     graphics: settings.graphics,
     calmFx: settings.calmFx,

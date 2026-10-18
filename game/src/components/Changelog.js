@@ -10,6 +10,7 @@ export const CHANGELOG = [
       '🏠 A new, calmer title screen: your level at the top, the frog you play and a big Start run in the middle, everything else in a dock at the bottom',
       '🎁 The daily gift and the kettle sit in the dock and fill up a ring while they count down',
       '⚙️ Settings on the title screen: Gentle Brew, sound, graphics, fullscreen and more in one place',
+      '⏸ A calmer pause menu: a big Resume, Restart and Quit under it, your build below, and the options behind ⚙️ Settings',
       '🐸 Tap your level to see your profile: name, records and your progress code',
       '🐸 Choose your frog is easier to read: one short line per frog, and all seven fit on the screen',
       '📸 The screenshot buttons are gone (C still saves a screenshot on a keyboard). Say Cheese now comes from 📤 Share run too, so tablets can earn it',

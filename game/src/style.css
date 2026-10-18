@@ -386,6 +386,8 @@ canvas.game {
 
 .menu.title-screen::before,
 .menu.title-screen::after,
+.menu.pause::before,
+.menu.pause::after,
 .menu.garden-mode::before,
 .menu.garden-mode::after,
 .menu.garden-walk::before,
@@ -2172,6 +2174,100 @@ body.title-open .corner-buttons {
   }
 }
 
+/* The pause menu (v0.29.9, like the title): the run and the extras on top, Resume in the middle, the build below.
+   A darker backdrop, so banners and callouts of the run behind it don't compete. */
+.menu.pause {
+  background: rgba(5, 18, 8, 0.74);
+}
+
+.run-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px 6px 6px;
+  border-radius: 18px;
+  background: rgba(10, 30, 15, 0.62);
+  text-align: left;
+}
+
+.run-card .class-face {
+  width: 52px;
+  height: 52px;
+}
+
+.run-card b {
+  display: block;
+  font-size: 17px;
+}
+
+.run-card small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.pause-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: clamp(4px, 3vh, 32px) 0 22px;
+}
+
+.pause-main h2 {
+  margin-bottom: 18px;
+}
+
+.pause-main .sub {
+  margin: -8px 0 18px;
+}
+
+.pause-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.quiet-button {
+  padding: 9px 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(10, 30, 15, 0.55);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quiet-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.pause-build {
+  box-sizing: border-box;
+  width: min(900px, 100%);
+  padding: 12px 16px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(10, 30, 15, 0.62);
+  text-align: left;
+}
+
+.pause-build h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #ffe680;
+}
+
+.pause-build > .sub {
+  margin: 0 0 8px;
+}
+
 /* Settings and the player profile (title screen popups) */
 .modal.settings .panel,
 .modal.player .panel {
@@ -2464,9 +2560,10 @@ body.title-open .corner-buttons {
 }
 
 /* Achievements */
-/* The game-over screen: the run's HUD hides, and toasts (achievements unlocked at the end) move to a corner so they
+/* The game-over screen (and the solo pause menu): the run's HUD hides, and toasts (achievements unlocked at the end) move to a corner so they
    don't cover the run's stats. */
-body.run-ended .hud > * {
+body.run-ended .hud > *,
+body.run-paused .hud > * {
   visibility: hidden;
 }
 

@@ -124,7 +124,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 
 - WASD move (camera-relative), mouse aims, Space/Shift/RMB hop-dash, E/middle mouse fires the ultimate, Esc/P
   pauses, M mutes. Tode spits by himself whenever a bee is within spit range (`settings.autoSpit`, on by default;
-  the pause menu's "Spit: hold LMB" brings back holding the left button, which always spits too). Skills and the tea bomb always cast themselves (there are no manual casts).
+  ⚙️ Settings' "Spit: Hold" brings back holding the left button, which always spits too). Skills and the tea bomb always cast themselves (there are no manual casts).
 - Waves of bees spawn at the four corners. After each wave: pick 1 of 3 **brews** (power-ups), offered by a tea
   spirit with a line of dialogue. After the first boss (wave 5) you pick an **ultimate**. **Skills** come from
   levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
@@ -561,7 +561,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   vowel, or a click on a kick). Importing Sound.js again from the console gives a separate copy (Vite's reload
   timestamps): measure through `game.sound`.
 - **Readability:** enemy bullets have a dark outline (back-face rim mesh) and draw after all other transparent
-  effects. The pause menu's **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
+  effects. ⚙️ Settings' **calm effects** (`settings.calmFx`) halve particles, soften flashes, pulses and shake
   during play (cut-scenes keep the full show) and drop the spit trails.
 - **Finding Tode** (v0.29.4, `components/PlayerBeacon.js`): in a playtest Golden Tode vanished inside the Queen's
   shield dome, and the garden's near corner beehive (then an instanced mesh, which `updatePropFade` skips; now four
@@ -589,7 +589,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   buttons sit in a row above the aim stick. The stick zones (z-index 3) sit above `.menu`, so the controls hide
   whenever a menu or popup is open during play (the co-op pause menu keeps the phase running). Tode always spits by himself: where the aim stick points (`input.aiming`,
   `input.aimAxis`; spit's aim assist still applies), or at the nearest bee in range when it's let go. Skills always
-  auto-cast (the pause menu hides that toggle). Touch mode turns on for a coarse pointer or touch without hover,
+  auto-cast (⚙️ Settings hides the spit choice). Touch mode turns on for a coarse pointer or touch without hover,
   and on the first real touch otherwise (touchscreen laptops). Graphics quality: see Graphics levels.
 - **Phones held upright** (v0.26.1, "Phones held upright" in main.js): portrait works but shows little of the arena.
   `portraitPhone()` (touch, taller than wide, narrower than `PHONE_WIDTH` 600 px; tablets play fine upright).
@@ -654,10 +654,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   scrolls when it doesn't fit, the dock wraps on tablets and phones held upright, and short screens tighten the
   spacing so a phone held sideways needs no scrolling. Settings toggles redraw through `refreshMenu()`, which also
   redraws an open settings popup (`hud.modalIs('settings')`). New things go in the dock or a popup, not as more
-  buttons in the middle.
+  buttons in the middle. **The pause menu** (`hud.showPause`) follows the same layout: the run (frog, form, wave,
+  keepsake, Steep) top left, What's new and ⚙️ Settings top right (the same popup; `inRun` leaves out Gentle Brew,
+  which applies from the next run), a big Resume with Restart and Quit under it, and the build in its own scrolling
+  box. Solo, the run's HUD hides behind it (`body.run-paused`, like `run-ended`); co-op keeps it, the run goes on.
 - **Corner buttons:** 🔊; ⏸ only while a run is playing (`hud.setPauseShown(PLAYING.has(phase))`). None on
   the title screen (`body.title-open`): they sat on its dock, sound is in ⚙️ Settings.
-- **Fullscreen:** a switch in the title's ⚙️ Settings and a button in the pause menu (`Fullscreen.js`, with the `webkit` API for iPad Safari).
+- **Fullscreen:** a switch in ⚙️ Settings (title and pause menu; `Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
   installable (`public/manifest.webmanifest` with `display: fullscreen`, Apple's `apple-mobile-web-app-*` meta tags,
@@ -826,7 +829,7 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   ring (Tournament), magma under the floor, a turning summoning sigil and sparks (Underworld). GLSL note: `half`
   is a reserved word.
 - **Quality** (`components/Quality.js`, the Graphics section in main.js): the player picks 🖥 Auto / High / Low
-  (`settings.graphics`, pause menu and title pill). It applies a **step**: 0 everything, 1 no bloom (and no sanitize
+  (`settings.graphics`, ⚙️ Settings on the title and in the pause menu). It applies a **step**: 0 everything, 1 no bloom (and no sanitize
   pass), 2 no multisampling and **lite** (`PostFX.render` draws straight to the screen while no flash, shatter,
   warp or aberration runs; lite drops the steady warp, and a CSS `.css-vignette` replaces the shader's), 3 no
   shadows, 4 **Low**: also resolution 0.5–1×, 45% particles, plain character materials in every arena
