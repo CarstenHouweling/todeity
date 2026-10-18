@@ -647,8 +647,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `hud.showPlayer`: name and tag with ✏️ Edit name / 🏷 Pick a name, records, the progress code with 📋 Copy) and on
   the right "📜 vX · What's new" and ⚙️ **Settings** (`hud.showSettings`, opened by `openSettings()` in main.js:
   Gentle Brew, spit, music, sound effects, graphics, fullscreen, screen effects, FPS counter). In the middle the
-  "Todeity" wordmark (the only text in **Grandstander** 800, bundled with `@fontsource/grandstander`, OFL; everything
-  else keeps the system font), the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
+  "Todeity" wordmark in **Grandstander** 800 (bundled with `@fontsource/grandstander`, OFL, upright and italic). The
+  same font (`--display-font`) is used for all big display text: callouts, banners, menu headings, the clash label,
+  boss names, the chest count and the garden countdown (one rule at the end of `style.css`); everything else keeps
+  the system font, the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
   Brew, Co-op, Leaderboard | Pantry, Keepsake, Steeping, Wardrobe, My garden, Visit | the gift and the kettle
   (`rewardTile`: a ring fills as they count down, `--p` from `rewardProgress`; they glow when ready). The menu
   scrolls when it doesn't fit, the dock wraps on tablets and phones held upright, and short screens tighten the

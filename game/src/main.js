@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import '@fontsource/grandstander/800.css'; // the "Todeity" wordmark only (OFL, bundled: no font requests to Google)
+import '@fontsource/grandstander/800.css'; // big display text: the wordmark, callouts, banners, headings (OFL, bundled)
+import '@fontsource/grandstander/800-italic.css'; // the callouts are italic
 import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
