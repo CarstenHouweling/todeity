@@ -2911,6 +2911,11 @@ body.touch .menu .prompt {
   cursor: default;
 }
 
+/* Full width, so the short cards sit two to a row and all seven frogs fit without scrolling. */
+.classes .panel {
+  width: min(680px, 92vw);
+}
+
 .class-chip {
   display: inline-flex;
   gap: 14px;

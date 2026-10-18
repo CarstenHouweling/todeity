@@ -1542,12 +1542,12 @@ export class Hud {
     const daily = classOfTheDay(todayKey());
     const cards = CLASSES.map(
       (frogClass) => `
-        <button class="class-card ${frogClass === current ? 'chosen' : ''}" data-action="class" data-id="${frogClass.id}">
+        <button class="class-card ${frogClass === current ? 'chosen' : ''}" data-action="class" data-id="${frogClass.id}" title="${escapeHtml(frogClass.text)}">
           ${this.classFace(frogClass)}
           <span class="class-text">
             <b>${frogClass.icon} ${frogClass.name}</b>
             <small class="class-title">${frogClass.title} · ${'♥'.repeat(frogClass.hearts)}</small>
-            <small>${frogClass.text}</small>
+            <small>${frogClass.short}</small>
           </span>
           ${frogClass === current ? '<span class="keepsake-tag">Playing</span>' : ''}
         </button>`
@@ -1557,7 +1557,7 @@ export class Hud {
       `
       <div class="panel">
         <h2>🐸 Choose your frog</h2>
-        <p class="sub">Every frog plays differently; brews, skills, charms and keepsakes work for all of them. Today's Daily Brew is played by ${daily.icon} <b>${daily.name}</b>.</p>
+        <p class="sub">Every frog plays differently. Today's Daily Brew: ${daily.icon} <b>${daily.name}</b>.</p>
         <div class="class-list">${cards}</div>
         <div class="menu-buttons"><button class="menu-button primary" data-action="title">Done</button></div>
       </div>`

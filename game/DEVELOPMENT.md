@@ -210,8 +210,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven).
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
-- **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked under Start run (`hud.showClasses`,
-  `meta.frogClass`): Tode, Bullfrog Brawler (8 hearts, two spinning throwing axes that hit ×3 and cleave, hard dash
+- **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked with the class chip above Start run (`hud.showClasses`,
+  `meta.frogClass`; its cards show each class's one-line `short`, the full `text` is the hover title): Tode, Bullfrog Brawler (8 hearts, two spinning throwing axes that hit ×3 and cleave, hard dash
   shove, Tongue Lash), Tree Frog Sharpshooter (4 hearts, long piercing double-damage darts, crits), Toad Alchemist
   (lobbed potions: `Projectile.lob` flies an arc under gravity, `LOB_TIME`, and `shatterPotion` splashes
   `POTION_RADIUS` where it lands, aimed at the assisted bee via `lobRange`; 3 elemental tea bombs, Sugar Mines),
