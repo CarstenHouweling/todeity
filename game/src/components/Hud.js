@@ -15,10 +15,10 @@ import { CHARM_RARITIES } from './Charms.js';
 import { CLASSES, chosenClass, classById, classOfTheDay } from './Classes.js';
 import { classPortrait } from './ClassPortraits.js';
 import { todayKey } from './Random.js';
-import { GRAPHICS_LABELS } from './Quality.js';
+import { GRAPHICS, GRAPHICS_LABELS } from './Quality.js';
 import { NAME_MAX, TAG_COLORS } from './PlayerTag.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
-import { SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
+import { KETTLE_HOURS, SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
 import { WEARABLES, unlockedWearables } from './Wearables.js';
 import { trinketPicture } from './TrinketPortraits.js';
 import { viewHeight, viewWidth } from './Viewport.js';
@@ -165,13 +165,6 @@ export class Hud {
     this.steep.hidden = true;
 
     this.buttons = element('corner-buttons', document.body);
-    this.photoButton = element('round-button', this.buttons, 'button');
-    this.photoButton.textContent = '📸';
-    this.photoButton.title = 'Save a screenshot (C)';
-    this.photoButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.onAction('photo');
-    });
     this.pauseButton = element('round-button', this.buttons, 'button');
     this.pauseButton.textContent = '⏸';
     this.pauseButton.title = 'Pause (Esc)';
@@ -582,7 +575,7 @@ export class Hud {
   setCoopRooms(rooms) {
     this.coopRooms = rooms;
     const label = this.menuName === 'title-screen' && this.menu.querySelector('[data-coop-count]');
-    if (label) label.textContent = coopLabel(rooms);
+    if (label) label.outerHTML = coopBadge(rooms);
   }
 
   /** The Visit garden button on the title screen: how many public gardens have frogs in them right now. */
@@ -775,6 +768,8 @@ export class Hud {
     this.menuClickAction = clickAction;
     // The game-over screen stands alone: the run's HUD (wave line, boss bar, ability bar, tips) hides behind it.
     document.body.classList.toggle('run-ended', this.menuName === 'game-over');
+    // The title has no corner buttons (sound is in its ⚙️ Settings, screenshots are C): they would sit on its dock.
+    document.body.classList.toggle('title-open', this.menuName === 'title-screen');
   }
 
   hideMenu() {
@@ -784,7 +779,7 @@ export class Hud {
     this.menu.hidden = true;
     this.menu.innerHTML = '';
     this.menuClickAction = null;
-    document.body.classList.remove('run-ended');
+    document.body.classList.remove('run-ended', 'title-open');
   }
 
   get menuOpen() {
@@ -800,6 +795,11 @@ export class Hud {
   hideModal() {
     this.modal.hidden = true;
     this.modal.innerHTML = '';
+  }
+
+  /** Whether the popup `name` (its class, e.g. 'settings') is open. */
+  modalIs(name) {
+    return !this.modal.hidden && this.modal.classList.contains(name);
   }
 
   get modalOpen() {
@@ -906,17 +906,16 @@ export class Hud {
     this.slots.spit.key.textContent = on ? 'auto' : 'LMB';
   }
 
+  /**
+   * The title screen (v0.29.9, layout "3c"): the level card and the small extras along the top, the name, the frog
+   * that plays and Start run in the middle, everything else in the dock at the bottom.
+   */
   showTitle(best) {
-    this.showMenu(
-      'title-screen',
-      `
-      <div class="panel">
-        <h1>Todeity</h1>
-        <p class="subtitle">Rise of the Tea God</p>
-        ${meta.runs > 0 ? this.profile(best) : ''}
-        ${meta.runs > 0 ? '' : `<p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
-        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>`}
-${ meta.runs > 0 ? '' :
+    const fresh = !meta.runs;
+    const intro = fresh
+      ? `<p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
+        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>
+        ${
           document.body.classList.contains('touch')
             ? `<div class="controls">
           <span><b>Left stick</b> move</span>
@@ -935,35 +934,30 @@ ${ meta.runs > 0 ? '' :
           <span>Skills and bombs cast <b>themselves</b></span>
           <span><b>Esc</b> pause</span>
         </div>`
-        }
-        ${best && !meta.runs ? `<p class="best">Best score: ${best}</p>` : ''}
-        ${meta.runs > 0 ? this.rewardRow() : ''}
-        <!-- Most important first: start, then ways to play, then preparing a run, then small extras. -->
-        <div class="menu-buttons title-start">
-          <button class="menu-button primary" data-action="start">▶ Start run</button>
+        }`
+      : '';
+    this.showMenu(
+      'title-screen',
+      `
+      <div class="title-top">
+        ${fresh ? '<span></span>' : this.levelCard()}
+        <div class="title-corner">
+          ${this.newVersion ? `<button type="button" class="title-pill update-pill" data-action="reload" title="The game was updated while you played">✨ v${escapeHtml(this.newVersion)} is out · reload</button>` : ''}
+          <button type="button" class="title-pill" data-action="changelog">📜 v${VERSION}<span class="long"> · What's new</span></button>
+          <button type="button" class="title-round" data-action="settings" title="Settings" aria-label="Settings">⚙️</button>
         </div>
+      </div>
+      <div class="title-main">
+        <h1 class="wordmark">Todeity</h1>
+        <p class="subtitle">Rise of the Tea God</p>
+        ${intro}
+        ${best && fresh ? `<p class="best">Best score: ${best}</p>` : ''}
         <p class="portrait-hint"><span class="turn-phone">📱</span> Turn your phone sideways: Todeity plays best in landscape</p>
         <button class="class-chip" data-action="classes">${this.classFace(chosenClass())}<span><small>Playing as</small><b>${chosenClass().name}</b></span><em>Change ▸</em></button>
-        <div class="menu-buttons title-play">
-          <button class="menu-button daily-button" data-action="daily">📅 Daily Brew <small>${classOfTheDay(todayKey()).icon} ${dailyTwists(todayKey()).title}</small></button>
-          <button class="menu-button" data-action="coop">👥 Co-op <small data-coop-count>${coopLabel(this.coopRooms)}</small></button>
-          <button class="menu-button" data-action="leaderboard" data-board="all">🏆 Leaderboard</button>
-        </div>
-        <div class="menu-buttons title-prepare">
-          ${this.prepareButtons()}
-          <button class="menu-button" data-action="garden-visit">👀 Visit garden ${gardenLabel(this.liveGardens)}</button>
-        </div>
-        <p class="prompt">or press Space</p>
-        <div class="title-footer">
-          ${this.tagChip()}
-          ${this.saveChip()}
-          ${meta.runs > 0 || meta.gentle ? `<button type="button" data-action="toggle-gentle" title="${GENTLE_TEXT}">🌿 Gentle Brew: ${meta.gentle ? 'on' : 'off'}</button>` : ''}
-          <button type="button" data-action="cycle-graphics" title="Low runs smoothly on older phones">🖥 Graphics: ${GRAPHICS_LABELS[this.graphics ?? 'auto']}</button>
-          ${canFullscreen() ? `<button type="button" data-action="toggle-fullscreen">⛶ Fullscreen${isFullscreen() ? ': on' : ''}</button>` : needsHomeScreen() ? '<button type="button" data-action="fullscreen-help">⛶ Fullscreen</button>' : ''}
-          ${this.newVersion ? `<button type="button" class="update-pill" data-action="reload" title="The game was updated while you played">✨ v${escapeHtml(this.newVersion)} is out · reload</button>` : ''}
-          <button type="button" data-action="changelog">📜 What's new · v${VERSION}</button>
-        </div>
-      </div>`
+        <button class="start-button" data-action="start">Start run</button>
+        ${meta.gentle ? `<button type="button" class="gentle-note" data-action="settings" title="${GENTLE_TEXT}">🌿 Gentle Brew is on</button>` : ''}
+      </div>
+      <nav class="title-dock" aria-label="Ways to play">${this.titleDock()}</nav>`
     );
   }
 
@@ -1000,52 +994,57 @@ ${ meta.runs > 0 ? '' :
     );
   }
 
-  /** Who's playing: account level, rank, and what they've done so far (title screen, after the first run). */
-  profile(best) {
+  /** Top left of the title (after the first run): level, name and rank, the bar to the next level. Opens the profile. */
+  levelCard() {
     const { level, rank, progress } = accountLevel(meta);
-    const achieved = ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length;
-    const stats = [
-      `🎮 ${meta.runs} run${meta.runs === 1 ? '' : 's'}`,
-      `🌊 best wave ${meta.bestWave}`,
-      best ? `⭐ ${best.toLocaleString()}` : '',
-      `🏆 ${achieved}/${ACHIEVEMENTS.length}`,
-      meta.victories ? `👑 ${meta.victories} victor${meta.victories > 1 ? 'ies' : 'y'}` : '',
-      meta.streak?.count > 1 ? `🔥 ${meta.streak.count}-day streak` : '',
-      meta.decor?.length ? `🌷 ${gardenBeauty(meta.decor)} beauty` : '',
-    ].filter(Boolean);
-    return `<div class="profile">
+    const name = meta.profile?.name;
+    return `<button type="button" class="level-card" data-action="player" title="Your profile">
       <span class="profile-level"><b>${level}</b><small>LV</small></span>
-      <span class="profile-info"><b>${meta.profile?.name ? `${escapeHtml(meta.profile.name)} · ` : ''}${rank}</b><span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>
-      <small>${stats.join(' · ')}</small></span>
-    </div>`;
+      <span class="profile-info"><b>${name ? `${escapeHtml(name)} · ` : ''}${rank}</b><span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span></span>
+      <em aria-hidden="true">▸</em>
+    </button>`;
   }
 
-  /** The daily gift and the kettle: they glow when they're ready, otherwise they count down. */
   /**
-   * The run preparation buttons. A new player sees none of them (just Start run and the ways to play); after the
-   * first run they all appear at once, marked ✨ New until the next run starts (`meta.seenUnlocks`).
+   * The title's dock: the ways to play, then (after the first run) preparing a run and the garden, then the daily
+   * gift and the kettle. A new player sees only the ways to play and Visit; after the first run the rest appears,
+   * marked New until the next run starts (`meta.seenUnlocks`).
    */
-  prepareButtons() {
-    if (!meta.runs) return '';
-    const fresh = meta.seenUnlocks ? '' : ' fresh';
+  titleDock() {
+    const tile = (action, icon, label, { badge = '', title = '', extra = '', attrs = '' } = {}) =>
+      `<button type="button" class="dock-tile${extra}" data-action="${action}"${title ? ` title="${escapeHtml(title)}"` : ''}${attrs}><span class="dock-icon">${icon}</span><span class="dock-label">${label}</span>${badge}</button>`;
+    const daily = classOfTheDay(todayKey());
+    const play = [
+      tile('daily', '📅', 'Daily Brew', { title: `Today: ${daily.name} · ${dailyTwists(todayKey()).title}`, badge: `<em class="dock-badge plain">${daily.icon}</em>` }),
+      tile('coop', '👥', 'Co-op', { badge: coopBadge(this.coopRooms) }),
+      tile('leaderboard', '🏆', 'Leaderboard', { attrs: ' data-board="all"' }),
+    ];
+    const visit = tile('garden-visit', '👀', 'Visit', { title: 'Visit a garden', badge: gardenLabel(this.liveGardens) });
+    const sep = '<span class="dock-sep"></span>';
+    if (!meta.runs) return [...play, sep, visit].join('');
+    const extra = meta.seenUnlocks ? '' : ' fresh';
+    const isNew = meta.seenUnlocks ? '' : '<em class="dock-badge">New</em>';
     const unseenWear = unlockedWearables(meta).filter((id) => !(meta.wearablesSeen ?? []).includes(id)).length;
-    const isNew = meta.seenUnlocks ? '' : '<em class="new-tag">✨ New</em>';
-    return `
-      <button class="menu-button${fresh}" data-action="pantry">🍃 Pantry <small>${meta.leaves}</small>${isNew}</button>
-      <button class="menu-button${fresh}" data-action="keepsakes">${currentKeepsake().icon} Keepsake${isNew}</button>
-      <button class="menu-button${fresh}" data-action="steeping">🔥 Steeping <small>${meta.gentle ? 'off · 🌿 Gentle' : steepLevel() ? `Steep ${steepLevel()}` : 'off'}</small>${isNew}</button>
-      <button class="menu-button${fresh}" data-action="garden">🏡 My garden <small>${ownedTrinkets(meta).length}/${TRINKETS.length}</small>${isNew}</button>
-      <button class="menu-button${fresh || unseenWear ? ' fresh' : ''}" data-action="wardrobe">👕 Wardrobe <small>${unlockedWearables(meta).length}/${WEARABLES.length}</small>${unseenWear ? `<em class="new-tag">${unseenWear} new</em>` : isNew}</button>`;
+    const steep = meta.gentle ? '🌿' : steepLevel() || '';
+    const prepare = [
+      tile('pantry', '🍃', 'Pantry', { extra, badge: isNew, title: `${meta.leaves} Golden Leaves` }),
+      tile('keepsakes', currentKeepsake().icon, 'Keepsake', { extra, badge: isNew }),
+      tile('steeping', '🔥', 'Steeping', { extra, badge: isNew || (steep ? `<em class="dock-badge plain">${steep}</em>` : ''), title: meta.gentle ? 'Off: Gentle Brew is on' : steepLevel() ? `Steep ${steepLevel()}` : 'Off' }),
+      tile('wardrobe', '👕', 'Wardrobe', { extra: extra || (unseenWear ? ' fresh' : ''), badge: unseenWear ? `<em class="dock-badge">${unseenWear}</em>` : isNew, title: `${unlockedWearables(meta).length}/${WEARABLES.length} unlocked` }),
+      tile('garden', '🏡', 'My garden', { extra, badge: isNew, title: `${ownedTrinkets(meta).length}/${TRINKETS.length} trinkets` }),
+      visit,
+    ];
+    const now = Date.now();
+    const rewards = [this.rewardTile('gift', giftStatus(meta, now)), this.rewardTile('kettle', kettleStatus(meta, now))];
+    return [...play, sep, ...prepare, sep, ...rewards].join('');
   }
 
-  rewardRow() {
-    const now = Date.now();
-    const gift = giftStatus(meta, now);
-    const kettle = kettleStatus(meta, now);
-    return `<div class="reward-row">
-      <button type="button" class="reward-chip ${gift.ready ? 'ready' : ''}" data-action="claim-gift" data-reward="gift">🎁 <span>${gift.ready ? `Daily gift · day ${gift.day}` : `Next gift <time>${clock(gift.nextIn)}</time>`}</span></button>
-      <button type="button" class="reward-chip ${kettle.ready ? 'ready' : ''}" data-action="claim-kettle" data-reward="kettle">🫖 <span>${kettle.ready ? 'The kettle is ready!' : `Kettle brewing <time>${clock(kettle.nextIn)}</time>`}</span></button>
-    </div>`;
+  /** The daily gift or the kettle in the dock: a ring fills while it counts down, and it glows when it's ready. */
+  rewardTile(kind, state) {
+    const gift = kind === 'gift';
+    const label = state.ready ? (gift ? `Day ${state.day} gift` : 'Tea ready') : `<time>${clock(state.nextIn)}</time>`;
+    const title = state.ready ? (gift ? 'Claim your daily gift' : 'The kettle is ready') : gift ? 'Next daily gift' : 'The kettle is brewing';
+    return `<button type="button" class="dock-tile reward-tile${state.ready ? ' ready' : ''}" data-action="claim-${kind}" data-reward="${kind}" title="${title}" style="--p:${rewardProgress(kind, state)}"><span class="dock-icon">${gift ? '🎁' : '🫖'}</span><span class="dock-label">${label}</span></button>`;
   }
 
   /** Keeps the reward countdowns on the title screen ticking; redraws a chip when it becomes ready. */
@@ -1058,6 +1057,7 @@ ${ meta.runs > 0 ? '' :
       if (state.ready !== chip.classList.contains('ready')) return true; // the caller redraws the title
       const time = chip.querySelector('time');
       if (time) setText(time, clock(state.nextIn));
+      chip.style.setProperty('--p', rewardProgress(chip.dataset.reward, state));
     }
     return false;
   }
@@ -1147,7 +1147,6 @@ ${ meta.runs > 0 ? '' :
       tool('garden-night', night ? '🌙 Night' : '☀️ Day', 'Day or night (N)', night),
       tool('garden-reset', '🧭 View', 'Back to the usual view'),
       tool('garden-plan', '🗺 Top', 'Look straight down'),
-      tool('garden-photo', '📸 Photo', 'Save a picture of your garden'),
       tool('garden-share', '🔗 Share', 'Your garden code, for friends to visit'),
       tool('garden-visit', '👀 Visit', "Look at someone else's garden"),
       tool('garden-collapse', collapsed ? '▴ Tray' : '▾ Tray', 'Show or hide the tray'),
@@ -1225,7 +1224,6 @@ ${ meta.runs > 0 ? '' :
       info.own ? tool('garden-share', '🔗 Share') : tool('garden', '🏡 My garden'),
       tool('garden-night', info.night ? '🌙' : '☀️'),
       tool('garden-music', `🎵 ${info.song?.icon ?? ''}`),
-      tool('garden-photo', '📸'),
       tool('garden-leave', '✓ Leave', 'primary'),
     ].join('');
     const where = info.own ? 'Your garden' : `${escapeHtml(info.owner ?? 'A frog')}'s garden`;
@@ -1419,6 +1417,83 @@ ${ meta.runs > 0 ? '' :
   saveChip() {
     const label = { online: escapeHtml(cloud.code ?? ''), connecting: 'Connecting…', offline: 'Offline' }[cloud.status];
     return `<button type="button" class="save-chip" data-action="save" title="Your save code: load your progress on another device">☁️ ${label}</button>`;
+  }
+
+  /**
+   * Settings (the title's ⚙️): the pause menu's options plus Gentle Brew and fullscreen. `autoSpit` is null on
+   * touch screens, where Tode always spits by himself.
+   */
+  showSettings({ sound, graphics, calmFx, showFps, autoSpit }) {
+    const text = (label, note) => `<span class="setting-text"><b>${label}</b>${note ? `<small>${note}</small>` : ''}</span>`;
+    const toggle = (action, on, label, note = '') =>
+      `<div class="setting">${text(label, note)}<button type="button" class="switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="${label}" data-action="${action}"><i></i></button></div>`;
+    // A choice of a few: the chosen one has no action, the others switch to themselves.
+    const choice = (label, note, options) =>
+      `<div class="setting">${text(label, note)}<span class="segmented">${options
+        .map(([title, on, action]) => `<button type="button"${on ? ' class="on" aria-pressed="true"' : ` aria-pressed="false" ${action}`}>${title}</button>`)
+        .join('')}</span></div>`;
+    const fullscreen = canFullscreen()
+      ? toggle('toggle-fullscreen', isFullscreen(), '⛶ Fullscreen')
+      : needsHomeScreen()
+        ? `<div class="setting">${text('⛶ Fullscreen', 'Add Todeity to your Home Screen')}<button type="button" class="menu-button" data-action="fullscreen-help">How?</button></div>`
+        : '';
+    this.showModal(
+      'settings',
+      `<h2>⚙️ Settings</h2>
+      <h3>Playing</h3>
+      ${toggle('toggle-gentle', meta.gentle, '🌿 Gentle Brew', `${GENTLE_TEXT} Solo runs only.`)}
+      ${autoSpit === null ? '' : choice('💧 Spit', 'By himself, or while you hold the left mouse button', [['Auto', autoSpit, 'data-action="toggle-autospit"'], ['Hold', !autoSpit, 'data-action="toggle-autospit"']])}
+      <h3>Sound</h3>
+      ${toggle('toggle-music', sound.music, '🎵 Music')}
+      ${toggle('toggle-sfx', sound.sfx, '🔊 Sound effects')}
+      <h3>Screen</h3>
+      ${choice('🖥 Graphics', 'Low runs smoothly on older phones', GRAPHICS.map((id) => [GRAPHICS_LABELS[id], graphics === id, `data-action="set-graphics" data-graphics="${id}"`]))}
+      ${fullscreen}
+      ${choice('✨ Effects', 'Calm: softer screen effects, no spit trails', [['Full', !calmFx, 'data-action="toggle-calm"'], ['Calm', calmFx, 'data-action="toggle-calm"']])}
+      ${toggle('toggle-fps', showFps, '📈 FPS counter')}
+      <div class="menu-buttons split-end"><button type="button" class="link-button" data-action="changelog">📜 What's new in v${VERSION}</button><button class="menu-button primary" data-action="close-modal">Done</button></div>`
+    );
+  }
+
+  /** The player profile (the title's level card): name and tag, level, records, and the progress code. */
+  showPlayer(best) {
+    const { level, rank, progress } = accountLevel(meta);
+    const profile = meta.profile ?? {};
+    const achieved = ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length;
+    const stats = [
+      [meta.runs, `run${meta.runs === 1 ? '' : 's'}`],
+      [`Wave ${meta.bestWave}`, 'deepest run'],
+      best ? [best.toLocaleString(), 'best score'] : null,
+      [`${achieved}/${ACHIEVEMENTS.length}`, 'achievements'],
+      meta.victories ? [meta.victories, `victor${meta.victories > 1 ? 'ies' : 'y'}`] : null,
+      meta.decor?.length ? [gardenBeauty(meta.decor), 'garden beauty'] : null,
+    ].filter(Boolean);
+    const streak = meta.streak?.count > 1 ? ` · 🔥 ${meta.streak.count}-day streak` : '';
+    const name = profile.name
+      ? `<b class="player-name" style="color:${profile.color ?? '#c8f77a'}">${escapeHtml(profile.name)}</b>${profile.tag ? `<small>#${escapeHtml(profile.tag)}</small>` : ''}`
+      : '<b class="player-name">No name yet</b>';
+    const code =
+      cloud.status === 'online'
+        ? `<div class="player-code"><span class="save-code">${escapeHtml(cloud.code)}</span><button class="menu-button" data-action="copy-save">📋 Copy</button></div>
+          <p class="sub save-status"></p>`
+        : `<p class="sub">${cloud.status === 'connecting' ? 'Connecting to your cloud save…' : "Can't reach the server: progress is saved in this browser only for now."}</p>`;
+    this.showModal(
+      'player',
+      `<div class="player-head">
+        <span class="profile-level"><b>${level}</b><small>LV</small></span>
+        <div class="player-info">
+          <div class="player-title">${name}<button type="button" class="menu-button" data-action="edit-name">${profile.name ? '✏️ Edit name' : '🏷 Pick a name'}</button></div>
+          <span class="player-rank">${rank}${streak}</span>
+          <span class="profile-bar"><i style="width:${Math.round(progress * 100)}%"></i></span>
+          <small>${Math.round(progress * 100)}% of the way to level ${level + 1}</small>
+        </div>
+      </div>
+      <div class="player-stats">${stats.map(([value, label]) => `<div><b>${value}</b><small>${label}</small></div>`).join('')}</div>
+      <h3>☁️ Your progress code</h3>
+      <p class="sub">Golden Leaves, Pantry, achievements and your garden are saved online under this code. Enter it on another device to play there.</p>
+      ${code}
+      <div class="menu-buttons split-end"><button type="button" class="link-button" data-action="save">Use a code from another device</button><button class="menu-button primary" data-action="close-modal">Close</button></div>`
+    );
   }
 
   /** Cloud save popup: this browser's code, and a field to continue another save. `message` / `error`: a result. */
@@ -1934,7 +2009,6 @@ export function formatTime(seconds) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** "3 open rooms" for the title's Co-op button (nothing without a server). */
 /** A green "live" badge with the number of public gardens that have frogs in them (empty when there are none). */
 function gardenLabel(gardens) {
   const live = (gardens ?? []).filter((garden) => garden.frogs > 0);
@@ -1944,10 +2018,18 @@ function gardenLabel(gardens) {
   return `<small class="live-count" data-garden-count title="${title}">${live.length}</small>`;
 }
 
-function coopLabel(rooms) {
-  if (!rooms) return '';
-  const open = rooms.rooms.length;
-  return open ? `${open} open room${open > 1 ? 's' : ''}` : rooms.playing ? `${rooms.playing} playing` : '';
+/** The Co-op tile's badge: how many public rooms are open (nothing without a server or open rooms). */
+function coopBadge(rooms) {
+  const open = rooms?.rooms.length ?? 0;
+  if (!open) return '<em class="dock-badge live" data-coop-count hidden></em>';
+  return `<em class="dock-badge live" data-coop-count title="${open} open room${open > 1 ? 's' : ''}">${open}</em>`;
+}
+
+/** How far the gift (a day) or the kettle (KETTLE_HOURS) has come, 0…1, for the dock tile's ring. */
+function rewardProgress(kind, state) {
+  if (state.ready) return 1;
+  const period = kind === 'gift' ? 86_400_000 : KETTLE_HOURS * 3_600_000;
+  return Math.max(0, Math.min(1, 1 - state.nextIn / period)).toFixed(3);
 }
 
 /** 3:05:09 or 12:34 for a countdown in ms. */

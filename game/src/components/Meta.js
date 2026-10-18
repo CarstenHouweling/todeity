@@ -56,7 +56,7 @@ function load() {
 }
 
 export const meta = withRewards(load());
-// The title reveals its run preparation buttons after the first run (Hud.prepareButtons); players from before
+// The title reveals its run preparation buttons after the first run (Hud.titleDock); players from before
 // that already know them.
 meta.seenUnlocks ??= meta.runs > 1;
 

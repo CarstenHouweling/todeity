@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import '@fontsource/grandstander/800.css'; // the "Todeity" wordmark only (OFL, bundled: no font requests to Google)
 import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
@@ -7676,6 +7677,7 @@ let shared = null; // { blob, file, text, image } for the open share popup
 async function openShare() {
   if (!lastRun || !lastBuild) return;
   play('click');
+  achieve('photo'); // Say Cheese: the run's picture card (C is the only other way, and tablets have no keyboard)
   const url = `${location.origin}/`;
   const card = drawShareCard(lastRun, lastBuild, captureFrame(), url);
   const blob = await new Promise((resolve) => card.toBlob(resolve, 'image/png'));
@@ -8070,7 +8072,6 @@ const MENU_ACTIONS = {
   },
   'garden-reset': () => garden.resetView(),
   'garden-plan': () => garden.planView(),
-  'garden-photo': gardenPhoto,
   'garden-share': shareGarden,
   'garden-visit': async () => {
     // (also on the title screen) The popup opens at once; the public gardens fill in when the server answers.
@@ -8133,15 +8134,17 @@ const MENU_ACTIONS = {
   'toggle-calm': () => {
     settings.calmFx = !settings.calmFx;
     saveSettings();
-    showPauseMenu();
-  },
-  'cycle-graphics': () => {
-    settings.graphics = GRAPHICS[(GRAPHICS.indexOf(settings.graphics) + 1) % GRAPHICS.length];
-    hud.graphics = settings.graphics;
-    saveSettings();
-    applyGraphicsSetting();
-    play('click');
     refreshMenu();
+  },
+  'cycle-graphics': () => setGraphics(GRAPHICS[(GRAPHICS.indexOf(settings.graphics) + 1) % GRAPHICS.length]),
+  'set-graphics': ({ graphics }) => GRAPHICS.includes(graphics) && setGraphics(graphics),
+  settings: () => {
+    play('click');
+    openSettings();
+  },
+  player: () => {
+    play('click');
+    hud.showPlayer(bestScore);
   },
   'toggle-fps': () => {
     settings.showFps = !settings.showFps;
@@ -8154,7 +8157,7 @@ const MENU_ACTIONS = {
     settings.autoSpit = !settings.autoSpit;
     hud.autoSpit = settings.autoSpit;
     saveSettings();
-    showPauseMenu();
+    refreshMenu();
   },
   buy: ({ id }) => {
     if (buy(id)) {
@@ -8193,14 +8196,15 @@ const MENU_ACTIONS = {
   resume,
   restart: () => landscapeFirst(() => startRun()),
   mute: toggleMute,
-  photo: takePhoto,
   'toggle-music': () => {
     setSound('music', !soundSettings().music);
-    showPauseMenu();
+    hud.setMuted(!soundSettings().sfx && !soundSettings().music);
+    refreshMenu();
   },
   'toggle-sfx': () => {
     setSound('sfx', !soundSettings().sfx);
-    showPauseMenu();
+    hud.setMuted(!soundSettings().sfx && !soundSettings().music);
+    refreshMenu();
   },
   'toggle-fullscreen': toggleFullscreen,
   'fullscreen-help': () => {
@@ -8231,7 +8235,7 @@ const MENU_ACTIONS = {
     meta.gentle = !meta.gentle;
     saveMeta();
     play('click');
-    hud.showTitle(bestScore);
+    refreshMenu();
   },
   'gentle-on': () => {
     meta.gentle = true;
@@ -8266,6 +8270,27 @@ onServerBack(async () => {
 function refreshMenu() {
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pause') showPauseMenu();
+  if (hud.modalIs('settings')) openSettings();
+}
+
+/** The title's ⚙️ Settings popup, drawn from the current settings. */
+function openSettings() {
+  hud.showSettings({
+    sound: soundSettings(),
+    graphics: settings.graphics,
+    calmFx: settings.calmFx,
+    showFps: settings.showFps,
+    autoSpit: touch.enabled ? null : settings.autoSpit,
+  });
+}
+
+function setGraphics(graphics) {
+  settings.graphics = graphics;
+  hud.graphics = graphics;
+  saveSettings();
+  applyGraphicsSetting();
+  play('click');
+  refreshMenu();
 }
 // Progress arrived from the server: redraw the menus that show it.
 cloud.onChange = () => {
@@ -8276,6 +8301,7 @@ cloud.onChange = () => {
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pantry') hud.showPantry();
   if (hud.modal.classList.contains('save') && !hud.modal.hidden && !hud.modal.querySelector('.save-ok, .lobby-error')) hud.showSave();
+  else if (hud.modalIs('player')) hud.showPlayer(bestScore);
 };
 cloud.onRefused = (error) => hud.runRefused(error);
 onFullscreenChange(() => {

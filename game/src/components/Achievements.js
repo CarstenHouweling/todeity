@@ -47,7 +47,7 @@ export const ACHIEVEMENTS = [
   { id: 'bitter', icon: '🍋', name: 'Acquired Taste', text: "Survive a Bitter Shrine's wave.", reward: 10 },
   { id: 'coop', icon: '👥', name: 'Pond Party', text: 'Defeat a boss in co-op.', reward: 15 },
   { id: 'daily', icon: '📅', name: 'Daily Brewer', text: 'Reach wave 10 in a Daily Brew.', reward: 15 },
-  { id: 'photo', icon: '📸', name: 'Say Cheese', text: 'Take a photo.', reward: 3 },
+  { id: 'photo', icon: '📸', name: 'Say Cheese', text: 'Share a picture of a run (📤 after a run, or C).', reward: 3 },
   // Gardens (v0.24)
   { id: 'tower', icon: '🗼', name: 'Frog Tower', text: 'Be part of a tower of three frogs in a garden.', reward: 10 },
   { id: 'party', icon: '🎉', name: 'Garden Party', text: 'Set off on a co-op run from a garden party.', reward: 12 },

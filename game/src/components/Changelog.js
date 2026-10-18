@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.9',
+    date: '2026-10-18',
+    title: 'A calmer title',
+    changes: [
+      '🏠 A new, calmer title screen: your level at the top, the frog you play and a big Start run in the middle, everything else in a dock at the bottom',
+      '🎁 The daily gift and the kettle sit in the dock and fill up a ring while they count down',
+      '⚙️ Settings on the title screen: Gentle Brew, sound, graphics, fullscreen and more in one place',
+      '🐸 Tap your level to see your profile: name, records and your progress code',
+      '📸 The screenshot buttons are gone (C still saves a screenshot on a keyboard). Say Cheese now comes from 📤 Share run too, so tablets can earn it',
+    ],
+  },
+  {
     version: '0.29.8',
     date: '2026-10-18',
     title: 'Look before you sip',

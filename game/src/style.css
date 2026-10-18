@@ -435,10 +435,6 @@ canvas.game {
   background: radial-gradient(ellipse at center, rgba(10, 40, 15, 0.35), rgba(10, 30, 15, 0.75));
 }
 
-.title-screen .panel {
-  max-width: 640px;
-}
-
 .title-screen h1 {
   font-size: clamp(40px, 8vw, 76px);
   color: #e9ffd9;
@@ -847,27 +843,9 @@ canvas.game {
 }
 
 /* Title buttons that appear after the first run glow until the next run starts. */
-.menu-button.fresh {
-  position: relative;
-  border-color: #ffd76a;
-  box-shadow: 0 0 0 2px rgba(255, 215, 106, 0.35), 0 0 18px rgba(255, 215, 106, 0.35);
-}
-
-.menu-button .new-tag {
-  position: absolute;
-  top: -9px;
-  right: -6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: #ffd76a;
-  color: #3b2a14;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
-}
-
 /* Visit garden: how many public gardens have frogs in them right now (a pulsing green dot says it's live). */
-.menu-button small.live-count {
+.menu-button small.live-count,
+.dock-tile small.live-count {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -879,7 +857,8 @@ canvas.game {
   opacity: 1;
 }
 
-.menu-button small.live-count::before {
+.menu-button small.live-count::before,
+.dock-tile small.live-count::before {
   content: '';
   width: 6px;
   height: 6px;
@@ -1856,8 +1835,575 @@ body.touch .owned {
 
 .menu.title-screen {
   justify-content: flex-start;
-  padding-top: 5vh;
-  background: linear-gradient(rgba(10, 30, 15, 0.7), rgba(10, 30, 15, 0.15) 60%, rgba(10, 30, 15, 0));
+  background: linear-gradient(rgba(10, 30, 15, 0.7), rgba(10, 30, 15, 0.15) 45%, rgba(10, 30, 15, 0) 70%, rgba(10, 30, 15, 0.5));
+}
+
+/* The title (v0.29.9, layout "3c"): level card and small extras on top, the name, the frog and Start run in the
+   middle, a dock with everything else at the bottom. The corner buttons hide (sound is in ⚙️ Settings). */
+body.title-open .corner-buttons {
+  display: none;
+}
+
+.title-top {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title-corner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.title-pill,
+.title-round {
+  height: 44px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 30, 15, 0.62);
+  color: rgba(255, 255, 255, 0.88);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.title-pill {
+  padding: 0 16px;
+}
+
+.title-round {
+  width: 44px;
+  padding: 0;
+  font-size: 19px;
+}
+
+.title-pill:hover,
+.title-round:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* A newer version is live (after a deploy): reload when it suits you */
+.title-pill.update-pill {
+  border-color: rgba(255, 211, 107, 0.7);
+  background: rgba(255, 211, 107, 0.2);
+  color: #fff3c4;
+  font-weight: 700;
+}
+
+.level-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px 10px 10px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  background: rgba(10, 30, 15, 0.62);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.level-card:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.level-card .profile-info {
+  width: 240px;
+  gap: 8px;
+}
+
+.level-card .profile-info b {
+  overflow: hidden;
+  font-size: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.level-card .profile-bar {
+  height: 8px;
+  border-radius: 4px;
+}
+
+.level-card em {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.title-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: clamp(4px, 2vh, 24px) 0 24px;
+}
+
+.title-screen h1.wordmark {
+  font-family: 'Grandstander', system-ui, sans-serif;
+  font-size: clamp(52px, 9vw, 88px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.title-main .subtitle {
+  margin: 6px 0 14px;
+}
+
+.title-main .story,
+.title-main .controls {
+  max-width: 680px;
+}
+
+.title-main .class-chip {
+  margin: 8px 0 20px;
+}
+
+.start-button {
+  padding: 18px 64px;
+  border: 2px solid #ffe08a;
+  border-radius: 999px;
+  background: linear-gradient(#ffd75a, #f2a628);
+  color: #3b2a14;
+  font: inherit;
+  font-size: 30px;
+  font-weight: 800;
+  box-shadow: 0 6px 0 #b0700a, 0 0 34px rgba(255, 200, 60, 0.55);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, filter 0.1s;
+}
+
+.start-button:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.start-button:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #b0700a, 0 0 24px rgba(255, 200, 60, 0.45);
+}
+
+.gentle-note {
+  margin-top: 16px;
+  padding: 5px 12px;
+  border: 1px solid rgba(200, 255, 170, 0.4);
+  border-radius: 999px;
+  background: rgba(10, 30, 15, 0.55);
+  color: #d8ffc4;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.title-dock {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  background: rgba(10, 30, 15, 0.74);
+}
+
+.dock-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 80px;
+  padding: 10px 0 8px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dock-tile:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 25px;
+  line-height: 1;
+}
+
+.dock-label {
+  white-space: nowrap;
+}
+
+/* New after the first run: a gold ring until the next run starts */
+.dock-tile.fresh .dock-icon {
+  box-shadow: 0 0 0 2px #ffd76a, 0 0 14px rgba(255, 215, 106, 0.5);
+}
+
+.dock-badge,
+.dock-tile small.live-count {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: #ffcf4a;
+  color: #3b2a14;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.dock-badge.plain {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(10, 30, 15, 0.92);
+  color: #fff;
+  line-height: 16px;
+}
+
+.dock-badge.live {
+  background: #2f9e44;
+  color: #fff;
+}
+
+.dock-sep {
+  width: 1px;
+  height: 52px;
+  margin: 0 6px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* The gift and the kettle: a ring fills as they count down (--p, 0…1), and they glow when ready */
+.reward-tile .dock-icon {
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, rgba(16, 40, 22, 0.96) 84%, transparent 86%),
+    conic-gradient(var(--ring, #ffcf5a) calc(var(--p, 0) * 1turn), rgba(255, 255, 255, 0.18) 0);
+}
+
+.reward-tile[data-reward='kettle'] {
+  --ring: #8fe36a;
+}
+
+.reward-tile time {
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.reward-tile.ready .dock-icon {
+  background: linear-gradient(#ffe27a, #f0a020);
+  animation: reward-ready 1s ease-in-out infinite alternate;
+}
+
+.reward-tile.ready .dock-label {
+  color: #ffe680;
+}
+
+/* Phones held sideways: the whole title fits without scrolling (menus are zoomed to 0.68 there too). */
+@media (max-height: 500px) {
+  .title-main {
+    margin: 0 0 10px;
+  }
+
+  .title-screen h1.wordmark {
+    font-size: 64px;
+  }
+
+  .title-main .subtitle {
+    margin: 4px 0 8px;
+  }
+
+  .title-main .class-chip {
+    margin: 2px 0 14px;
+  }
+
+  .gentle-note {
+    margin-top: 10px;
+  }
+
+  .dock-tile {
+    padding: 6px 0 4px;
+  }
+}
+
+@media (max-width: 700px) {
+  .title-pill .long,
+  .dock-sep {
+    display: none;
+  }
+
+  .level-card .profile-info {
+    width: auto;
+    max-width: 46vw;
+  }
+
+  .dock-tile {
+    width: 72px;
+  }
+
+  .start-button {
+    padding: 15px 52px;
+    font-size: 26px;
+  }
+}
+
+/* Settings and the player profile (title screen popups) */
+.modal.settings .panel,
+.modal.player .panel {
+  width: min(600px, 100%);
+  text-align: left;
+}
+
+.modal.settings h2 {
+  text-align: center;
+}
+
+.modal.settings h3,
+.modal.player h3 {
+  margin: 16px 0 2px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #ffe680;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-text b {
+  font-size: 17px;
+}
+
+.setting-text small {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: left 0.15s;
+}
+
+.switch.on {
+  background: #5ec26a;
+}
+
+.switch.on i {
+  left: 25px;
+}
+
+.segmented {
+  display: flex;
+  flex: none;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.segmented button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.segmented button.on {
+  background: #e9ffd9;
+  color: #173d1f;
+  cursor: default;
+}
+
+.menu-buttons.split-end {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.link-button {
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.player-head .profile-level {
+  width: 76px;
+  height: 76px;
+}
+
+.player-head .profile-level b {
+  font-size: 32px;
+}
+
+.player-head .profile-level small {
+  font-size: 12px;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.player-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.player-name {
+  font-size: 26px;
+}
+
+.player-title small {
+  opacity: 0.6;
+}
+
+.player-title .menu-button {
+  margin-left: auto;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.player-rank {
+  font-weight: 700;
+  color: #ffe680;
+}
+
+.player-info .profile-bar {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.player-info > small {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.player-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.player-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.player-stats b {
+  font-size: 20px;
+}
+
+.player-stats small {
+  font-size: 13px;
+  opacity: 0.72;
+}
+
+.player-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.player-code .save-code {
+  flex: 1;
+  margin: 0;
+  padding: 10px 14px;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  font-size: 24px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .player-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Story cut-scene */
@@ -2367,13 +2913,14 @@ body.touch .menu .prompt {
 
 .class-chip {
   display: inline-flex;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
   margin: 12px auto 0;
-  padding: 4px 14px 4px 4px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: 14px;
-  background: rgba(10, 30, 15, 0.45);
+  padding: 6px 24px 6px 8px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 22px;
+  background: rgba(14, 44, 20, 0.78);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
   color: #fff;
   font: inherit;
   text-align: left;
@@ -2385,20 +2932,30 @@ body.touch .menu .prompt {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.class-chip span {
+  min-width: 100px;
+}
+
 .class-chip span small {
   display: block;
-  font-size: 11px;
+  font-size: 14px;
   opacity: 0.75;
 }
 
 .class-chip span b {
   display: block;
-  font-size: 17px;
+  font-size: 25px;
+  line-height: 1.15;
+}
+
+.class-chip .class-face {
+  width: 68px;
+  height: 68px;
 }
 
 .class-chip em {
-  margin-left: 8px;
-  font-size: 13px;
+  margin-left: 10px;
+  font-size: 18px;
   font-style: normal;
   font-weight: 700;
   color: #ffd76a;
@@ -2829,44 +3386,7 @@ body.touch .steep-badge {
   text-shadow: 0 0 10px #c8d8ff, 0 0 22px #9ff4ff, 0 0 30px #c8b0ff, 0 1px 2px #000;
 }
 
-/* A newer version is live (after a deploy): reload when it suits you */
-.title-footer .update-pill {
-  border-color: rgba(255, 211, 107, 0.7);
-  background: rgba(255, 211, 107, 0.2);
-  color: #fff3c4;
-  font-weight: 700;
-}
-
-/* Title screen: start, ways to play, preparing a run, then small extras */
-.title-screen .menu-buttons {
-  margin-top: 10px;
-}
-
-.title-screen .title-start {
-  margin-top: 20px;
-}
-
-.title-start .menu-button {
-  padding: 14px 48px;
-  font-size: 22px;
-}
-
-.title-prepare .menu-button {
-  padding: 7px 14px;
-  border-width: 1px;
-  font-size: 15px;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.title-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.title-footer button,
+/* The save code chip (Pantry) */
 .save-chip {
   padding: 5px 12px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -2875,17 +3395,13 @@ body.touch .steep-badge {
   color: rgba(255, 255, 255, 0.82);
   font: inherit;
   font-size: 13px;
+  letter-spacing: 0.5px;
   cursor: pointer;
 }
 
-.title-footer button:hover,
 .save-chip:hover {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
-}
-
-.save-chip {
-  letter-spacing: 0.5px;
 }
 
 /* Cloud save popup */
@@ -2919,11 +3435,6 @@ body.touch .steep-badge {
   color: #b8f5a0;
 }
 
-.title-screen .prompt {
-  margin-top: 12px;
-  font-size: 15px;
-}
-
 /* Phones: a tighter title screen, so every button fits without scrolling */
 @media (max-width: 600px) {
   .title-screen .story {
@@ -2941,10 +3452,6 @@ body.touch .steep-badge {
     font-size: 13px;
   }
 
-  .title-start .menu-button {
-    padding: 12px 40px;
-    font-size: 20px;
-  }
 }
 
 /* iPhone: how to play fullscreen (Add to Home Screen) */
@@ -3050,19 +3557,7 @@ body.touch .steep-badge {
   color: #ffe680;
 }
 
-/* Title: profile, rewards and the garden (v0.19) */
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 4px auto 12px;
-  padding: 8px 14px;
-  max-width: 520px;
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.28);
-  text-align: left;
-}
-
+/* Account level (title level card, player profile) */
 .profile-level {
   display: flex;
   flex-direction: column;
@@ -3103,38 +3598,6 @@ body.touch .steep-badge {
   display: block;
   height: 100%;
   background: linear-gradient(90deg, #7ed957, #ffe680);
-}
-
-.reward-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin: 6px 0 12px;
-}
-
-.reward-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.reward-chip time { font-variant-numeric: tabular-nums; opacity: 0.8; }
-
-.reward-chip.ready {
-  border-color: #ffd36b;
-  background: linear-gradient(#ffcf4a, #f0a020);
-  color: #3b2a14;
-  font-weight: 800;
-  animation: reward-ready 1s ease-in-out infinite alternate;
 }
 
 @keyframes reward-ready {

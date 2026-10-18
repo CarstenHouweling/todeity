@@ -234,7 +234,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   keep them blocky. `/classes.html` (dev only) previews them all (`preview.sheet([{ move: 'dance', at: 0.3, camera: 'face' }])`).
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
   again too); the first run starts with a skippable story
-  cut-scene (`meta.seenStory`). 📸 / C saves a watermarked screenshot.
+  cut-scene (`meta.seenStory`). C saves a watermarked screenshot (in a garden without the editor's rings; there is no screenshot button anywhere since v0.29.9). The Say Cheese achievement (`photo`) comes from C or from 📤 Share run (`openShare`), so tablets can earn it too.
 - **Finale:** the Empress (wave 20) has a Royal Spiral attack. Bee-zebub (wave 21, a winged devil with a fire aura:
   `components/DevilModel.js`, v0.26.2, built at every graphics level since the old bee model with horns read as
   "very simple") adds
@@ -490,7 +490,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   **UI:** 👕 Wardrobe in the garden bar opens a panel (`hud.wardrobePanel`: slot tabs with what's worn, then the
   slot's items; locked ones show how they unlock; on phones one sideways-scrolling row). While it's open the camera
   comes closer and looks past the frog so he stands below the panel (`garden.dressing(below)`, `goal.shift`). The
-  title screen's 👕 Wardrobe (next to 🏡 My garden, after the first run) opens your garden with the panel open; both
+  title dock's 👕 Wardrobe (next to 🏡 My garden, after the first run) opens your garden with the panel open; both
   buttons count unlocked items not yet seen (`meta.wearablesSeen`, local). To preview models outside the game, build
   frogs with `buildFrog` and `dressFrog` into a scene of their own and render a contact sheet.
 - **Level aura** (v0.26, bolder in v0.26.2: `GardenFx.levelAura` builds a `GardenAura` from
@@ -504,14 +504,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `GET /api/gardens` lists only public ones, at most 30: those with frogs in them right now (fullest first), then
   the loveliest empty ones (`listGardens`; `loveliestGardens()` in saves.js is cached until a public garden's decor,
   name or visibility changes; also in the co-op lobby, and in the 👀 Visit popup, which the title
-  screen's 👀 Visit garden opens too: it shows at once and `hud.setVisitGardens` fills the list in). That button
+  dock's 👀 Visit opens too: it shows at once and `hud.setVisitGardens` fills the list in). That tile
   carries a pulsing green badge with the number of public gardens that have frogs in them (`hud.setLiveGardens`,
   `gardenLabel`; `refreshRooms` fetches the list with the Co-op rooms every 15 s on the title screen). Garden achievements: `tower`, `openhouse`.
 - **Visiting gardens:** the save code is a password, so it is never shared. Each save can get a separate random
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
-  👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a profile on the title (`accountLevel`, shared with the server, curve retuned in v0.27.1 so playing again counts: runs ×60, boss kills ×50, victories ×200, achievements ×15, best wave ×5 xp, level n at 150·(n−1)^1.4 xp, a first full run ~4, 19 runs ~14: level, rank, runs,
-  best wave, achievements, streak) instead of the story and controls.
+  👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a level card on the title (`accountLevel`, shared with the server, curve retuned in v0.27.1 so playing again counts: runs ×60, boss kills ×50, victories ×200, achievements ×15, best wave ×5 xp, level n at 150·(n−1)^1.4 xp, a first full run ~4, 19 runs ~14: level, rank, runs,
+  best wave, achievements, streak in the profile popup it opens) instead of the story and controls.
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
@@ -628,10 +628,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too. Two
   spirits talking at once (a Duo exchange) sit side by side there (`.dialogue:has(.speech + .speech)`, v0.29.5):
   stacked, they pushed the brew offer's Reroll button off the bottom of the screen.
-- **First impressions (v0.25):** a new player's title shows only Start run, the class and the ways to play (Daily
-  Brew, Co-op, Leaderboard) plus Visit garden; the reward chips and the run preparation buttons
-  (`hud.prepareButtons`: Pantry, Keepsake, Steeping, My garden) appear after the first run, glowing ✨ New until the
-  next run starts (`meta.seenUnlocks`, true for players who had more than one run before). The game-over screen hides
+- **First impressions (v0.25):** a new player's title shows the story, the controls, the class, Start run and a dock
+  with the ways to play (Daily Brew, Co-op, Leaderboard) plus Visit; the level card, the gift and kettle and the run
+  preparation tiles (`hud.titleDock`: Pantry, Keepsake, Steeping, Wardrobe, My garden) appear after the first run,
+  ringed in gold with a New badge until the next run starts (`meta.seenUnlocks`, true for players who had more than one run before). The game-over screen hides
   the run's HUD (`body.run-ended`, set by `showMenu`) and moves toasts to the bottom-left corner. **The first
   volley** (`startFirstVolley`/`updateFirstVolley`, `VOLLEY`): Tode clears waves 1–4 standing still, so early in wave
   2 (solo) a shielded stinger bee marks 7 lanes with telegraphs for 1.5 s and fires a slow fan at Tode; it stays
@@ -639,14 +639,25 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   for 2.4 s says "Nimble!" and drops tea leaves and points. **Gentle Brew** (`GENTLE` in Steeping.js, `meta.gentle`):
   +3 hearts, one extra life, stingers ×0.8 (`launchStinger`), score ×0.5; solo outside the Daily Brew only, vows
   don't apply (taking a vow switches it off). The game-over screen offers it after a death before wave 10 by a player
-  whose best is below wave 10 (`offerGentle`); the title footer toggles it (`toggle-gentle`). Scores carry `gentle`
+  whose best is below wave 10 (`offerGentle`); ⚙️ Settings on the title toggles it (`toggle-gentle`), and the
+  title says "🌿 Gentle Brew is on" under Start run while it is. Scores carry `gentle`
   (🌿 on the boards).
-- **Title screen layout:** in order of importance: (after the first run) the profile and the reward chips; a big
-  Start run; the ways to play (Daily Brew, Co-op, Leaderboard); smaller run preparation (Pantry, Keepsake, Steeping,
-  My garden, Visit garden); then small pills (save code, fullscreen, What's new with the version). Keep new entries in that order rather than adding full-size buttons.
-- **Corner buttons:** 📸 and 🔊 always; ⏸ only while a run is playing (`hud.setPauseShown(PLAYING.has(phase))`),
-  never on the title screen or in a garden, where it did nothing.
-- **Fullscreen:** a button in the title and pause menus (`Fullscreen.js`, with the `webkit` API for iPad Safari).
+- **Title screen layout** (v0.29.9, picked from mockups as layout "3c"; `hud.showTitle`): along the top the level
+  card (after the first run: level, name · rank and the bar to the next level; it opens the **profile popup**,
+  `hud.showPlayer`: name and tag with ✏️ Edit name / 🏷 Pick a name, records, the progress code with 📋 Copy) and on
+  the right "📜 vX · What's new" and ⚙️ **Settings** (`hud.showSettings`, opened by `openSettings()` in main.js:
+  Gentle Brew, spit, music, sound effects, graphics, fullscreen, screen effects, FPS counter). In the middle the
+  "Todeity" wordmark (the only text in **Grandstander** 800, bundled with `@fontsource/grandstander`, OFL; everything
+  else keeps the system font), the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
+  Brew, Co-op, Leaderboard | Pantry, Keepsake, Steeping, Wardrobe, My garden, Visit | the gift and the kettle
+  (`rewardTile`: a ring fills as they count down, `--p` from `rewardProgress`; they glow when ready). The menu
+  scrolls when it doesn't fit, the dock wraps on tablets and phones held upright, and short screens tighten the
+  spacing so a phone held sideways needs no scrolling. Settings toggles redraw through `refreshMenu()`, which also
+  redraws an open settings popup (`hud.modalIs('settings')`). New things go in the dock or a popup, not as more
+  buttons in the middle.
+- **Corner buttons:** 🔊; ⏸ only while a run is playing (`hud.setPauseShown(PLAYING.has(phase))`). None on
+  the title screen (`body.title-open`): they sat on its dock, sound is in ⚙️ Settings.
+- **Fullscreen:** a switch in the title's ⚙️ Settings and a button in the pause menu (`Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is
   installable (`public/manifest.webmanifest` with `display: fullscreen`, Apple's `apple-mobile-web-app-*` meta tags,
@@ -685,8 +696,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Pantry (title screen),
   and Tode says a story line after each run. **Cloud saves** (`components/CloudSave.js`, `server/saves.js`): the
   server owns leaves, Pantry levels, achievements and run stats. Every browser gets a save code (`MINT-FROG-42`,
-  two words and a number) on its first visit. A ☁️ pill on the title screen and in the Pantry opens the save
-  popup (`hud.showSave`): copy the code or load another one. At start the server's copy replaces the local one (so editing localStorage doesn't stick); a finished
+  two words and a number) on its first visit. The profile popup (the title's level card) shows the code with 📋 Copy;
+  its "Use a code from another device" and the ☁️ pill in the Pantry open the save popup (`hud.showSave`): copy the code or load another one. At start the server's copy replaces the local one (so editing localStorage doesn't stick); a finished
   run is reported (`reportRun` in `endRun`) and the server computes the leaves itself with the shared rules
   (`leavesForRun`, `PANTRY`, `ACHIEVEMENTS`, `steepBonus` are imported from `src/`, so the server needs the `src`
   folder next to it), accepts achievements only when the run fits them (`earned()`), and refuses a run whose
