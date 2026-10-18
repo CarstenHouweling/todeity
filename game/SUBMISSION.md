@@ -5,7 +5,7 @@ voting until Oct 23, 11:00 CEST; winners Oct 28). Rules recap: start public post
 no third-party trademarks or logos, recognizable characters, memes, or commercial music or recordings (Todeity uses
 none: all music and sound are generated in code, all scenery is procedural).
 
-Numbers below are counted from the code (v0.29.4, Oct 17). Recount them if content changes before posting.
+Numbers below are counted from the code (v0.29.4, Oct 17; v0.29.5–6 were fixes only). Recount them if content changes before posting.
 
 ## One-liner
 
@@ -67,12 +67,14 @@ Post your run card below (📤 Share run → Copy image on the game-over screen)
 Made from the "Build a Game with an AI Coding Agent" course with Claude Code: Three.js, procedural world, all music and sound generated in code.
 ```
 
-Attach `todeity-trailer-discord.mp4` (or `todeity.gif`). Discord unfurls the game link with the banner by itself.
+Attach `todeity-trailer-discord.mp4` (9.5 MB, plays inline). Discord unfurls the game link with the new banner by
+itself. Keep the GIFs for replies: `todeity-trueform.gif` under "what's the final boss like?", `todeity-wardrobe.gif`
+for the Wardrobe, `todeity-garden.gif` when inviting people to your garden.
 
 ## How I built it (paste into the post or a reply)
 
 > Todeity started as the course's frog-and-bees game on Oct 13 and grew in five days of directing Claude Code (Anthropic's
-> AI coding agent): 67 commits, about 34,000 lines of JavaScript, a Three.js client and a small Node server for
+> AI coding agent): 71 commits, about 34,000 lines of JavaScript, a Three.js client and a small Node server for
 > cloud saves, leaderboards, co-op and gardens. I set the direction, played every build and said what felt wrong; the
 > agent wrote the code, and kept a handoff document (`DEVELOPMENT.md`) up to date so every new session could pick up
 > where the last one stopped. Nothing is a bought asset: the frogs, bees, bosses, arenas and wearables are built
@@ -140,103 +142,57 @@ Attach `todeity-trailer-discord.mp4` (or `todeity.gif`). Discord unfurls the gam
 
 ## Promo assets (`game/promo/`)
 
-Made on Oct 16 from **v0.25.2**: no Wardrobe, no garden games, no true-form Bee-zebub, no level auras. Re-render
-from the shot list below before posting (how: DEVELOPMENT.md, Promo material). The MP4s and GIFs are not in git (too
-big); they are in `game/promo/` on the machine that made them.
+Rendered on **Oct 18 from v0.29.6** by the capture kit (how: DEVELOPMENT.md, Promo material). The MP4s and GIFs are
+not in git (too big); they are in `game/promo/` on the machine that made them. Banners are committed.
 
 | File | Use |
 | --- | --- |
-| `todeity-trailer-1080p.mp4` | The trailer with the game's own music: upload to YouTube, link it in the post |
+| `todeity-trailer-1080p.mp4` | The 66 s trailer with the game's own music: upload to YouTube, link it in the post |
 | `todeity-trailer-720p.mp4` | X / LinkedIn / anywhere that wants a smaller file |
-| `todeity-trailer-discord.mp4` | 960×540, under 10 MB: attach to the Discord post, plays inline (muted until clicked) |
-| `todeity.gif` | 12 s highlights, 480 px, ~7 MB: for places that don't play video |
-| `todeity-chest.gif`, `todeity-ascension.gif`, `todeity-bosses.gif`, `todeity-garden.gif` | Short loops for replies and comments |
-| `todeity-banner-1200x630.jpg` | Link preview / social card (also `public/og-image.jpg`) |
+| `todeity-trailer-discord.mp4` | 960×540, 9.5 MB (under Discord's 10 MB): attach to the Discord post, plays inline |
+| `todeity.gif` | 12 s highlights, 480 px, 9.3 MB: for places that don't play video |
+| `todeity-trueform.gif` | Bee-zebub's killing blow, the screen shatters, he rises again (the cold open) |
+| `todeity-ascension.gif`, `todeity-chest.gif`, `todeity-bosses.gif` | Golden Tode → God of Tea; the Royal Tea Chest; the Steeping Beam and a raid shield |
+| `todeity-wardrobe.gif`, `todeity-garden.gif` | Crown, mantle, breastplate, embers, then Power Up; Leaf Rush in the garden |
+| `todeity-banner-1200x630.jpg` | Link preview / social card (also `public/og-image.jpg`, linked as `og-image.jpg?v=0.29` so Discord refetches it) |
 | `todeity-banner-1920x1080.png`, `todeity-banner-2400x1260.png` | Hi-res banner for posts and slides |
 | `todeity-header-1500x500.png` | X / profile header |
 
-Worth adding: a `todeity-trueform.gif` (the cold open) and a `todeity-wardrobe.gif` (scene 12) for replies.
+The banner's three panels are Tode as God of Tea, the true-form Bee-zebub and Tode in his Wardrobe crown, with the
+seven frogs below, each dressed in earned wearables.
 
-## The new trailer (about 60 s, for v0.29)
+## The trailer (66 s, v0.29.6)
 
-The old cut opened on a calm garden; a voter scrolling past sees nothing happen for five seconds. The new one opens on
-the most dramatic moment in the game, then cuts to the calm garden for the story beat, and adds the Wardrobe and the
-garden games at the end.
+Opens on the most dramatic moment in the game (Bee-zebub's true form), hard-cuts to the quiet garden for the story
+beat, and ends on the Wardrobe and the garden games. Every cut lands on a bar of the music.
 
-**Music** (`music.mjs`, sections are `[song, intensity, bars]`):
+| Time | Scene | What we see | Caption |
+| --- | --- | --- | --- |
+| 0:00 | 00-trueform | The killing blow, the screen shatters, "Bee-zebub rises again!", his true-form entrance | (the game's own banner) |
+| 0:03 | 01-title | The quiet garden, Tode on the path | Tode just wanted his morning tea. |
+| 0:08 | 02-swarm | A ring of 30 bees closes in | Then the bees came. / A 3D roguelite bullet hell |
+| 0:12 | 03-bullets | The noose and a starburst | Dodge, dash, graze |
+| 0:15 | 04-picks | A skill pick with a fusion card, then a tea spirit's brew offer | 24 skills that fuse / Brews from talking tea spirits |
+| 0:19 | 05-frogs | Class picker, the Brawler, the Mage | Seven frogs |
+| 0:23 | 06-chest | The Royal Tea Chest reel | A Royal Tea Chest / From every boss |
+| 0:26 | 07-ascend | Golden Tode, then God of Tea | Ascend |
+| 0:33 | 08-beam | The Steeping Beam on the Hornet Shogun | Unleash ultimates |
+| 0:37 | 09-summon | The Great Tode stomps a crowd | Summon the Great Tode |
+| 0:40 | 10-underworld | The ground gives way into the Underworld | none |
+| 0:44 | 11-raid | The Seraph Queen raises her shield, Halo Crystals circle the Sky Citadel | Raid bosses |
+| 0:47 | 12-wardrobe | Crown, Divine Mantle, Golden Breastplate, Embers, then Power Up | Dress up your frog / 54 things to wear, all earned |
+| 0:55 | 12b-garden | Leaf Rush: Tode hops from leaf to leaf past the pond | Play together in gardens |
+| 1:00 | 13-end | End card | Play free in your browser |
 
-```bash
-node music.mjs '[["boss",4,1],["garden",0,2],["battle",2,4],["battle",3,6],["divine",4,4],["boss",4,6],["garden",0,6]]' work/trailer.wav
-```
-
-Frames per bar, measured from the current scenes at 30 fps: garden ~78.5, battle ~54.5, divine ~51.5, boss ~64.8.
-Check them against the `starts` that `music.mjs` prints before setting each scene's `N`, so cuts land on the beat.
-
-**Shots** (scenes in `promo/capture/scenes/`; "keep" means the existing script as is, "new" ones are sketched below):
-
-| Time | Music | Scene | What we see | Caption |
-| --- | --- | --- | --- | --- |
-| 0:00 | boss, 1 bar | **00-trueform** (new) | Bee-zebub falls, the screen cracks, he rises again twice the size in hellfire | none; the game's own banner "Bee-zebub rises again!" |
-| 0:02 | garden, 2 bars | 01-title (keep) | Hard cut to the quiet garden, Tode on the path | Tode just wanted his morning tea. |
-| 0:08 | battle, 2 bars | 02-swarm (keep) | A ring of 30 bees closes in | Then the bees came. / A 3D roguelite bullet hell |
-| 0:11 | battle, 2 bars | 03-bullets (keep) | The noose and a starburst, Tode hop-dashing through | Dodge, dash, graze |
-| 0:15 | battle, 2 bars | 04-picks (shorten to one pick) | A skill pick with a rainbow fusion card | 24 skills · 13 fusions |
-| 0:19 | battle, 2 bars | 05-frogs (keep) | Class picker, then the Brawler and the Mage in action | Seven frogs |
-| 0:23 | battle, 2 bars | 06-chest (keep) | The Royal Tea Chest reel lands on ×5 | A Royal Tea Chest / From every boss |
-| 0:27 | divine, 4 bars | 07-ascend (keep) | Golden, then God of Tea | Ascend / From garden frog to God of Tea |
-| 0:34 | boss, ~1.6 bars | 08-beam (keep) | The Steeping Beam on the Shogun | Unleash ultimates |
-| 0:37 | boss, ~1.6 bars | 09-summon (keep) | The Great Tode stomps a crowd | Summon the Great Tode |
-| 0:41 | boss, ~1.2 bars | 10-underworld, the fall only (cut 10x) | The ground gives way into the Underworld | none |
-| 0:43 | boss, ~1.6 bars | 11 (keep) | Raid boss mechanics | Raid bosses / Stages · shields · enrage timers |
-| 0:47 | garden, 2 bars | **12-wardrobe** (new) | In the garden, the frog tries on a crown, a mantle, wings and an ember aura, then Power Up | Dress up your frog / 54 things to wear, all earned |
-| 0:52 | garden, 2 bars | **12b-garden** (new) | Leaf Rush, a cannon shot into the pond, a skipped stone | Play together in gardens / Leaf Rush · co-op for up to 4 |
-| 0:57 | garden, 2 bars | 13-end (keep) | End card | Play free in your browser |
-
-`assemble.py` order becomes `['00','01','02','03','04','05','06','07','08','09','10','11','12','12b','13']`, and
-`render.sh`'s default list gets `00` and `12b`. Scene 10 no longer needs its `10x` record (the cold open shows
-Bee-zebub); drop it so the boss section is 6 bars. Total ≈ 1,830 frames, about 61 s.
-
-**New scene sketches** (untested; write them like the existing ones, then check the contact sheets):
-
-- `00-trueform.sh`: `$C reload "$META"`, then in `eval`: `$startRun`, learn a strong build (`comet`, `thunder`,
-  `fireflies` ×3 as in scene 10), `game.startWave(21)` and `waitFor(() => boss() && game.phase === "fighting", 60000)`,
-  `game.setTier(4)`, `below(240)` for a few frames so both are in view, then `boss().hp = 1` and `ff(0.2)`: the next
-  hit calls `riseAgain` (the roar, the crack, the banner, his intro). Start recording one frame before the hit; about
-  65 frames.
-- `12-wardrobe.sh`: put an outfit in the veteran save first (`meta.profile.outfit = {}`, `metaClass`-style python
-  edit of `$META`), open the garden (`[data-action=garden]`), then `game.action('garden-wardrobe')`. In `each`, call
-  `game.action('wear', { id })` on the beat: `crown` (n=10), `royalcape` (n=40), `fairy` or `batwings` (n=70),
-  `embers` (n=100); close the panel at n=120 and `game.action('emote', { id: 'power' })`. The veteran save
-  (`meta-vet.json`: every achievement, `maxTier` 4, about level 10) unlocks all of these; Stardust and the other
-  Omnitode or high-level items need `maxTier: 5` or more runs in that save. About 157 frames.
-- `12b-garden.sh`: open the garden as in scene 12, `game.action('garden-rush')` (a 3 s countdown, then leaves fall:
-  start recording after `ff(3)`), walk the frog through the leaves with `__pilot.setKey` as scene 12 does, and for the
-  second half aim at the teapot cannon or the pond (`POND` in Environment.js) so the shot ends in a splash. About
-  157 frames.
-- **Co-op**, if there's time: the harness drives one browser, so record 10–15 s of a real 2–3 tab co-op run with OBS
-  (1920×1080, each frog in a different outfit) and use it instead of `12b`, or as a separate clip for replies.
-
-**YouTube chapters:**
+**YouTube chapters** (YouTube wants each chapter at least 10 s long, so shots are grouped):
 
 ```
 0:00 He doesn't stay down
-0:02 Tode just wanted his morning tea
-0:08 Then the bees came
-0:11 Dodge, dash, graze
-0:15 Skills that fuse
-0:19 Seven frogs
-0:23 The Royal Tea Chest
-0:27 Ascend: Golden Tode, God of Tea
-0:34 Ultimates: the Steeping Beam
-0:37 Summon the Great Tode
-0:41 Down to the Underworld
-0:43 Raid bosses
-0:47 Dress up your frog
-0:52 Gardens and co-op
-0:57 Play free in your browser
+0:12 Dodge, fuse, pick your frog
+0:26 Ascend: God of Tea and the Steeping Beam
+0:37 The Great Tode, the Underworld, raid bosses
+0:47 Dress up your frog and play in gardens
 ```
-
-(Recheck the times against the rendered video: they follow the bar lengths above.)
 
 **YouTube title:** Todeity: Rise of the Tea God · trailer (#JetBrainsGameChallenge)
 
@@ -250,15 +206,21 @@ A 3D roguelite bullet hell in your browser: pick one of seven frogs, brew powers
 ▶ Play free: https://todeity.azurewebsites.net
 
 Made from the JetBrains Academy course "Build a Game with an AI Coding Agent" with Claude Code. Everything you hear and see is generated in code: Three.js, procedural world, synthesized music. Even this trailer was rendered by a script that drives the game frame by frame.
+
+0:00 He doesn't stay down
+0:12 Dodge, fuse, pick your frog
+0:26 Ascend: God of Tea and the Steeping Beam
+0:37 The Great Tode, the Underworld, raid bosses
+0:47 Dress up your frog and play in gardens
 ```
 
-Re-record by hand (OBS, 1920×1080, desktop browser) only for footage the capture kit can't make, like real co-op
-or several players in one garden. 📸 (or **C**) in the game takes clean, watermarked screenshots.
+Not in the trailer: real co-op and several players in one garden (the harness drives one browser). For a reply
+clip, record 10–15 s of a 2–3 tab co-op run with OBS (1920×1080, each frog in a different outfit).
 
 ## Launch-day checklist (Oct 19, 10:00 CEST)
 
-- **Saturday/Sunday:** render the new trailer and GIFs from the shot list above, watch them through once with sound,
-  and refresh the banner stills if the frogs or forms changed (`STILLS=1 bash scenes/render.sh 07 09 03`).
+- **Done Oct 18:** trailer, GIFs, banners and og-image re-rendered from v0.29.6. Watch the trailer through once with
+  sound before uploading.
 - **Before Monday:** upload `todeity-trailer-1080p.mp4` to YouTube (public or unlisted) with the title, description
   and chapters above, and put its link in both post drafts.
 - **Sunday evening:** stop adding features. Deploy the latest build, then **restart the app** so the server code is

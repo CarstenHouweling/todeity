@@ -1,13 +1,21 @@
 #!/bin/bash
 # The seven frogs in their victory pose with a transparent background (work/banner/lineup.png), from the dev-only
 # /classes.html: rendered once on black and once on white, and the difference gives the alpha.
+# OUTFITS=1 dresses them from the Wardrobe first (no auras: their glowing bits don't survive the alpha trick).
 K=$(cd "$(dirname "$0")" && pwd); W=${WORK:-$K/work}; B=$W/banner; mkdir -p $B; C="node $K/c.mjs"
 $C reload '{"raw":true,"query":"classes.html","dsf":2}' >/dev/null
-$C eval '
+$C eval "const OUTFITS = ${OUTFITS:-0};"'
 document.head.insertAdjacentHTML("beforeend","<style>body > *:not(canvas){display:none!important}</style>");
 const scene = preview.frogs[0].frog.root.parent;
 const keep = new Set(preview.frogs.map(f => f.frog.root));
 scene.children.forEach(c => { if (c.isMesh && !keep.has(c)) c.visible = false; });
+if (OUTFITS) {
+  const { dressFrog } = await import("/src/components/WearableModels.js");
+  // Tode, Brawler, Sharpshooter, Alchemist, Mage, Summoner, Ninja
+  const looks = [{ head: "crown", back: "royalcape" }, { head: "kabuto", body: "goldplate" }, { head: "tophat", face: "stache", body: "bowtie" },
+    { head: "cosy", back: "teapack" }, { head: "halo", back: "fairy" }, { head: "flowercrown", body: "lei" }, { head: "horns", back: "batwings" }];
+  preview.frogs.forEach(({ frog }, i) => dressFrog(frog, looks[i]));
+}
 window.__bg = (hex) => { scene.background.set(hex); scene.fog.color.set(hex); };
 __vt.auto = false; preview.setCamera("front"); __bg("#000000"); preview.pose("victory", 0.55); return 1' >/dev/null
 $C shot "{\"path\":\"$B/lineup-black.png\"}" >/dev/null

@@ -58,14 +58,14 @@
   <ul>
     <li>3D roguelite bullet hell</li>
     <li>Ascend from frog to God of Tea</li>
-    <li>Seven frogs · skills that fuse</li>
-    <li>Raid bosses · five arenas</li>
-    <li>Solo or co-op for up to 4</li>
+    <li>Raid bosses down to Bee-zebub</li>
+    <li>7 frogs · 54 things to wear</li>
+    <li>Solo, co-op for 4, shared gardens</li>
   </ul>
 </div>
 <div class="cta">▶ Play free in your browser</div>
 <div class="url">todeity.azurewebsites.net</div>
-<div class="frogs-label">Pick your frog</div>
+<div class="frogs-label">Pick your frog · dress it up</div>
 <img class="frogs">
 <script>
   const q = new URLSearchParams(location.search);
@@ -82,11 +82,13 @@
   r.setProperty('--w', W + 'px'); r.setProperty('--h', H + 'px'); r.setProperty('--u', u + 'px');
   r.setProperty('--split', split + 'px'); r.setProperty('--textw', textw);
   const frogw = Math.min(W - split - 40 * u, 1180 * u);
-  r.setProperty('--frogw', frogw + 'px'); r.setProperty('--frogh', (frogw * 283 / 2278) + 'px');
+  r.setProperty('--frogw', frogw + 'px'); r.setProperty('--frogh', (frogw * 336 / 2279) + 'px');
+  const lineup = document.querySelector('.frogs');
+  lineup.onload = () => r.setProperty('--frogh', (frogw * lineup.naturalHeight / lineup.naturalWidth) + 'px');
   if (header) document.querySelector('.frogs').style.display = 'none';
   const panels = header
-    ? [['ascend.jpg', '50% 40%', '', 1.7], ['summon.jpg', '32% 45%', '', 1.15], ['bullets.jpg', '45% 55%', '', 1.15]]
-    : [['ascend.jpg', '50% 40%', 'Ascend', 1.7], ['summon.jpg', '32% 45%', 'Summon', 1.15], ['bullets.jpg', '45% 55%', 'Bullet hell', 1.15]];
+    ? [['ascend.jpg', '50% 42%', '', 1.9], ['boss.jpg', '50% 50%', '', 1.32], ['dress.jpg', '60% 45%', '', 1.0]]
+    : [['ascend.jpg', '50% 42%', 'Ascend', 1.9], ['boss.jpg', '50% 50%', 'Bee-zebub', 1.32], ['dress.jpg', '60% 45%', 'Dress up', 1.0]];
   const pw = (W - split) / panels.length;
   const slant = Math.tan(12 * Math.PI / 180) * H; // horizontal run of a -12° skew over the full height
   const host = document.getElementById('panels');

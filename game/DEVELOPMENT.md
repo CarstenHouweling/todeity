@@ -703,11 +703,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 
 ## Promo material
 
-`game/promo/` (v0.25.2 footage, made Oct 16): `todeity-trailer-1080p.mp4` (58 s, YouTube), `-720p.mp4` (X, posts) and
-`-discord.mp4` (960×540, under 10 MB, plays inline); `todeity.gif` (12 s highlights, 7 MB) plus short GIFs of the
-chest, the ascension, the bosses and the garden; banners `todeity-banner-1200x630.jpg` (also `public/og-image.jpg`),
-`-1920x1080.png`, `-2400x1260.png` and the X header `todeity-header-1500x500.png`. MP4s and GIFs are gitignored (too
-big for the repo and the deploy); only the banners are committed.
+`game/promo/` (v0.29.6 footage, made Oct 18): `todeity-trailer-1080p.mp4` (66 s, YouTube), `-720p.mp4` (X, posts) and
+`-discord.mp4` (960×540, 9.5 MB: Discord's limit is 10 MB, so `encode.sh` uses 1040 kb/s), `todeity.gif` (12 s
+highlights) plus short GIFs (true form, chest, ascension, bosses, wardrobe, garden); banners `todeity-banner-1200x630.jpg`
+(also `public/og-image.jpg`; `index.html` links it as `og-image.jpg?v=0.29` so link previews refetch it: bump the query
+when the image changes), `-1920x1080.png`, `-2400x1260.png` and the X header `todeity-header-1500x500.png`. MP4s and
+GIFs are gitignored (too big for the repo and the deploy); only the banners are committed. Shot list, chapters and
+post copy: `SUBMISSION.md`.
 
 Everything is made by `promo/capture/` from the dev build, not by screen recording:
 
@@ -723,23 +725,33 @@ Everything is made by `promo/capture/` from the dev build, not by screen recordi
   a per-frame snippet, advances and screenshots. Viewport 1280×720 at 1.5× gives 1080p frames with a readable HUD.
 - **Scenes** (`scenes/NN-*.sh`, `scenes/render.sh` renders them all into `work/frames/`): each sets up a moment with
   the dev helpers (`startWave`, `learn`, `setTier`, `ascend`, `levelUp`, `ultimate`, `spawn`, `event`…) and records a
-  fixed number of frames. Shot lengths are whole bars of the music: garden 2 bars (157 frames), battle 4 + 8 bars,
-  divine 4, boss 8, garden 2 + 2. `STILLS=1` renders clean 2560×1440 stills (no HUD or captions) for banners.
+  fixed number of frames. Shot lengths are whole bars of the music (at 30 fps: garden 78.3 frames a bar, battle 54.5,
+  divine 51.4, boss 51.4): boss 2 (00, the true-form cold open), garden 2 (01), battle 10 (02–06, 109 each), divine 4
+  (07), boss 8 (08–11, ~103 each), garden 7 (12 wardrobe 236, 12b Leaf Rush 157, 13 end card 157). `assemble.py` can
+  keep only part of a scene (`keep`: 04 is recorded at 4 bars and cut to 2). `STILLS=1` renders clean 2560×1440 stills
+  (no HUD or captions) for banners. Don't edit `scenes/render.sh` while it runs: bash reads scripts as it goes.
+- **Garden scenes** run offline (no `npm run server`): with the server up, the game makes a fresh cloud save and its
+  progress replaces the veteran save, so the title shows the first-run screen. Offline the garden hub is still
+  `active`, so Leaf Rush and the Wardrobe work. 12b steers the frog on screen towards the nearest leaf (`__steer`).
 - **Music** (`music.mjs`): the game's own sequencer (`Music.js`) rendered offline: `AudioContext` is swapped for an
   `OfflineAudioContext` with a fake `currentTime`, and `music.play(song, intensity)` is switched at bar boundaries
-  (garden → battle 2 → battle 3 → divine → boss → garden). Peak-normalised; the trailer measures about -13 LUFS.
+  (boss → garden → battle 2 → battle 3 → divine → boss → garden). It prints each section's start in seconds: check
+  them against the scene starts `assemble.py` prints (frame ÷ 30 + 0.1) so cuts land on the beat. Peak-normalised; the trailer measures about -13 LUFS.
 - **Encoding** (`assemble.py` links the frames in order into `work/seq/`, `encode.sh` makes the three MP4s, `gifs.sh`
   the GIFs with a per-GIF palette). Needs `ffmpeg`.
-- **Banners** (`banner.html`, rendered at any size by `banners.mjs`): three slanted gameplay panels (Ascend, Summon,
-  Bullet hell; stills copied into `work/banner/` as `ascend.jpg`, `summon.jpg`, `bullets.jpg`) and the seven frogs from
-  `lineup.sh`, which renders `/classes.html` on black and on white and takes the difference as alpha.
+- **Banners** (`banner.html`, rendered at any size by `banners.mjs`): three slanted gameplay panels (Ascend, Bee-zebub,
+  Dress up: `work/banner/ascend.jpg`, `boss.jpg`, `dress.jpg`) and the seven frogs from `lineup.sh`, which renders
+  `/classes.html` on black and on white and takes the difference as alpha (`OUTFITS=1` dresses them first). The panel
+  pictures: `TIER=4 bash formshot.sh` (Tode in a form mid-fight, close camera), the `00` still from `STILLS=1` (crop
+  past the boss intro's letterbox bars) and `bash closeup.sh` (Tode in an outfit in his garden, low close camera).
 
 ```bash
 cd game/promo/capture && npm install                      # playwright-core; uses the installed Google Chrome
-npm run dev --prefix ../..                                  # the game on port 5179 (or set GAME_URL)
+npm run dev --prefix ../..                                  # the game on port 5179 (or set GAME_URL, also for music.mjs)
 node harness.mjs &                                          # then:
-bash scenes/render.sh && python3 assemble.py && node music.mjs '' work/trailer.wav && ./encode.sh && ./gifs.sh
-STILLS=1 bash scenes/render.sh 07 09 03 && bash lineup.sh   # pick stills, copy them into work/banner/
+node music.mjs '[["boss",4,2],["garden",0,2],["battle",2,4],["battle",3,6],["divine",4,4],["boss",4,8],["garden",0,7]]' work/trailer.wav
+bash scenes/render.sh && python3 assemble.py && ./encode.sh && ./gifs.sh
+STILLS=1 bash scenes/render.sh 00 && TIER=4 bash formshot.sh && bash closeup.sh && OUTFITS=1 bash lineup.sh
 node banners.mjs "$PWD/work/banner" '[["todeity-banner-1200x630.jpg",1200,630,"full"],["todeity-header-1500x500.png",1500,500,"header"]]'
 ```
 

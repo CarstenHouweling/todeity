@@ -1,7 +1,7 @@
 . "$(dirname "$0")/common.sh"
 $C reload "$META" >/dev/null
 $C eval "$startRun"'
-game.startWave(3); await waitFor(() => game.phase === "fighting"); game.setWeather("noon", "clear");
+game.startWave(2); await waitFor(() => game.phase === "fighting"); game.setWeather("noon", "clear");
 for (const id of ["comet","thunder"]) for (let i=0;i<2;i++) game.learn(id);
 const P = game.player.position; for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; game.spawn("drone", P.x + Math.cos(a) * 320, P.y + Math.sin(a) * 320); }
 game.setTier(1); game.cameraOffset.multiplyScalar(0.7); ff(1.5); game.ascend(2); return game.phase'
