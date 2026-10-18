@@ -113,4 +113,5 @@ const server = http.createServer(async (req, res) => {
     res.end(String(e.stack || e));
   }
 });
-server.listen(9330, () => console.log('harness on 9330'));
+const PORT = +(process.env.HARNESS_PORT || 9330); // several harnesses can render at once on different ports
+server.listen(PORT, () => console.log(`harness on ${PORT}`));

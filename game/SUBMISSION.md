@@ -150,6 +150,8 @@ not in git (too big); they are in `game/promo/` on the machine that made them. B
 | `todeity-trailer-1080p.mp4` | The 66 s trailer with the game's own music: upload to YouTube, link it in the post |
 | `todeity-trailer-720p.mp4` | X / LinkedIn / anywhere that wants a smaller file |
 | `todeity-trailer-discord.mp4` | 960×540, 9.5 MB (under Discord's 10 MB): attach to the Discord post, plays inline |
+| `todeity-journey-1080p.mp4`, `-720p.mp4`, `-discord.mp4` (8.5 MB) | **The Journey** (59 s): Tode's story in five chapters, from the night garden to the Underworld and home for tea. Calmer, cinematic: for YouTube, a second post or a mid-week reply |
+| `todeity-short-1080p.mp4`, `-720p.mp4`, `-discord.mp4` (4.4 MB) | **The short** (31 s, vertical 1080×1920): big hook text, fast cuts. For YouTube Shorts, TikTok, Reels, phone viewers in Discord |
 | `todeity.gif` | 12 s highlights, 480 px, 9.3 MB: for places that don't play video |
 | `todeity-trueform.gif` | Bee-zebub's killing blow, the screen shatters, he rises again (the cold open) |
 | `todeity-ascension.gif`, `todeity-chest.gif`, `todeity-bosses.gif` | Golden Tode → God of Tea; the Royal Tea Chest; the Steeping Beam and a raid shield |
@@ -160,6 +162,39 @@ not in git (too big); they are in `game/promo/` on the machine that made them. B
 
 The banner's three panels are Tode as God of Tea, the true-form Bee-zebub and Tode in his Wardrobe crown, with the
 seven frogs below, each dressed in earned wearables.
+
+## Feature page
+
+**https://todeity.azurewebsites.net/about**: everything in the game on one page, with gameplay loops, the three
+trailers, the arenas and the frogs. Link it in the post or a reply for voters who want the whole picture before
+playing (the game link itself still goes straight into the game).
+
+## The Journey (59 s)
+
+| Time | What we see | Chapter card |
+| --- | --- | --- |
+| 0:00 | The garden at night | *It began with a cup of tea.* |
+| 0:05 | The first bees on a sunny lawn | I · Tode's Garden |
+| 0:09 | Queen Buzzbelle's entrance | (her own name card) |
+| 0:12 | The leap and the swoop into each new arena, Tode one form further each time | II · Sage Mountain, III · Sky Citadel, IV · Tournament of the Gods |
+| 0:29 | God of Tea becomes **Omnitode** (not in the launch trailer) | |
+| 0:36 | The ground gives way | V · The Underworld |
+| 0:39 | Bee-zebub's beam clash, the screen shatters | |
+| 0:46 | The ending: back home, "…and pours himself a fresh cup" | (the game's own narration) |
+| 0:54 | End card | |
+
+YouTube title: *Todeity: Rise of the Tea God · The Journey (#JetBrainsGameChallenge)*. Chapters (each ≥ 10 s):
+`0:00 It began with a cup of tea` / `0:12 Five arenas` / `0:29 Omnitode and the Underworld` / `0:46 Home for tea`.
+
+## The short (31 s, vertical)
+
+Hook lines, one per cut: THIS IS TODE → HE JUST WANTED HIS TEA → THEN 1,000 BEES SHOWED UP → SO HE BECAME A GOD →
+DODGE EVERYTHING → MELT BOSSES WITH A TEA BEAM → SUMMON A GIANT TOAD → THE FINAL BOSS GETS BACK UP → THEN DRESS UP →
+FIRE YOUR FROG OUT OF A TEAPOT → end card. Post caption idea: *He just wanted his tea. 🐸☕ Free in your browser:
+todeity.azurewebsites.net #JetBrainsGameChallenge*
+
+**Which one when:** the launch trailer goes with the main Discord post; the short for phones and social (and as a
+"30-second version" reply); The Journey mid-week, when people who saw the first post need a reason to come back.
 
 ## The trailer (66 s, v0.29.6)
 

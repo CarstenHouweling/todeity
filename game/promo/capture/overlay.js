@@ -40,6 +40,28 @@
   #promo-card .url { margin-top: 18px; font-size: 32px; font-weight: 800; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
   #promo-card .meta { margin-top: 22px; font-size: 17px; font-weight: 700; color: rgba(233,255,217,.85); letter-spacing: 1px; }
   #promo-card .tag { margin-top: 12px; font-size: 16px; font-weight: 800; color: #ffe680; letter-spacing: 1px; }
+  /* The Journey: chapter cards (a numeral between rules, the arena's name) and story lines in a serif. */
+  #promo-chap { position: fixed; left: 0; right: 0; bottom: 110px; z-index: 9999; pointer-events: none; text-align: center; color: #fff;
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; }
+  #promo-chap .n { display: inline-flex; align-items: center; gap: 22px; font-size: 40px; letter-spacing: 10px; color: #ffe27a; font-weight: 700;
+    text-shadow: 0 0 14px rgba(255,190,60,.7), 0 2px 0 rgba(0,0,0,.5); }
+  #promo-chap .n::before, #promo-chap .n::after { content: ''; width: 90px; height: 2px; background: linear-gradient(90deg, transparent, #ffe27a, transparent); }
+  #promo-chap .t { margin-top: 6px; font-size: 64px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 4px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.6); }
+  #promo-chap.story .t { font-size: 46px; font-style: italic; font-weight: 600; }
+  #promo-chap.in .n { animation: pc-fade 1s ease-out both; } #promo-chap.in .t { animation: pc-rise 1.1s .15s cubic-bezier(.2,.8,.2,1) both; }
+  #promo-chap.out { animation: pc-out .5s ease-in both; }
+  @keyframes pc-rise { from { opacity: 0; transform: translateY(16px); letter-spacing: 6px; filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+  body.promo-bars::before, body.promo-bars::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 9997; pointer-events: none; }
+  body.promo-bars::before { top: 0; } body.promo-bars::after { bottom: 0; }
+  /* The vertical short: big stacked hook text near the top, one highlighted word. */
+  #promo-big { position: fixed; left: 24px; right: 24px; top: 13vh; z-index: 9999; pointer-events: none; text-align: center;
+    font-family: system-ui, -apple-system, sans-serif; font-weight: 950; text-transform: uppercase; color: #fff; line-height: .98; font-size: 54px; letter-spacing: -.5px;
+    -webkit-text-stroke: 2px rgba(0,0,0,.55); paint-order: stroke fill; text-shadow: 0 5px 0 rgba(0,0,0,.45), 0 0 26px rgba(0,0,0,.55); }
+  #promo-big em { font-style: normal; color: #ffd84a; }
+  #promo-big.in { animation: pc-pop .32s cubic-bezier(.2,1.6,.4,1) both; }
+  @keyframes pc-pop { from { opacity: 0; transform: scale(.6) rotate(-3deg); } to { opacity: 1; transform: none; } }
+  #promo-card.tall h1 { font-size: 92px; } #promo-card.tall .sub { font-size: 24px; letter-spacing: 4px; }
+  #promo-card.tall .play { font-size: 22px; margin-top: 60px; } #promo-card.tall .url { font-size: 26px; } #promo-card.tall .meta { font-size: 16px; padding: 0 30px; line-height: 1.5; }
   .toasts { display: none !important; }
   body.promo-noui .menu, body.promo-noui .hud, body.promo-noui .corner-buttons, body.promo-noui .toasts { visibility: hidden !important; }
   body.promo-nopills .title-pills, body.promo-nopills .save-pill { display: none !important; }
@@ -75,6 +97,37 @@
       <div class="url">todeity.azurewebsites.net</div>
       <div class="meta">Solo or co-op for up to 4 · keyboard, mouse or touch · a new Daily Brew every day</div>
       <div class="tag">#JetBrainsGameChallenge</div>`);
+  const chap = document.createElement('div');
+  chap.id = 'promo-chap';
+  document.body.append(chap);
+  // __chapter('II', 'Sage Mountain'), __chapter(null, 'It began with a cup of tea.') for a story line, __chapter() to fade out.
+  window.__chapter = (num, title) => {
+    if (!title) return chap.innerHTML && (chap.className = 'out ' + (chap.dataset.mode || ''));
+    chap.dataset.mode = num ? '' : 'story';
+    chap.className = '';
+    chap.innerHTML = `${num ? `<div class="n">${num}</div>` : ''}<div class="t">${title}</div>`;
+    void chap.offsetWidth;
+    chap.className = 'in ' + chap.dataset.mode;
+  };
+  window.__bars = (on) => document.body.classList.toggle('promo-bars', on);
+  const big = document.createElement('div');
+  big.id = 'promo-big';
+  document.body.append(big);
+  // __big('Then 1,000 <em>bees</em> showed up'), __big() to clear (cuts are hard in the short).
+  window.__big = (html) => {
+    big.className = '';
+    big.innerHTML = html || '';
+    if (!html) return;
+    void big.offsetWidth;
+    big.className = 'in';
+  };
+  window.__endCardTall = () => {
+    __card(`<h1>Todeity</h1><div class="sub">Rise of the Tea God</div><div class="play">▶ Play free in your browser</div>
+      <div class="url">todeity.azurewebsites.net</div>
+      <div class="meta">Phone, tablet or desktop · solo or co-op for up to 4</div>
+      <div class="tag">#JetBrainsGameChallenge</div>`);
+    document.getElementById('promo-card').classList.add('tall');
+  };
   window.__noUI = (on) => document.body.classList.toggle('promo-noui', on);
 })();
 // Footage: no "LEVEL UP!" callouts (level picks are held for the wave's end).

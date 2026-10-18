@@ -19,7 +19,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -55,6 +55,11 @@ const MIME = {
   '.json': 'application/json',
   '.webmanifest': 'application/manifest+json',
   '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
 };
 
 // --- Score storage ---------------------------------------------------------------
@@ -234,14 +239,30 @@ async function handleScores(req, res, url) {
   return send(res, 405, { error: 'Method not allowed.' });
 }
 
-async function serveStatic(res, pathname) {
+async function serveStatic(req, res, pathname) {
   const safe = normalize(pathname).replace(/^(\.\.[/\\])+/, '');
   let file = join(DIST, safe === '/' ? 'index.html' : safe);
+  // A folder serves its own index.html (the feature page lives at /about).
+  if (file.startsWith(DIST) && existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
   if (!file.startsWith(DIST) || !existsSync(file)) file = join(DIST, 'index.html');
   try {
     const data = await readFile(file);
-    const cache = file.includes(`${join('dist', 'assets')}`) ? 'public, max-age=31536000, immutable' : 'no-cache';
-    res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Cache-Control': cache });
+    const media = /^\/media\//.test(safe);
+    const cache = file.includes(`${join('dist', 'assets')}`) ? 'public, max-age=31536000, immutable' : media ? 'public, max-age=86400' : 'no-cache';
+    const headers = { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream', 'Cache-Control': cache, 'Accept-Ranges': 'bytes' };
+    // Byte ranges: Safari won't play a video without them.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+    if (range && (range[1] || range[2])) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, data.length - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), data.length - 1) : data.length - 1;
+      if (start >= data.length || start > end) {
+        res.writeHead(416, { 'Content-Range': `bytes */${data.length}` });
+        return res.end();
+      }
+      res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${data.length}`, 'Content-Length': end - start + 1 });
+      return res.end(data.subarray(start, end + 1));
+    }
+    res.writeHead(200, { ...headers, 'Content-Length': data.length });
     res.end(data);
   } catch {
     send(res, 404, 'Not found. Did you run "npm run build"?');
@@ -629,7 +650,7 @@ const server = createServer(async (req, res) => {
       return await handleAdmin(req, res, url, { send, ip: clientIp(req), boards: () => boards, saveScores, stats: adminStats });
     }
     if (url.pathname === '/admin' || url.pathname === '/admin/') return await serveAdminPage(res, send);
-    return await serveStatic(res, url.pathname);
+    return await serveStatic(req, res, url.pathname);
   } catch (error) {
     console.error(error);
     send(res, 500, { error: 'Something went wrong.' });

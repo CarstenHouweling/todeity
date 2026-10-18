@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Todeity: Rise of the Tea God · features</title>
+<meta name="description" content="A frog. A cup of tea. A thousand bees. Todeity is a free 3D roguelite bullet hell in your browser: seven frogs, five arenas, raid bosses down to Bee-zebub, a Wardrobe of 54 wearables, co-op for up to 4 and gardens to meet in." />
+<meta name="theme-color" content="#071a0d" />
+<link rel="icon" type="image/svg+xml" href="/tode.svg" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Todeity" />
+<meta property="og:title" content="Todeity: Rise of the Tea God · everything in the game" />
+<meta property="og:description" content="A free 3D roguelite bullet hell in your browser. Seven frogs, five arenas, raid bosses, 54 things to wear, co-op for up to 4." />
+<meta property="og:url" content="https://todeity.azurewebsites.net/about" />
+<meta property="og:image" content="https://todeity.azurewebsites.net/og-image.jpg?v=0.29" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<style>
+  :root {
+    --bg: #071a0d; --bg2: #0b2414; --panel: #0f2d19; --line: rgba(233,255,217,.12);
+    --cream: #e9ffd9; --text: #dcefd2; --muted: #9fb99a; --gold: #ffd76a; --gold2: #f4a523; --ember: #ff7a3c;
+    --radius: 18px; --max: 1180px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--gold); }
+  img, video { display: block; max-width: 100%; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  h1, h2, h3 { color: var(--cream); line-height: 1.05; margin: 0; letter-spacing: -.01em; }
+  h2 { font-size: clamp(32px, 4.6vw, 54px); font-weight: 900; }
+  h3 { font-size: 24px; font-weight: 850; }
+  .kicker { font-size: 14px; font-weight: 850; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
+  .lede { font-size: clamp(18px, 2vw, 21px); color: var(--text); max-width: 680px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 15px 28px; border-radius: 999px; font-weight: 900; font-size: 17px; letter-spacing: .04em;
+    text-transform: uppercase; text-decoration: none; transition: transform .15s, box-shadow .15s; cursor: pointer; border: 0; font-family: inherit; }
+  .btn.primary { background: linear-gradient(180deg, var(--gold), var(--gold2)); color: #3a2300; box-shadow: 0 10px 34px rgba(255,170,40,.35); }
+  .btn.ghost { background: rgba(233,255,217,.08); color: var(--cream); box-shadow: inset 0 0 0 2px rgba(233,255,217,.25); }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; }
+
+  /* Top bar */
+  .top { position: fixed; inset: 0 0 auto; z-index: 20; transition: background .25s, box-shadow .25s; }
+  .top.solid { background: rgba(7,26,13,.92); backdrop-filter: blur(10px); box-shadow: 0 1px 0 var(--line); }
+  .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--cream); font-weight: 900; font-size: 20px; text-decoration: none; letter-spacing: .02em; }
+  .brand img { width: 32px; height: 32px; }
+  .top nav { display: flex; gap: 22px; align-items: center; }
+  .top nav a { color: var(--text); text-decoration: none; font-weight: 700; font-size: 15px; }
+  .top nav a:hover { color: var(--cream); }
+  .top nav .btn { padding: 9px 18px; font-size: 14px; }
+  @media (max-width: 760px) { .top nav a:not(.btn) { display: none; } }
+
+  /* Hero */
+  .hero { position: relative; min-height: min(100svh, 920px); display: flex; align-items: flex-end; overflow: hidden; }
+  .hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hero::after { content: ''; position: absolute; inset: 0; background:
+    linear-gradient(90deg, rgba(7,26,13,.92) 0%, rgba(7,26,13,.6) 42%, rgba(7,26,13,.05) 75%),
+    linear-gradient(0deg, var(--bg) 0%, rgba(7,26,13,0) 32%); }
+  .hero .wrap { position: relative; z-index: 2; padding-bottom: clamp(48px, 9vh, 110px); width: 100%; }
+  .hero h1 { font-size: clamp(64px, 11vw, 150px); font-weight: 950; letter-spacing: -.03em; line-height: .88;
+    text-shadow: 0 8px 0 rgba(0,0,0,.3), 0 0 60px rgba(120,255,140,.18); }
+  .hero .sub { margin-top: 12px; font-size: clamp(16px, 2.2vw, 28px); font-weight: 850; letter-spacing: .2em; text-transform: uppercase; color: var(--gold);
+    text-shadow: 0 0 22px rgba(255,180,40,.5); }
+  .hero .line { margin: 26px 0 0; font-size: clamp(22px, 2.6vw, 32px); font-weight: 800; color: var(--cream); max-width: 560px; line-height: 1.2; }
+  .hero .ctas { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+  .hero .free { margin-top: 16px; color: var(--muted); font-size: 15px; }
+  @media (max-width: 480px) { .hero .btn { font-size: 15px; padding: 14px 22px; letter-spacing: .02em; } }
+  @media (max-width: 760px) {
+    .hero::after { background: linear-gradient(0deg, var(--bg) 8%, rgba(7,26,13,.55) 55%, rgba(7,26,13,.35) 100%); }
+  }
+
+  /* Numbers */
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 8px; }
+  .stat { background: var(--bg2); padding: 22px 14px; text-align: center; }
+  .stat b { display: block; font-size: clamp(30px, 3.6vw, 44px); font-weight: 950; color: var(--gold); line-height: 1; }
+  .stat span { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); font-weight: 650; }
+  @media (max-width: 860px) { .stats { grid-template-columns: repeat(3, 1fr); } }
+
+  section { padding: clamp(70px, 10vw, 120px) 0; }
+  .center { text-align: center; }
+  .center .lede { margin: 18px auto 0; }
+
+  /* Trailers */
+  .tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 30px 0 22px; }
+  .tab { padding: 10px 20px; border-radius: 999px; border: 0; background: rgba(233,255,217,.07); color: var(--text); font-weight: 750; font-size: 15px; line-height: 1; font-family: inherit; cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--gold); color: #3a2300; }
+  .tab:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; }
+  .player { position: relative; margin: 0 auto; border-radius: var(--radius); overflow: hidden; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 0 1px var(--line); }
+  .player.wide { max-width: 980px; aspect-ratio: 16 / 9; }
+  .player.tall { max-width: 360px; aspect-ratio: 9 / 16; }
+  .player video { width: 100%; height: 100%; object-fit: contain; }
+  .player-note { text-align: center; color: var(--muted); font-size: 15px; margin-top: 14px; }
+
+  /* Features */
+  .feature { display: grid; grid-template-columns: 1.15fr 1fr; gap: clamp(28px, 5vw, 64px); align-items: center; padding: clamp(36px, 5vw, 56px) 0; }
+  .feature.flip { grid-template-columns: 1fr 1.15fr; }
+  .feature.flip .media { order: 2; }
+  .media { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--panel); aspect-ratio: 16 / 9; box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 1px var(--line); }
+  .media video, .media img { width: 100%; height: 100%; object-fit: cover; }
+  .feature p { margin: 14px 0 0; }
+  .feature ul { margin: 16px 0 0; padding: 0; list-style: none; }
+  .feature li { position: relative; padding-left: 26px; margin: 8px 0; }
+  .feature li::before { content: ''; position: absolute; left: 0; top: .6em; width: 11px; height: 11px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px rgba(255,200,60,.6); }
+  .feature .kicker { margin-bottom: 10px; }
+  .forms { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .forms span { padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 800; background: rgba(255,215,106,.1); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255,215,106,.3); }
+  .forms span:last-child { background: linear-gradient(90deg, rgba(190,150,255,.25), rgba(255,215,106,.2)); color: #f1e2ff; }
+  @media (max-width: 860px) {
+    .feature, .feature.flip { grid-template-columns: 1fr; }
+    .feature.flip .media { order: 0; }
+  }
+
+  /* Frogs */
+  .frogs { margin-top: 36px; background: radial-gradient(ellipse at 50% 85%, rgba(120,255,140,.12), transparent 60%); padding: 10px 0 0; }
+  .frogs img { width: 100%; height: auto; filter: drop-shadow(0 16px 18px rgba(0,0,0,.55)); }
+  .frog-names { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 18px; text-align: center; }
+  .frog-names div { font-size: 14px; color: var(--muted); line-height: 1.35; }
+  .frog-names b { display: block; color: var(--cream); font-size: 15px; }
+  @media (max-width: 760px) { .frog-names { grid-template-columns: repeat(2, 1fr); text-align: left; gap: 12px 20px; } }
+
+  /* Arenas */
+  .arenas { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 38px; }
+  figure { margin: 0; }
+  .feature > *, .duo > *, .cards > *, .arenas > *, .made .grid > * { min-width: 0; }
+  .arena { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 3 / 4; background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
+  .arena img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s; }
+  .arena:hover img { transform: scale(1.06); }
+  .arena::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,.8), transparent 55%); }
+  .arena figcaption { position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 2; color: var(--cream); font-weight: 850; line-height: 1.2; }
+  .arena figcaption small { display: block; color: var(--gold); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 850; }
+  .arena figcaption span { display: block; color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 2px; }
+  @media (max-width: 860px) { .arenas { grid-template-columns: repeat(2, 1fr); } .arena:last-child { grid-column: span 2; aspect-ratio: 16 / 9; } }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 38px; }
+  .card { background: var(--bg2); border-radius: var(--radius); padding: 26px; box-shadow: inset 0 0 0 1px var(--line); }
+  .card .icon { font-size: 30px; line-height: 1; }
+  .card h3 { font-size: 20px; margin-top: 14px; }
+  .card p { margin: 8px 0 0; color: var(--text); font-size: 16px; }
+  @media (max-width: 960px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+
+  /* Gardens: a tall clip beside the copy */
+  .duo { display: grid; grid-template-columns: 1fr 1fr 300px; gap: 18px; margin-top: 38px; align-items: stretch; }
+  .duo .media { aspect-ratio: auto; height: 100%; min-height: 240px; }
+  .duo .media.tall { aspect-ratio: 9 / 16; height: auto; }
+  .duo figcaption { position: absolute; left: 14px; bottom: 12px; z-index: 2; font-weight: 850; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,.8); }
+  @media (max-width: 960px) { .duo { grid-template-columns: 1fr; } .duo .media { aspect-ratio: 16 / 9; height: auto; min-height: 0; width: 100%; } .duo .media.tall { max-width: 320px; margin: 0 auto; width: 100%; } }
+
+  /* Made with */
+  .made { background: linear-gradient(180deg, var(--bg2), var(--bg)); }
+  .made .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 50px; align-items: center; }
+  .made .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .made .facts div { background: rgba(233,255,217,.05); border-radius: 14px; padding: 18px; box-shadow: inset 0 0 0 1px var(--line); }
+  .made .facts b { display: block; color: var(--gold); font-size: 30px; font-weight: 950; line-height: 1.1; }
+  .made .facts span { color: var(--muted); font-size: 14px; font-weight: 650; }
+  @media (max-width: 860px) { .made .grid { grid-template-columns: 1fr; } }
+
+  .final { position: relative; overflow: hidden; text-align: center; }
+  .final h2 { font-size: clamp(40px, 7vw, 84px); }
+  .final .btn { margin-top: 30px; font-size: 19px; padding: 18px 36px; }
+  .final .url { margin-top: 16px; color: var(--muted); font-weight: 700; }
+  footer { border-top: 1px solid var(--line); padding: 34px 0 48px; color: var(--muted); font-size: 14px; }
+  footer p { margin: 6px 0; }
+  .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
+  .reveal.on { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .reveal { opacity: 1; transform: none; transition: none; } .btn, .arena img { transition: none; } }
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="/tode.svg" alt="" />Todeity</a>
+    <nav>
+      <a href="#trailers">Trailers</a>
+      <a href="#features">Features</a>
+      <a href="#frogs">Frogs</a>
+      <a href="#together">Together</a>
+      <a class="btn primary" href="/">▶ Play free</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero" aria-label="Todeity">
+  <video src="/media/hero.mp4" poster="/media/hero.jpg" autoplay muted loop playsinline aria-hidden="true"></video>
+  <div class="wrap">
+    <h1>Todeity</h1>
+    <div class="sub">Rise of the Tea God</div>
+    <p class="line">A frog. A cup of tea.<br />A thousand bees.</p>
+    <div class="ctas">
+      <a class="btn primary" href="/">▶ Play free in your browser</a>
+      <a class="btn ghost" href="#trailers">Watch the trailers</a>
+    </div>
+    <p class="free">Free · no download · keyboard and mouse or touch · solo or co-op for up to 4</p>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="stats reveal">
+    <div class="stat"><b>7</b><span>frogs to play</span></div>
+    <div class="stat"><b>5</b><span>arenas, 5 raid bosses</span></div>
+    <div class="stat"><b>24</b><span>skills · 13 fusions</span></div>
+    <div class="stat"><b>45</b><span>brews from tea spirits</span></div>
+    <div class="stat"><b>54</b><span>things to wear</span></div>
+    <div class="stat"><b>4</b><span>players in co-op</span></div>
+  </div>
+</div>
+
+<section id="trailers" class="center">
+  <div class="wrap">
+    <div class="kicker reveal">Trailers</div>
+    <h2 class="reveal">Three ways to meet Tode</h2>
+    <p class="lede reveal">The launch trailer shows everything at once, The Journey follows Tode from his garden to the Underworld, and the short is made for your phone.</p>
+    <div class="tabs" role="tablist" aria-label="Trailers">
+      <button class="tab" role="tab" aria-selected="true" data-src="/media/trailer.mp4" data-poster="/media/trailer.jpg" data-shape="wide" data-note="Launch trailer · 66 s · music from the game">Launch trailer</button>
+      <button class="tab" role="tab" aria-selected="false" data-src="/media/journey.mp4" data-poster="/media/journey.jpg" data-shape="wide" data-note="The Journey · from Tode's garden to the Underworld, and home for tea">The Journey</button>
+      <button class="tab" role="tab" aria-selected="false" data-src="/media/short.mp4" data-poster="/media/short.jpg" data-shape="tall" data-note="The short · 30 s, made for phones">The short</button>
+    </div>
+    <div class="player wide" id="player"><video id="trailer" controls playsinline preload="none" poster="/media/trailer.jpg" src="/media/trailer.mp4"></video></div>
+    <p class="player-note" id="player-note">Launch trailer · 66 s · music from the game</p>
+  </div>
+</section>
+
+<section id="features" style="padding-top: 0">
+  <div class="wrap">
+    <div class="center">
+      <div class="kicker reveal">The game</div>
+      <h2 class="reveal">Tode just wanted his morning tea</h2>
+      <p class="lede reveal">Then the bees came. Todeity is a 3D roguelite bullet hell: every run you build a new frog out of skills, brews and charms, and fight your way down through five arenas to the bottom of the hive.</p>
+    </div>
+
+    <article class="feature reveal">
+      <div class="media"><video data-src="/media/loop-bullets.mp4" poster="/media/loop-bullets.jpg" muted loop playsinline aria-label="Tode dodging rings of stingers"></video></div>
+      <div>
+        <div class="kicker">Bullet hell</div>
+        <h3>Dodge, dash, graze</h3>
+        <p>Bees fire fans, rings and spirals; arena events sweep the field with curtains of stingers, closing rings and starbursts, and the hive runs real tactics: encirclements, phalanxes, synchronized volleys.</p>
+        <ul>
+          <li>Hop-dash straight through bullets and bees</li>
+          <li>Near misses <b>graze</b>: they sparkle and charge your ultimate</li>
+          <li>Shred the hive too fast and it adapts: tougher bees, in packs</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="media"><video data-src="/media/loop-picks.mp4" poster="/media/loop-picks.jpg" muted loop playsinline aria-label="A skill pick with a rainbow fusion card, then a tea spirit's brew offer"></video></div>
+      <div>
+        <div class="kicker">Build-crafting</div>
+        <h3>Skills that fuse, brews that talk</h3>
+        <p>Every level is a pick of three skills. They cast themselves, so you can focus on moving. Train two partners up and they fuse into one rainbow skill; master a skill and it casts twice.</p>
+        <ul>
+          <li>24 skills, 13 fusions, up to six at once</li>
+          <li>45 brews from five talking tea spirits: Green Tea, Ember Black, Frost Mint, Chamomile and Storm Oolong, with Duos, Legendaries and cursed brews</li>
+          <li>14 charms that stack and chain into each other</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="feature reveal">
+      <div class="media"><video data-src="/media/loop-ascend.mp4" poster="/media/loop-ascend.jpg" muted loop playsinline aria-label="Tode transforming into Golden Tode, then God of Tea"></video></div>
+      <div>
+        <div class="kicker">Ascension</div>
+        <h3>From garden frog to God of Tea</h3>
+        <p>Grow strong enough and Tode transforms, with a cut-scene: a quake, stars pouring into him, a burst that shatters reality. In his garden, the world transforms with him, from blossoms to lanterns, crystals, floating islands and a marble heaven.</p>
+        <div class="forms"><span>Awakened</span><span>Golden</span><span>Radiant</span><span>God of Tea</span><span>Omnitode</span></div>
+      </div>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="media"><video data-src="/media/loop-beam.mp4" poster="/media/loop-beam.jpg" muted loop playsinline aria-label="The Steeping Beam sweeping across the Hornet Shogun"></video></div>
+      <div>
+        <div class="kicker">Ultimates</div>
+        <h3>Steep, storm or summon</h3>
+        <p>After the first boss you choose an ultimate. The <b>Steeping Beam</b> is an enormous beam you steer through the swarm, or hold on a boss and watch it melt. The <b>Thunder Tea Storm</b> calls lightning down on everything. <b>Summoning: Great Tode</b> brings a giant battle toad that stomps, tongue-lashes and body-slams.</p>
+        <ul><li>Every boss leaves a <b>Royal Tea Chest</b>: a reel spins and lands on one, three or five rewards</li></ul>
+      </div>
+    </article>
+
+    <article class="feature reveal">
+      <div class="media"><video data-src="/media/loop-trueform.mp4" poster="/media/loop-trueform.jpg" muted loop playsinline aria-label="Bee-zebub falls, the screen shatters and he rises again in his true form"></video></div>
+      <div>
+        <div class="kicker">Raid bosses</div>
+        <h3>He doesn't stay down</h3>
+        <p>Queen Buzzbelle, the Hornet Shogun, the Seraph Queen and Empress Buzzbelle fight in stages: shields with circling crystals to smash, rituals to interrupt, falling stars to soak, blade storms, enrage timers and beam clashes you win by mashing.</p>
+        <p>Then the ground gives way and you fall into the Underworld to face <b>Bee-zebub</b>, a winged devil in a fire aura. Beat him, and he rises again in his true form.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="arenas" class="center" style="padding-top: 0">
+  <div class="wrap">
+    <div class="kicker reveal">Five arenas</div>
+    <h2 class="reveal">A long way down</h2>
+    <p class="lede reveal">A new field every five waves, each bigger than the last, with its own bees, hazards, side objective and sky. The graphics grow richer the deeper you go.</p>
+    <div class="arenas">
+      <figure class="arena reveal"><img loading="lazy" src="/media/arena-garden.jpg" alt="Tode's Garden: a sunny lawn with a pond and a wooden fence" /><figcaption><small>I</small>Tode's Garden<span>Waves 1–5 · wild hives</span></figcaption></figure>
+      <figure class="arena reveal"><img loading="lazy" src="/media/arena-mountain.jpg" alt="Sage Mountain: stone paths between pines and misty peaks" /><figcaption><small>II</small>Sage Mountain<span>Waves 6–10 · temple bells</span></figcaption></figure>
+      <figure class="arena reveal"><img loading="lazy" src="/media/arena-citadel.jpg" alt="Sky Citadel: marble pillars above the clouds" /><figcaption><small>III</small>Sky Citadel<span>Waves 11–15 · golden hives</span></figcaption></figure>
+      <figure class="arena reveal"><img loading="lazy" src="/media/arena-tournament.jpg" alt="Tournament of the Gods: a glowing arena among the stars" /><figcaption><small>IV</small>Tournament of the Gods<span>Waves 16–20 · reality rifts</span></figcaption></figure>
+      <figure class="arena reveal"><img loading="lazy" src="/media/arena-underworld.jpg" alt="The Underworld: cracked black stone and rivers of lava" /><figcaption><small>V</small>The Underworld<span>Wave 21 · Bee-zebub</span></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="frogs" class="center" style="padding-top: 0">
+  <div class="wrap">
+    <div class="kicker reveal">Seven frogs</div>
+    <h2 class="reveal">Pick your frog. Dress it up.</h2>
+    <p class="lede reveal">Every class is a fully animated voxel frog with its own weapon, stats and signature move, and every frog can wear everything in the Wardrobe.</p>
+    <div class="frogs reveal"><img loading="lazy" src="/media/frogs.png" alt="The seven frogs in a row, each in a different outfit: a crown and mantle, a ronin helm, a top hat and moustache, a tea cosy, a halo and fairy wings, a flower crown, devil horns and bat wings" width="2279" height="336" /></div>
+    <div class="frog-names reveal">
+      <div><b>Tode</b>The all-rounder</div>
+      <div><b>Bullfrog Brawler</b>Spinning axes, 8 hearts</div>
+      <div><b>Tree Frog Sharpshooter</b>Piercing darts, crits</div>
+      <div><b>Toad Alchemist</b>Lobbed potions</div>
+      <div><b>Starleaf Mage</b>Homing fireballs</div>
+      <div><b>Toad Summoner</b>Pond toads at his side</div>
+      <div><b>Ninja Toad</b>Throwing stars, decoy logs</div>
+    </div>
+
+    <article class="feature reveal" style="text-align: left">
+      <div class="media"><video data-src="/media/loop-wardrobe.mp4" poster="/media/loop-wardrobe.jpg" muted loop playsinline aria-label="Tode tries on a crown, a mantle, a golden breastplate and an ember aura, then powers up"></video></div>
+      <div>
+        <div class="kicker">The Wardrobe</div>
+        <h3>54 things to wear, all earned</h3>
+        <p>Hats, face, body, back and aura: crowns, a ronin helm, devil horns, a grand moustache, a golden breastplate, draped capes, butterfly and infernal wings, a steam jetpack, auras of petals, embers and stardust.</p>
+        <ul>
+          <li>Four are free; the rest unlock with achievements, levels and divine forms</li>
+          <li>You wear it everywhere: in runs, in co-op and in gardens</li>
+        </ul>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section id="together" style="padding-top: 0">
+  <div class="wrap">
+    <div class="center">
+      <div class="kicker reveal">Together</div>
+      <h2 class="reveal">Gardens, parties and co-op</h2>
+      <p class="lede reveal">Your garden is a meeting place. Decorate it with 27 trinkets, pick a song and day or night, then open it up: other frogs hop in, play, and set off on a co-op run together.</p>
+    </div>
+    <div class="duo">
+      <figure class="media reveal"><video data-src="/media/loop-garden.mp4" poster="/media/loop-garden.jpg" muted loop playsinline aria-label="Leaf Rush: Tode hops from leaf to leaf across his garden"></video><figcaption>Leaf Rush: 30 seconds, most leaves wins</figcaption></figure>
+      <div class="card reveal">
+        <div class="icon">🐸</div>
+        <h3>Co-op for 2–4</h3>
+        <p>Public rooms, Quick play or an invite link. Every player plays their own class, and runs survive a server restart.</p>
+        <div class="icon" style="margin-top: 22px">🏡</div>
+        <h3>Gardens to visit</h3>
+        <p>Hop on each other's heads, swim in the pond and skip stones, kick the Tea Ball, boop frogs and trinkets, use 17 emotes and form a party.</p>
+      </div>
+      <figure class="media tall reveal"><video data-src="/media/loop-cannon.mp4" poster="/media/loop-cannon.jpg" muted loop playsinline aria-label="Tode is fired out of the teapot cannon into the pond"></video><figcaption>The teapot cannon</figcaption></figure>
+    </div>
+
+    <div class="cards">
+      <div class="card reveal"><div class="icon">📅</div><h3>Daily Brew</h3><p>A new seeded run every day, the same for everyone, with its own leaderboard, a daily trial and a daily boon.</p></div>
+      <div class="card reveal"><div class="icon">🏆</div><h3>Leaderboards</h3><p>Score, deepest run, fastest Bee-zebub, Daily Brew and co-op boards. Every run goes on by itself, one best entry per frog.</p></div>
+      <div class="card reveal"><div class="icon">🔥</div><h3>Steeping vows</h3><p>Ten vows up to Steep 25 for more score and Golden Leaves. New to bullet hells? Gentle Brew gives you extra hearts and a second life.</p></div>
+      <div class="card reveal"><div class="icon">🫖</div><h3>Tode's Pantry</h3><p>Golden Leaves buy 13 permanent upgrades. Pick one of 17 keepsakes, chase 39 achievements, claim a daily gift and a kettle that brews rewards.</p></div>
+      <div class="card reveal"><div class="icon">☁️</div><h3>Cloud saves</h3><p>Your progress follows you with a save code. An account level with seven ranks, from Tadpole to Todeity, glows around your frog in gardens.</p></div>
+      <div class="card reveal"><div class="icon">📱</div><h3>Plays anywhere</h3><p>Keyboard and mouse or twin-stick touch controls. Installable to your Home Screen, and the graphics adapt to your device.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="made" id="made">
+  <div class="wrap grid">
+    <div>
+      <div class="kicker reveal">How it was made</div>
+      <h2 class="reveal">Built in days, made from code</h2>
+      <p class="lede reveal" style="margin-top: 18px">Todeity started as the frog-and-bees game from the JetBrains Academy course “Build a Game with an AI Coding Agent” and grew from there with Claude Code as an AI pair. Nothing is a bought asset: the frogs, bees, bosses, arenas and wearables are built from code, and the music, voices and sound effects are synthesized in the browser. Even the trailers are rendered by a script that drives the game frame by frame.</p>
+    </div>
+    <div class="facts reveal">
+      <div><b>34k</b><span>lines of JavaScript</span></div>
+      <div><b>Three.js</b><span>procedural 3D world</span></div>
+      <div><b>0</b><span>bought assets or recordings</span></div>
+      <div><b>1</b><span>small Node server for saves, boards and co-op</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <h2 class="reveal">Brew your way to godhood</h2>
+    <a class="btn primary reveal" href="/">▶ Play free in your browser</a>
+    <p class="url reveal">todeity.azurewebsites.net</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Todeity: Rise of the Tea God · an entry for the JetBrains Academy Build Your Game Challenge · #JetBrainsGameChallenge</p>
+    <p>Made with Claude Code (Anthropic). Original course project: JetBrains Academy “Build a Game with an AI Coding Agent”.</p>
+    <p>“Small House” by Jarlan Perez (CC-BY 3.0) and “Armabee Evolved” by Quaternius (CC0), via Poly Pizza.</p>
+  </div>
+</footer>
+
+<script>
+{
+  // The top bar turns solid once you scroll past the hero.
+  const bar = document.getElementById('top');
+  const onScroll = () => bar.classList.toggle('solid', scrollY > 40);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Feature loops load and play only while on screen (they're muted, so browsers allow autoplay).
+  const loops = new IntersectionObserver((entries) => {
+    for (const { target: video, isIntersecting } of entries) {
+      if (isIntersecting) {
+        if (!video.src) video.src = video.dataset.src;
+        if (!still) video.play().catch(() => {});
+      } else video.pause();
+    }
+  }, { rootMargin: '200px 0px' });
+  document.querySelectorAll('video[data-src]').forEach((video) => loops.observe(video));
+  if (still) document.querySelector('.hero video')?.pause();
+
+  // Sections fade in once.
+  const reveal = new IntersectionObserver((entries) => entries.forEach((e) => e.isIntersecting && (e.target.classList.add('on'), reveal.unobserve(e.target))), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal').forEach((el) => reveal.observe(el));
+
+  // Trailer tabs swap the player (wide or tall).
+  const player = document.getElementById('player');
+  const trailer = document.getElementById('trailer');
+  const note = document.getElementById('player-note');
+  document.querySelectorAll('.tab').forEach((tab) => tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
+    player.className = `player ${tab.dataset.shape}`;
+    trailer.pause();
+    trailer.poster = tab.dataset.poster;
+    trailer.src = tab.dataset.src;
+    note.textContent = tab.dataset.note;
+  }));
+}
+</script>
+</body>
+</html>

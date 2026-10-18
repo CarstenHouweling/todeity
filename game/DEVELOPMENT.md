@@ -711,6 +711,33 @@ when the image changes), `-1920x1080.png`, `-2400x1260.png` and the X header `to
 GIFs are gitignored (too big for the repo and the deploy); only the banners are committed. Shot list, chapters and
 post copy: `SUBMISSION.md`.
 
+**Three trailers** (all in `game/promo/`, each in 1080p, 720p and a Discord cut under 10 MB):
+- `todeity-trailer-*` (66 s, `scenes/`): everything at once, cold open on Bee-zebub's true form, feature captions.
+- `todeity-journey-*` (59 s, `scenes-journey/`, harness port 9331, frames in `work/journey/`): a story in chapters,
+  letterboxed (`__bars`), serif chapter cards (`__chapter('II', 'Sage Mountain')`, `__chapter(null, line)` for a story
+  line): the night garden, Tode's Garden, Queen Buzzbelle's entrance, the travel cut-scenes into Sage Mountain, the Sky
+  Citadel and the Tournament (each leap starts in the arena before, `game.setArena`), Omnitode, the fall, Bee-zebub's
+  beam clash (`ai.stage = 99` skips his stage script so the first roar at 66% fires `startClash`; the pilot mashes
+  Space) and the game's own ending, home for tea. The game's arena cards (`.boss-intro`) are hidden where a chapter
+  card shows.
+- `todeity-short-*` (31 s, vertical 1080×1920, `scenes-short/`, port 9332, `work/short/`): reloads at 540×960 at 2×
+  (`tall` in its `common.sh`), fast cuts with big stacked hook text (`__big('So he became<br>a <em>god</em>')`), the
+  Wardrobe in rapid fire and the teapot cannon (moved in the scene's decor so it fires Tode into the pond: the shot
+  flies ~410 units and the garden's edge stops it) and a tall end card (`__endCardTall`).
+
+Each folder has its own `render.sh`; `assemble.py` takes `ORDER` and `encode.sh` takes `NAME` (and `TALL=1`). The
+harness port is `HARNESS_PORT` (default 9330) for `harness.mjs` and `c.mjs`, so the three can render at once.
+
+**The feature page** (`public/about/index.html`, served at `/about`): hero loop, the three trailers in tabs, feature
+rows with muted gameplay loops (loaded and played only while on screen), the five arenas, the dressed frog lineup,
+gardens and co-op, and how it was made. Its media live in `public/media/` (about 30 MB, committed, so they deploy;
+the trailers are the Discord cuts) and are built by `promo/capture/make-web.sh` from caption-free footage:
+`NOCAP=1 WORK=$PWD/work/web bash scenes/render.sh 00 03 04 07 08 12 12b`, `NOCAP=1 WORK=$PWD/work/web-short bash
+scenes-short/render.sh s09`, `NOCAP=1 NOHUD=1 WORK=$PWD/work/hero bash scenes/render.sh 07 08 00 12` (no HUD for the
+hero) and `STILLS=1 bash scenes-journey/render.sh j02 j04 j05 j06 j08` (arena stills). `server.js` serves a folder's
+`index.html`, knows the video and font MIME types and answers byte ranges (Safari won't play an MP4 without them);
+`/media/` is cached for a day.
+
 Everything is made by `promo/capture/` from the dev build, not by screen recording:
 
 - **Virtual time** (`vtime.js`, injected before the page loads): `setTimeout`, `setInterval`, `requestAnimationFrame`,
@@ -755,7 +782,8 @@ STILLS=1 bash scenes/render.sh 00 && TIER=4 bash formshot.sh && bash closeup.sh 
 node banners.mjs "$PWD/work/banner" '[["todeity-banner-1200x630.jpg",1200,630,"full"],["todeity-header-1500x500.png",1500,500,"header"]]'
 ```
 
-Python needs Pillow and numpy for `lineup.sh` (`PYTHON=…`), ffmpeg can be given as `FFMPEG=…`. Scenes are written
+Python needs Pillow and numpy for `lineup.sh` and `make-web.sh` (`PYTHON=…`), ffmpeg can be given as `FFMPEG=…`.
+`STILLS=1` renders never delete a scene's video frames (they did until Oct 18). Scenes are written
 against the game as it is: when a wave, boss or menu changes, check the contact sheets before trusting a re-render.
 
 ## Graphics levels
