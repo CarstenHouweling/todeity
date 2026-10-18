@@ -633,6 +633,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   row; `.menu` itself allows both, since a touch only pans the ways every layer up to the scroller allows: with
   `pan-y` on `.menu` the garden's set chips and the wardrobe row couldn't be swiped); panel heights use
   `dvh` (tablet `vh` includes the browser bars).
+- **Redraws keep their scroll** (v0.29.9): most clicks redraw their whole screen (`showMenu`/`showModal` replace the
+  HTML), which used to send every list back to the start (the garden's set chips, the wardrobe row, the Pantry,
+  Settings, Steeping…). When the same screen is drawn again, `scrollState` notes where each scrolled box was (keyed
+  by its class and how many boxes with that class come before it) and `restoreScroll` puts it back. A screen that
+  fills itself in after `showMenu` (the garden editor's sets) restores again afterwards (`showMenu` returns the
+  positions).
 - **Screen size:** everything is sized from the layout viewport (`viewWidth`/`viewHeight` in `Viewport.js`), never
   `window.innerWidth`: on phones that grows when the browser zooms out, and a canvas sized from it made the page wider
   than the screen and kept it zoomed out (menus cut off on the right). The canvas is pinned to the screen by CSS

@@ -19,6 +19,7 @@ export const CHANGELOG = [
       '✏️ Editing your garden leaves the lawn in view: the tools in a slim bar on top, your trinkets in a low tray at the bottom',
       '👆 On phones the garden\'s set chips and the wardrobe row scroll sideways again, and tapping a set (Tea Party…) shows what it needs',
       '🧺 Editing on a phone: swipe the trinkets sideways to look through them, pull one up to place it, and tap a set to see just its trinkets',
+      '📜 Lists stay where you scrolled them when you tap something in them (garden sets, wardrobe, Pantry, Settings…), and the wardrobe row swipes on phones again',
       '📱 A new player\'s title fits on a phone held sideways: the story line is gone (the opening cut-scene tells it) and the controls are smaller',
       '🐸 Tap your level to see your profile: name, records and your progress code',
       '🐸 Choose your frog is easier to read: one short line per frog, and all seven fit on the screen',

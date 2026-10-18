@@ -760,10 +760,13 @@ export class Hud {
   showMenu(className, html, clickAction = null) {
     clearInterval(this.typing);
     this.onHush();
+    // The same screen drawn again (a click changed something): its lists keep where they were scrolled to.
+    const scrolls = !this.menu.hidden && this.menu.className === `menu ${className}` ? scrollState(this.menu) : null;
     this.menuName = className.split(' ')[0];
     this.menu.className = `menu ${className}`;
     this.menu.innerHTML = html;
     this.menu.hidden = false;
+    if (scrolls) restoreScroll(this.menu, scrolls);
     this.menuShownAt = performance.now();
     this.menuClickAction = clickAction;
     // The game-over screen stands alone: the run's HUD (wave line, boss bar, ability bar, tips) hides behind it.
@@ -771,6 +774,7 @@ export class Hud {
     // The title has no corner buttons (sound is in its ⚙️ Settings, screenshots are C): they would sit on its dock.
     document.body.classList.toggle('title-open', this.menuName === 'title-screen');
     document.body.classList.remove('run-paused', 'coop-menu');
+    return scrolls; // (a screen that fills itself in afterwards, like the garden editor, restores them again)
   }
 
   hideMenu() {
@@ -788,9 +792,11 @@ export class Hud {
   }
 
   showModal(className, html) {
+    const scrolls = !this.modal.hidden && this.modal.className === `modal ${className}` ? scrollState(this.modal) : null;
     this.modal.className = `modal ${className}`;
     this.modal.innerHTML = `<div class="panel">${html}</div>`;
     this.modal.hidden = false;
+    if (scrolls) restoreScroll(this.modal, scrolls);
   }
 
   hideModal() {
@@ -1107,7 +1113,7 @@ export class Hud {
     const list = filter
       ? `<button type="button" class="trinket-toggle" data-action="garden-set" data-set="${filter.id}">✖ All trinkets</button>${filter.parts.map((id) => button(trinketById(id))).join('')}`
       : `${mine.map(button).join('')}${toggle}${state.locked ? missing.map(button).join('') : ''}`;
-    this.showMenu(
+    const scrolls = this.showMenu(
       'garden-mode',
       `<div class="garden-bar">
         <div class="garden-top">
@@ -1124,6 +1130,7 @@ export class Hud {
       </div>`
     );
     this.refreshGarden(state);
+    if (scrolls) restoreScroll(this.menu, scrolls); // the sets are only there now
   }
 
   refreshGarden({ held = null, selected = null, snap = false, night = false, canUndo = false, collapsed = false } = {}) {
@@ -2096,6 +2103,43 @@ function rewardProgress(kind, state) {
   if (state.ready) return 1;
   const period = kind === 'gift' ? 86_400_000 : KETTLE_HOURS * 3_600_000;
   return Math.max(0, Math.min(1, 1 - state.nextIn / period)).toFixed(3);
+}
+
+/**
+ * Where the scrolled boxes inside `root` (and `root` itself) are scrolled to, keyed by their class and how many
+ * boxes with that class come before them, so a redraw of the same screen can put them back (`restoreScroll`).
+ * Without it every click that redrew a screen sent its lists back to the start.
+ */
+function scrollState(root) {
+  const state = new Map();
+  const counts = new Map();
+  const note = (el, key) => {
+    if (el.scrollLeft || el.scrollTop) state.set(key, [el.scrollLeft, el.scrollTop]);
+  };
+  note(root, ':root');
+  for (const el of root.querySelectorAll('*')) {
+    const cls = el.getAttribute('class') ?? el.tagName;
+    const n = counts.get(cls) ?? 0;
+    counts.set(cls, n + 1);
+    note(el, `${cls}#${n}`);
+  }
+  return state;
+}
+
+function restoreScroll(root, state) {
+  if (!state.size) return;
+  const counts = new Map();
+  const put = (el, key) => {
+    const at = state.get(key);
+    if (at) [el.scrollLeft, el.scrollTop] = at;
+  };
+  put(root, ':root');
+  for (const el of root.querySelectorAll('*')) {
+    const cls = el.getAttribute('class') ?? el.tagName;
+    const n = counts.get(cls) ?? 0;
+    counts.set(cls, n + 1);
+    put(el, `${cls}#${n}`);
+  }
 }
 
 /** 3:05:09 or 12:34 for a countdown in ms. */

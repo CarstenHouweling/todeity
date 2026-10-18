@@ -4286,7 +4286,8 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
   overscroll-behavior: contain;
 }
 
-.garden-sheet .emote-grid {
+/* The sheet scrolls up and down for the grids in it; the wardrobe row (phones) keeps scrolling sideways itself. */
+.garden-sheet .emote-grid:not(.wardrobe-grid) {
   max-height: none;
   overflow: visible;
 }
