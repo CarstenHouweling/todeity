@@ -258,8 +258,8 @@ async function serveStatic(res, pathname) {
 // client → server: { t: 'create', name, public } | { t: 'join', code, name } | { t: 'quick', name }
 //                  { t: 'visibility', public } (host) | { t: 'start' } / { t: 'open' } (host: a run starts / ended)
 //                  { t: 'relay', to: 'all'|'host'|id, d } | { t: 'leave' }
-//                  { t: 'resume', code, id, hostId, name, color, public, started } (back after a restart or a drop)
-// server → client: { t: 'joined', code, id, hostId, public } | { t: 'players', players, hostId, started, public }
+//                  { t: 'resume', code, id, hostId, name, color, public, started, key } (back after a restart or a drop)
+// server → client: { t: 'joined', code, id, hostId, public, key } | { t: 'players', players: [{ id, name, color, away }], hostId, started, public }
 //                  { t: 'relay', from, d } | { t: 'error', message } | { t: 'closed', reason }
 //                  { t: 'restarting' } (the server is about to restart: reconnect and resume)
 //
@@ -268,6 +268,12 @@ async function serveStatic(res, pathname) {
 // gets their old id back, so the run carries on (Net.js reconnects, main.js re-sends the wave). Ids start at a
 // random number in every server process, so new players never take an id that someone is about to resume with.
 // A room made again by a guest closes when its host isn't back within RESUME_GRACE.
+//
+// **A player's own connection dropping** (bad Wi-Fi, a phone switching from Wi-Fi to mobile data): their socket
+// closing doesn't take them out of the room. They stay `away` for AWAY_GRACE (the host too: the room waits), and a
+// `resume` takes their seat back. The phone often opens its new socket before the server has noticed the old one
+// is dead (that takes up to 30 s, see the ping below), so a resume with the seat's `key` (sent in `joined`) may take
+// over a seat that still looks connected; before v0.29.6 that was refused and the player was out of the run.
 
 const MAX_PLAYERS = 4;
 const COLORS = ['#7ed957', '#5fb8ff', '#ff9ec7', '#ffd23f'];
@@ -275,6 +281,9 @@ const rooms = new Map();
 const MAX_PUBLIC_ROOMS = 200; // a list longer than this is noise (and a sign of abuse)
 let nextClientId = 1 + randomInt(1_000_000) * 1000;
 const RESUME_GRACE = 120_000; // ms a room made again by a guest waits for its host
+const AWAY_GRACE = 90_000; // ms a player whose connection dropped keeps their seat
+const newKey = () => randomBytes(12).toString('base64url');
+const validKey = (key) => typeof key === 'string' && /^[\w-]{8,40}$/.test(key);
 let stopping = false; // shutting down: sockets closing now are a restart, not players leaving
 
 function makeCode() {
@@ -288,18 +297,20 @@ function makeCode() {
 const sendTo = (ws, message) => ws.readyState === 1 && ws.send(JSON.stringify(message));
 
 function broadcastPlayers(room) {
-  const players = [...room.clients.values()].map(({ id, name, color }) => ({ id, name, color }));
+  const players = [...room.clients.values()].map(({ id, name, color, away }) => ({ id, name, color, away: Boolean(away) }));
   for (const client of room.clients.values()) sendTo(client.ws, { t: 'players', players, hostId: room.hostId, started: room.started, public: room.public });
 }
 
-function leaveRoom(client) {
+function leaveRoom(client, reason = 'The host left the game.') {
   const room = client.room;
   if (!room) return;
+  clearTimeout(client.awayTimer);
   room.clients.delete(client.id);
   client.room = null;
   if (client.id === room.hostId || room.clients.size === 0) {
     for (const other of room.clients.values()) {
-      sendTo(other.ws, { t: 'closed', reason: 'The host left the game.' });
+      clearTimeout(other.awayTimer);
+      sendTo(other.ws, { t: 'closed', reason });
       other.room = null;
     }
     rooms.delete(room.code);
@@ -312,9 +323,23 @@ function joinRoom(client, room, name) {
   const used = new Set([...room.clients.values()].map((c) => c.color));
   client.name = publicName(name, 'Frog');
   client.color = COLORS.find((color) => !used.has(color));
+  client.key = newKey();
   client.room = room;
   room.clients.set(client.id, client);
-  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public });
+  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public, key: client.key });
+  broadcastPlayers(room);
+}
+
+/** The connection dropped without a `leave`: keep the seat for AWAY_GRACE, in case they resume (see above). */
+function goAway(client) {
+  const room = client.room;
+  if (!room || client.away) return;
+  // Alone in the room, nobody waits for them; the resume makes the room again.
+  if (room.clients.size === 1) return leaveRoom(client);
+  client.away = true;
+  client.awayTimer = setTimeout(() => {
+    if (client.room === room && client.away) leaveRoom(client, "The host's connection didn't come back.");
+  }, AWAY_GRACE);
   broadcastPlayers(room);
 }
 
@@ -327,7 +352,16 @@ function resumeRoom(client, message) {
   if (!/^[A-Z]{4}$/.test(code) || !Number.isSafeInteger(id) || !Number.isSafeInteger(hostId)) return lost('Lost the co-op room.');
   if (client.room?.code === code && client.id === id) return; // (already back)
   let room = rooms.get(code);
-  if (room && (room.hostId !== hostId || room.clients.has(id))) return lost('The room carried on without you.');
+  if (room && room.hostId !== hostId) return lost('The room carried on without you.');
+  const seat = room?.clients.get(id);
+  if (seat && seat !== client) {
+    // Our old connection: gone (away), or still looking alive to the server (the key proves it's ours).
+    if (!seat.away && !(seat.key && message.key === seat.key)) return lost('The room carried on without you.');
+    clearTimeout(seat.awayTimer);
+    room.clients.delete(id);
+    seat.room = null;
+    seat.ws.terminate();
+  }
   leaveRoom(client);
   if (!room) {
     room = { code, hostId, clients: new Map(), started: Boolean(message.started), public: Boolean(message.public) && publicCount() < MAX_PUBLIC_ROOMS, createdAt: Date.now() };
@@ -346,12 +380,14 @@ function resumeRoom(client, message) {
   }
   if (id === hostId) clearTimeout(room.hostTimer);
   client.id = id;
+  client.key = seat?.key ?? (validKey(message.key) ? message.key : newKey());
+  client.away = false;
   client.name = publicName(message.name, 'Frog');
   const used = new Set([...room.clients.values()].map((c) => c.color));
   client.color = COLORS.includes(message.color) && !used.has(message.color) ? message.color : COLORS.find((color) => !used.has(color));
   client.room = room;
   room.clients.set(client.id, client);
-  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public, resumed: true });
+  sendTo(client.ws, { t: 'joined', code: room.code, id: client.id, hostId: room.hostId, public: room.public, resumed: true, key: client.key });
   broadcastPlayers(room);
 }
 
@@ -538,7 +574,7 @@ sockets.on('connection', (ws, req, ip) => {
   ws.on('message', (raw) => handleSocketMessage(client, raw));
   ws.on('close', () => {
     if (stopping) return; // a restart: the rooms come back when their players resume
-    leaveRoom(client);
+    goAway(client);
     leaveGarden(client);
     const left = (relayPerIp.get(ip) ?? 1) - 1;
     if (left > 0) relayPerIp.set(ip, left);

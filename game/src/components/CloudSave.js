@@ -37,6 +37,11 @@ let eliteBase = meta.eliteKills ?? 0; // elite kills the server knows about
 
 export const notePending = (id, reward) => pending.set(id, reward);
 
+// The outfit picked here that the server hasn't confirmed yet. A reply to an earlier outfit save (or a run report)
+// carries the old one, and taking it made the wardrobe jump back to the item worn before.
+let outfitWanted = null;
+export const noteOutfit = (outfit) => (outfitWanted = structuredClone(outfit));
+
 /** Takes the server's progress, keeping achievements (and their leaves) that are still on their way. */
 function apply(data) {
   const progress = data.progress;
@@ -49,6 +54,7 @@ function apply(data) {
   for (const reward of pending.values()) meta.leaves += reward;
   eliteBase = progress.eliteKills;
   if (data.profile) meta.profile = structuredClone(data.profile); // the player tag lives in the cloud save too
+  if (outfitWanted) meta.profile = { ...meta.profile, outfit: structuredClone(outfitWanted) };
   cloud.status = 'online';
   saveMeta();
   cloud.onChange?.();
@@ -106,6 +112,7 @@ export async function loadCode(code) {
     const { ok, data } = await request(`/${encodeURIComponent(code.trim())}`);
     if (!ok) return data.error ?? "Couldn't load that save.";
     pending.clear();
+    outfitWanted = null; // another save: its own outfit
     apply(data);
     return null;
   } catch {
@@ -270,7 +277,10 @@ export async function saveOutfit(outfit) {
   if (cloud.status !== 'online' || !cloud.code || !isPersisting()) return;
   try {
     const { data } = await request(`/${encodeURIComponent(cloud.code)}/outfit`, { outfit });
-    if (data.progress) apply(data);
+    if (!data.progress) return;
+    // The latest choice arrived: the server's copy counts again (it keeps only unlocked items).
+    if (JSON.stringify(outfit) === JSON.stringify(outfitWanted)) outfitWanted = null;
+    apply(data);
   } catch {
     // Kept locally; it goes up with the next change.
   }

@@ -33,7 +33,7 @@ import { PlayerBeacon } from './components/PlayerBeacon.js';
 import { TouchControls } from './components/TouchControls.js';
 import { canLockLandscape, isFullscreen, landscapeFullscreen, needsHomeScreen, onFullscreenChange, toggleFullscreen } from './components/Fullscreen.js';
 import { drawShareCard, shareText } from './components/ShareCard.js';
-import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, saveOutfit, saveProfile, setGardenLook, setGardenPublic } from './components/CloudSave.js';
+import { claimReward, cloud, fetchGarden, gardenCode, initCloud, loadCode, reportBuy, reportRun, saveDecor, noteOutfit, saveOutfit, saveProfile, setGardenLook, setGardenPublic } from './components/CloudSave.js';
 import { randomName } from './components/PlayerTag.js';
 import { Bullets } from './components/Bullets.js';
 import { Leaves, leavesForLevel } from './components/Leaves.js';
@@ -4511,6 +4511,7 @@ function wear(id) {
   if (outfit[item.slot] === id) delete outfit[item.slot];
   else outfit[item.slot] = id;
   meta.profile = { ...meta.profile, outfit };
+  noteOutfit(myOutfit()); // (the same shape saveOutfit sends, so the reply can be matched)
   saveMeta();
   player.setOutfit(outfit);
   play('pop');
@@ -7119,9 +7120,9 @@ function startCoopRun(players, sharedVows = {}) {
   coop = { host: net.isHost, remotes: new Map(), ready: new Set(), size: players.length };
   pendingHits.clear();
   pendingStatuses.clear();
-  // Phones on Auto graphics: a team's swarm is bigger and every teammate's skills play here too, so start lighter
-  // (no bloom or shadows; Low with 3 or more frogs) instead of stuttering until the frame rate check steps down.
-  if (touch.enabled && settings.graphics === 'auto') stepTo(players.length >= 3 ? LOW_STEP : 3);
+  // No lighter start for phones on Auto: a gaming phone kept its shadows only until co-op began. Weak devices start
+  // on Low anyway (looksWeak), and adaptQuality steps down within seconds when a team's swarm is too much.
+  qualityGrace(5); // (teammates' frogs load during the first seconds: not a sign of a slow phone)
   roomPresent = new Set(players.map((p) => p.id));
   lastWaveShare = null;
   waveClearedShared = false;
@@ -7142,20 +7143,29 @@ let resumedAt = -Infinity;
 let lastWaveShare = null; // host: the last wave message, and whether that wave is cleared, for teammates coming back
 let waveClearedShared = false;
 let guestWave = 0; // guest: the last wave the host started for us
-let roomPresent = new Set(); // who was in the room at the last players message
+let roomPresent = new Set(); // who was in the room (and connected) at the last players message
 
-/** The room's players changed: teammates who came back are caught up; ones who left are dropped. */
+/**
+ * The room's players changed: teammates who came back are caught up; ones who left are dropped. A teammate whose
+ * connection dropped stays in the room as `away` for a while (server.js AWAY_GRACE): their frog waits where it
+ * stood, and they're caught up like anyone coming back once they resume.
+ */
 function teammatesChanged() {
-  const present = new Set(net.players.map((p) => p.id));
+  const present = new Set(net.players.filter((p) => !p.away).map((p) => p.id));
   for (const info of net.players) {
-    if (info.id === net.id || roomPresent.has(info.id)) continue;
+    if (info.id === net.id) continue;
+    if (info.away) {
+      if (roomPresent.has(info.id)) hud.showCallout(`📡 ${info.name} lost the connection…`);
+      continue;
+    }
+    if (roomPresent.has(info.id)) continue;
     // Back after a dropped connection (their puppet may be gone already).
     if (!coop.remotes.has(info.id)) {
       const remote = new RemoteTode(info, { scene, particles, effects, hud });
       coop.remotes.set(info.id, remote);
       remote.load();
-      hud.showCallout(`${info.name} is back`);
     }
+    hud.showCallout(`${info.name} is back`);
     // Host: they missed what happened meanwhile, so tell them the wave again (and whether it's cleared).
     if (coop.host && lastWaveShare) {
       net.queue(info.id, lastWaveShare);
@@ -8283,6 +8293,9 @@ music.start();
 
 // Pause automatically when the player switches away.
 window.addEventListener('blur', () => autoPause && !coop && pause());
+// Closing or reloading the page leaves the co-op room for real: a socket that just drops keeps its seat for a
+// while (server.js AWAY_GRACE), and teammates would wait for a frog that isn't coming back.
+window.addEventListener('pagehide', () => net.inRoom && net.leave());
 
 window.addEventListener('resize', () => {
   camera.aspect = viewWidth() / viewHeight();

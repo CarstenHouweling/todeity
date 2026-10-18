@@ -466,7 +466,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the server can work out itself (`unlock`: an achievement, an account level or the best form), so nothing new is
   stored per item. The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
   `saveOutfit` in CloudSave.js, sent 1.5 s after the last click; the server keeps only unlocked items with
-  `cleanOutfit(outfit, progress)`, and its cleaned copy replaces the local one). `myOutfit()` in main.js cleans it again
+  `cleanOutfit(outfit, progress)`, and its cleaned copy replaces the local one). Until the server has confirmed the
+  latest pick, `noteOutfit` keeps it over any server reply (`outfitWanted` in CloudSave.js `apply`): before v0.29.6 the
+  reply to the previous save arrived after the next click and put the old item back on. `myOutfit()` in main.js cleans it again
   with the loaded save. **Where it shows:** everywhere. The frame loop dresses Tode (`player.setOutfit`, a no-op
   while unchanged) through `shownOutfit(outfit, { tier, run })`: no hat from `CREST_TIER` (2, the form's crest sits on
   the head; also a garden Power Up) and no aura in runs (the forms bring their own). Co-op teammates get the outfit
@@ -866,7 +868,9 @@ server proxies `/ws` and `/api`).
 - **Co-op performance** (v0.26.2, a 3-player run on phones lagged for everyone): a guest's hits and statuses are
   merged per bee and sent `HIT_RATE` (20) times a second (`queueHit`, `sendPendingHits`); the host draws no damage
   numbers for teammates' hits (their own screens do); snapshots drop to 10/s above 80 bees (`snapshotRate`); phones
-  on Auto graphics start a co-op run at step 3, or Low with 3+ players (`startCoopRun`); damage numbers are capped
+  on Auto graphics used to start a co-op run at step 3, or Low with 3+ players; since v0.29.6 they keep their step
+  (a gaming phone lost its shadows at once) and `adaptQuality` steps down when needed, after a 5 s `qualityGrace`
+  while teammates load (`startCoopRun`); damage numbers are capped
   at 40 on touch. Measured with three local tabs in a Bee-zebub fight with late-game builds: every player spat
   150–250 times a second and each spit was a message and a projectile on every other screen (60% of the host's
   traffic, ~85% of a guest's). Spits are now shared at most `SPIT_SHARE.rate` (40) a second (split-off children
@@ -890,6 +894,16 @@ server proxies `/ws` and `/api`).
   (the host sends it before its own travel). Brimstone Rings are events (`k: 'fring'`), simulated by everyone.
 - **Restarts:** a dropped connection or a server restart doesn't end the run; everyone reconnects into the same
   room (see Deploying while people play).
+- **A player's own connection dropping** (v0.29.6; bad Wi-Fi, a phone switching from Wi-Fi to mobile data): the
+  server keeps their seat as `away` for `AWAY_GRACE` (90 s; the host's too, the room waits) instead of removing them
+  when the socket closes (`goAway` in server.js); `players` carries `away`, teammates get a "📡 … lost the
+  connection" callout and their frog waits where it stood, and on resume they're caught up like after a restart
+  (`teammatesChanged`). The phone opens its new socket before the server notices the old one is dead (the ping
+  sweep takes up to 30 s), so `joined` hands each seat a `key` and a `resume` carrying it takes the seat over, closing
+  the stale socket; without the key only an `away` seat can be taken. Before this the resume was refused ("The room
+  carried on without you") and the player was out of the run. Closing or reloading the page sends a real `leave`
+  (`pagehide`), so teammates don't wait 90 s for a closed tab. Tested with raw sockets against a local server
+  (switch-over with a live old socket, a wrong key refused, the host dropping and coming back), not on real phones.
 - **Connection indicator** (v0.27.2): `Net` pings the server every 1.5 s while in a room (the server answers `pong`
   at once) and `net.quality()` gives good / weak (≥250 ms) / bad (≥600 ms, or 64 KB waiting to be sent) / lost
   (reconnecting); an unanswered ping counts with its age, so a stall shows at once. `updateConnection()` in main.js

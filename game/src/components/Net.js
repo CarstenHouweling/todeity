@@ -4,7 +4,9 @@
 // **Riding out a restart:** when the connection drops while we're in a room (a deploy restarts the server, Wi-Fi
 // blips), we don't give up: `reconnecting` is emitted, the socket is opened again with backoff for up to RESUME_FOR,
 // and a `resume` message asks for our old room, id and host back. `resumed` follows when it worked; `disconnected`
-// when it never did, or `closed` when the room is gone for good.
+// when it never did, or `closed` when the room is gone for good. The server keeps our seat meanwhile (`away` in
+// `players`), and the `key` it gave us in `joined` lets the resume take it back even before the server noticed the
+// old socket died (a phone switching from Wi-Fi to mobile data opens the new one within a second or two).
 //
 // **Connection quality:** a ping every PING_EVERY ms measures the round trip to the server (the server answers
 // `pong` right away). `quality()` turns it into good / weak / bad / lost for the co-op HUD's badge.
@@ -36,6 +38,7 @@ export class Net {
     this.players = [];
     this.started = false;
     this.isPublic = false; // listed for everyone (see server.js), or only joined by code
+    this.key = null; // proves a resume is us (see the top of this file)
     this.listeners = new Set();
     this.outbox = new Map(); // to → messages
     this.resuming = null; // { until, session } while getting back into the room after a drop
@@ -140,7 +143,7 @@ export class Net {
   /** Back into our room after the connection dropped (see the top of this file). */
   async resume() {
     const me = this.players.find((p) => p.id === this.id);
-    const session = { t: 'resume', code: this.code, id: this.id, hostId: this.hostId, name: me?.name, color: me?.color, public: this.isPublic, started: this.started };
+    const session = { t: 'resume', code: this.code, id: this.id, hostId: this.hostId, name: me?.name, color: me?.color, public: this.isPublic, started: this.started, key: this.key };
     const resuming = (this.resuming = { until: Date.now() + RESUME_FOR, session });
     this.emit({ t: 'reconnecting' });
     let delay = 1_000;
@@ -171,6 +174,7 @@ export class Net {
       this.hostId = message.hostId;
       this.code = message.code;
       this.isPublic = Boolean(message.public);
+      this.key = message.key ?? null;
       if (this.resuming) {
         this.resuming = null;
         this.emit(message);
@@ -254,6 +258,7 @@ export class Net {
     this.id = null;
     this.hostId = null;
     this.code = null;
+    this.key = null;
     this.players = [];
     this.started = false;
     this.outbox.clear();

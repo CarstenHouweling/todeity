@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.29.6',
+    date: '2026-10-18',
+    title: 'Stay a while',
+    changes: [
+      '👕 Picking another item in the wardrobe sticks: it no longer jumps back to what you wore before a moment later',
+      '📱 Phones on Auto graphics keep their shadows and full graphics when a co-op run starts; they only step down if the game actually runs slowly',
+      '📡 A bad connection no longer throws you out of a co-op run: switching from Wi-Fi to mobile data (or a short drop) puts you back in your seat, and your team waits up to 90 seconds for you, even when you\'re the host',
+    ],
+  },
+  {
     version: '0.29.5',
     date: '2026-10-17',
     title: 'Clean clashes',
