@@ -1136,13 +1136,19 @@ export class Hud {
     const sets = gardenSets(decor);
     const active = selected ?? held;
     this.menu.querySelector('.garden-where').innerHTML = `✏️ <b>Edit garden</b> <small>${owned.size}/${TRINKETS.length} · 🌷 ${gardenBeauty(decor)}</small>`;
+    // The hint line: what to do with the trinket in hand, else the set whose chip was tapped, else how it works.
+    const info = !active && SETS.find((set) => set.id === this.gardenSetInfo);
     const status = this.menu.querySelector('.garden-status');
-    status.classList.toggle('idle', !active);
+    status.classList.toggle('idle', !active && !info);
     status.innerHTML = held
       ? `Drop the ${trinketById(held).name} on the lawn. Scroll or <b>R</b> turns it.`
       : active
         ? `${trinketById(active).name}: drag it to move it, <b>R</b> turns it, <b>Delete</b> puts it away.`
-        : 'Drag a trinket onto the lawn. Drag the lawn to look around, scroll or pinch to zoom, right-drag or WASD to move.';
+        : info
+          ? `${info.icon} <b>${info.name}</b>: place ${info.parts
+              .map((id) => `${trinketById(id).name}${placed.has(id) ? ' ✓' : owned.has(id) ? '' : ' ❔'}`)
+              .join(', ')} close together for +${info.beauty} beauty.${sets.some((found) => found.set.id === info.id) ? ' Complete!' : ''}`
+          : 'Drag a trinket onto the lawn. Drag the lawn to look around, scroll or pinch to zoom, right-drag or WASD to move.';
     const act = (action, icon, label, opts) => this.gardenAct(action, icon, label, opts);
     this.menu.querySelector('.garden-tools').innerHTML = [
       active ? act('turn-trinket', '↻', 'Turn (R)') : '',
@@ -1157,7 +1163,7 @@ export class Hud {
     tray.querySelector('.garden-sets').innerHTML = SETS.map((set) => {
       const done = sets.some((found) => found.set.id === set.id);
       const parts = set.parts.map((id) => `<span class="${placed.has(id) ? 'have' : owned.has(id) ? '' : 'missing'}">${trinketById(id).icon}</span>`).join('');
-      return `<span class="garden-set ${done ? 'done' : ''}" style="--set:${set.color}" title="${set.name}: place ${set.parts.map((id) => trinketById(id).name).join(', ')} close together (+${set.beauty} beauty)">${set.icon} <b>${set.name}</b> ${parts}${done ? ' ✓' : ''}</span>`;
+      return `<button type="button" class="garden-set${done ? ' done' : ''}${set.id === this.gardenSetInfo ? ' on' : ''}" data-action="garden-set" data-set="${set.id}" style="--set:${set.color}" title="${set.name}: place ${set.parts.map((id) => trinketById(id).name).join(', ')} close together (+${set.beauty} beauty)">${set.icon} <b>${set.name}</b> ${parts}${done ? ' ✓' : ''}</button>`;
     }).join('');
   }
 

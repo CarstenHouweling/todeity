@@ -372,8 +372,11 @@ canvas.game {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
+  overflow-x: hidden;
   overflow-y: auto;
-  touch-action: pan-y;
+  /* pan-x too: a touch's allowed panning is what every layer up to here allows, so a sideways row inside a menu
+     (the garden's set chips, the wardrobe on phones) couldn't be swiped with pan-y alone. */
+  touch-action: pan-x pan-y;
   overscroll-behavior: contain;
   padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   background: rgba(10, 30, 15, 0.55);
@@ -4014,6 +4017,10 @@ body.touch .steep-badge {
   flex: none;
   white-space: nowrap;
   padding: 3px 8px;
+  border: 1px solid transparent;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.07);
   font-size: 12px;
@@ -4024,6 +4031,7 @@ body.touch .steep-badge {
 .garden-set span.have { opacity: 1; }
 .garden-set span.missing { opacity: 0.2; filter: grayscale(1); }
 .garden-set.done { background: color-mix(in srgb, var(--set) 30%, transparent); box-shadow: 0 0 10px var(--set); }
+.garden-set.on { border-color: #ffd36b; }
 
 .trinket {
   touch-action: none; /* a finger on a trinket drags it out of the tray instead of scrolling */

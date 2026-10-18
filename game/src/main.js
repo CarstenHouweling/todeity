@@ -8130,6 +8130,11 @@ const MENU_ACTIONS = {
     trayCollapsed = !trayCollapsed;
     refreshGardenTray();
   },
+  // A set chip in the editor's tray: what the set needs shows in the hint line (again: hidden).
+  'garden-set': ({ set }) => {
+    hud.gardenSetInfo = hud.gardenSetInfo === set ? null : set;
+    refreshGardenTray();
+  },
   'garden-locked': () => {
     showLockedTrinkets = !showLockedTrinkets;
     if (decorating && garden.editing) hud.showGarden(gardenState());

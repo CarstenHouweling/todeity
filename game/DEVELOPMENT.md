@@ -411,7 +411,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Turn and Put away (with a trinket held or picked), Undo, Grid, Day/Night, View, Top, 🧺 the tray, and a gold Done;
   a hint line under it (the general one hides on phones). The tray sits at the bottom: the sets in one line that
   scrolls sideways, then your own trinkets (two rows at most, one on phones held sideways; the ones still to find
-  only on request, `showLockedTrinkets`). Share and Visit left the editor: they're in the walking bar's ⋯ More. On
+  only on request, `showLockedTrinkets`). The set chips are buttons: a tap shows what the set needs in the hint line
+  (`hud.gardenSetInfo`, the `garden-set` action; ✓ placed, ❔ not found yet), again hides it. Share and Visit left the editor: they're in the walking bar's ⋯ More. On
   phones held upright both bars put the garden and the exit buttons on the first row and the tools on a second;
   while editing, 🔊 sits under the bar.
 - **Garden walking keeps its pace** (v0.26.2): the frame loop caps the game's step at 0.1 s, so below 10 fps a frog
@@ -624,7 +625,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   weather and modifier lines show only their names; banners and callouts wrap. Narrow screens (`max-width: 600px`)
   shrink hearts and score and move the wave line below them. The pause menu still lists the whole build, below its
   buttons and in its own scrolling box (`.pause .build`), so Resume stays reachable. The body has
-  `touch-action: none` for the sticks, so every scrolling menu box sets `touch-action: pan-y`; panel heights use
+  `touch-action: none` for the sticks, so every scrolling menu box sets `touch-action: pan-y` (`pan-x` for a sideways
+  row; `.menu` itself allows both, since a touch only pans the ways every layer up to the scroller allows: with
+  `pan-y` on `.menu` the garden's set chips and the wardrobe row couldn't be swiped); panel heights use
   `dvh` (tablet `vh` includes the browser bars).
 - **Screen size:** everything is sized from the layout viewport (`viewWidth`/`viewHeight` in `Viewport.js`), never
   `window.innerWidth`: on phones that grows when the browser zooms out, and a canvas sized from it made the page wider
