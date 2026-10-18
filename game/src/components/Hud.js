@@ -907,10 +907,9 @@ export class Hud {
    */
   showTitle(best) {
     const fresh = !meta.runs;
+    // A new player gets the controls (the story line that used to come first pushed the dock off phone screens).
     const intro = fresh
-      ? `<p class="story">Tode was brewing his morning tea when the bees came buzzing over the fence.
-        Brew mighty powers, rise from frog to god, and chase the hive all the way down to Bee-zebub.</p>
-        ${
+      ? `${
           document.body.classList.contains('touch')
             ? `<div class="controls">
           <span><b>Left stick</b> move</span>

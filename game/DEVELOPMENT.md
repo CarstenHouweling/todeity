@@ -532,7 +532,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   **garden code** (`POST /api/save/:code/garden`, `save.garden`, 6 characters); `GET /api/garden/:garden` returns only
   the name, decor, level and beauty (misses are rate-limited). 🔗 Share shows the code and a `?garden=CODE` link;
   👀 Visit loads that decor read-only (`garden.visit`, `hud.showGardenVisit`). Returning players see a level card on the title (`accountLevel`, shared with the server, curve retuned in v0.27.1 so playing again counts: runs ×60, boss kills ×50, victories ×200, achievements ×15, best wave ×5 xp, level n at 150·(n−1)^1.4 xp, a first full run ~4, 19 runs ~14: level, rank, runs,
-  best wave, achievements, streak in the profile popup it opens) instead of the story and controls.
+  best wave, achievements, streak in the profile popup it opens) instead of the controls.
 - **Steeping** (`components/Steeping.js`, title screen after the first run): vows with ranks (more bees, tougher
   bees/bosses, faster bullets, fewer hearts, early elites, a modifier every wave, a locked Pantry). Each rank adds its
   heat to the Steep level; score and Golden Leaves get ×(1 + 0.12 × Steep). Solo only: `runVows` returns nothing for
@@ -651,7 +651,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   screen pixels, so never zoom them (or `.hud` as a whole). Inside a zoomed element `vh` lengths shrink too. Two
   spirits talking at once (a Duo exchange) sit side by side there (`.dialogue:has(.speech + .speech)`, v0.29.5):
   stacked, they pushed the brew offer's Reroll button off the bottom of the screen.
-- **First impressions (v0.25):** a new player's title shows the story, the controls, the class, Start run and a dock
+- **First impressions (v0.25):** a new player's title shows the controls, the class, Start run and a dock (the story line that came first pushed
+  the dock off phone screens and is gone since v0.29.9; the story cut-scene still tells it)
   with the ways to play (Daily Brew, Co-op, Leaderboard) plus Visit; the level card, the gift and kettle and the run
   preparation tiles (`hud.titleDock`: Pantry, Keepsake, Steeping, Wardrobe, My garden) appear after the first run,
   ringed in gold with a New badge until the next run starts (`meta.seenUnlocks`, true for players who had more than one run before). The game-over screen hides

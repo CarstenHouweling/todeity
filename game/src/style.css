@@ -465,12 +465,6 @@ canvas.game {
   text-shadow: 0 0 12px rgba(255, 180, 40, 0.8), 0 2px 0 rgba(0, 0, 0, 0.4);
 }
 
-.title-screen .story {
-  font-size: 18px;
-  line-height: 1.5;
-  opacity: 0.92;
-}
-
 .title-screen .controls {
   display: flex;
   flex-wrap: wrap;
@@ -1978,7 +1972,6 @@ body.coop-menu .corner-buttons {
   margin: 6px 0 14px;
 }
 
-.title-main .story,
 .title-main .controls {
   max-width: 680px;
 }
@@ -2159,6 +2152,17 @@ body.coop-menu .corner-buttons {
 
   .title-main .class-chip {
     margin: 2px 0 14px;
+  }
+
+  /* A new player's controls: one row of smaller tips */
+  .title-main .controls {
+    gap: 5px;
+    margin: 0 0 10px;
+  }
+
+  .title-main .controls span {
+    padding: 3px 9px;
+    font-size: 13px;
   }
 
   .gentle-note {
@@ -3567,11 +3571,6 @@ body.touch .steep-badge {
 
 /* Phones: a tighter title screen, so every button fits without scrolling */
 @media (max-width: 600px) {
-  .title-screen .story {
-    font-size: 15px;
-    line-height: 1.4;
-  }
-
   .title-screen .controls {
     gap: 6px;
     margin: 12px 0 4px;

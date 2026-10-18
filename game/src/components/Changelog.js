@@ -18,6 +18,7 @@ export const CHANGELOG = [
       '▶ Start a solo run straight from the garden',
       '✏️ Editing your garden leaves the lawn in view: the tools in a slim bar on top, your trinkets in a low tray at the bottom',
       '👆 On phones the garden\'s set chips and the wardrobe row scroll sideways again, and tapping a set (Tea Party…) shows what it needs',
+      '📱 A new player\'s title fits on a phone held sideways: the story line is gone (the opening cut-scene tells it) and the controls are smaller',
       '🐸 Tap your level to see your profile: name, records and your progress code',
       '🐸 Choose your frog is easier to read: one short line per frog, and all seven fit on the screen',
       '📸 The screenshot buttons are gone (C still saves a screenshot on a keyboard). Say Cheese now comes from 📤 Share run too, so tablets can earn it',
