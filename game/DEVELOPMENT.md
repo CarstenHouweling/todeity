@@ -407,6 +407,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   open something else close it (`closeMoreSheet`). A party's status line shows under the bar. Phones (and windows up
   to 820 px wide, or 500 px tall) show icons only at full touch size (the garden bar skips the short-screen zoom).
   Before, a heading, a line of help and eleven buttons, with the emote grid inside, covered half a phone's screen.
+  **Editing** (`hud.showGarden`/`refreshGarden`) uses the same bar: ✏️ Edit garden with the trinket count and beauty,
+  Turn and Put away (with a trinket held or picked), Undo, Grid, Day/Night, View, Top, 🧺 the tray, and a gold Done;
+  a hint line under it (the general one hides on phones). The tray sits at the bottom: the sets in one line that
+  scrolls sideways, then your own trinkets (two rows at most, one on phones held sideways; the ones still to find
+  only on request, `showLockedTrinkets`). Share and Visit left the editor: they're in the walking bar's ⋯ More. On
+  phones held upright both bars put the garden and the exit buttons on the first row and the tools on a second;
+  while editing, 🔊 sits under the bar.
 - **Garden walking keeps its pace** (v0.26.2): the frame loop caps the game's step at 0.1 s, so below 10 fps a frog
   hopped slower (visitors on weaker phones in a busy garden reported it). `gardenKeys` now runs `hub.update` on the
   frame's real time (up to `WALK_FRAME_MAX`, 0.25 s) in `WALK_STEP` slices; `frame()` gets that time as `elapsed`.
@@ -660,10 +667,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `hud.showPlayer`: name and tag with ✏️ Edit name / 🏷 Pick a name, records, the progress code with 📋 Copy) and on
   the right "📜 vX · What's new" and ⚙️ **Settings** (`hud.showSettings`, opened by `openSettings()` in main.js:
   Gentle Brew, spit, music, sound effects, graphics, fullscreen, screen effects, FPS counter). In the middle the
-  "Todeity" wordmark in **Grandstander** 800 (bundled with `@fontsource/grandstander`, OFL, upright and italic). The
-  same font (`--display-font`) is used for all big display text: callouts, banners, menu headings, the clash label,
-  boss names, the chest count and the garden countdown (one rule at the end of `style.css`); everything else keeps
-  the system font, the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
+  "Todeity" wordmark in **Grandstander** 800 (bundled with `@fontsource/grandstander`, OFL, upright and italic). Only
+  the wordmark and the in-game callouts ("Brewtastic!", one rule at the end of `style.css`) use it (`--display-font`);
+  everything else keeps the system font (headings and banners had it briefly, the owner wanted it only there), the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
   Brew, Co-op, Leaderboard | Pantry, Keepsake, Steeping, Wardrobe, My garden, Visit | the gift and the kettle
   (`rewardTile`: a ring fills as they count down, `--p` from `rewardProgress`; they glow when ready). The menu
   scrolls when it doesn't fit, the dock wraps on tablets and phones held upright, and short screens tighten the

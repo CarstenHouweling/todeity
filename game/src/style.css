@@ -6,8 +6,8 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Big display text (the "Todeity" wordmark, callouts, banners, menu headings) uses Grandstander 800; the rest stays
-   on the system font. */
+/* Only the "Todeity" wordmark and the in-game callouts use Grandstander 800; everything else stays on the system
+   font. */
 :root {
   --display-font: 'Grandstander', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -3784,8 +3784,9 @@ body.touch .steep-badge {
 .streak-day.past { opacity: 0.45; }
 .streak-day.today { color: #3b2a14; background: linear-gradient(#ffcf4a, #f0a020); box-shadow: 0 0 12px rgba(255, 190, 40, 0.8); }
 
+/* Editing the garden (v0.29.9): the tools in the garden bar along the top, a low tray of trinkets at the bottom. */
 .menu.garden-mode {
-  justify-content: flex-end;
+  justify-content: space-between;
   background: none;
   pointer-events: none;
   cursor: default;
@@ -3793,23 +3794,34 @@ body.touch .steep-badge {
 
 .garden-tray {
   pointer-events: auto;
-  width: min(900px, 100%);
-  max-height: 46dvh;
-  overflow-y: auto;
-  touch-action: pan-y;
-  padding: 10px 14px;
+  box-sizing: border-box;
+  width: min(1100px, 100%);
+  padding: 8px 10px;
   border-radius: 18px;
-  background: rgba(10, 30, 15, 0.82);
+  background: rgba(10, 30, 15, 0.78);
 }
 
-.garden-tray h2 { margin: 0 0 4px; font-size: 22px; }
-.garden-tray h2 small { font-size: 14px; opacity: 0.75; }
-.garden-tray .sub { margin: 0 0 8px; }
-
+/* At most two rows of trinkets (your own; the ones to find only on request), scrolling past that. */
 .trinkets {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   gap: 6px;
+  max-height: 196px;
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.trinket-toggle {
+  padding: 6px 4px;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .trinket {
@@ -3943,9 +3955,23 @@ body.touch .steep-badge {
   position: relative;
 }
 
-.garden-tray.collapsed .garden-body,
-.garden-tray.collapsed .garden-head .sub {
+.garden-tray.collapsed {
   display: none;
+}
+
+/* The hint line under the editor's bar; the general one only where there's room. */
+.menu.garden-mode .garden-status {
+  margin: 4px 6px 0;
+  font-size: 13px;
+}
+
+.menu.garden-mode .garden-status.idle {
+  opacity: 0.75;
+}
+
+.garden-act:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .garden-tools {
@@ -3970,14 +3996,23 @@ body.touch .steep-badge {
 .garden-tool.primary { margin-left: auto; border-color: #ffd36b; background: linear-gradient(#ffcf4a, #f0a020); color: #3b2a14; font-weight: 800; }
 .garden-tool:disabled { opacity: 0.4; cursor: default; }
 
+/* The sets: one line that scrolls sideways */
 .garden-sets {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.garden-sets::-webkit-scrollbar {
+  display: none;
 }
 
 .garden-set {
+  flex: none;
+  white-space: nowrap;
   padding: 3px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.07);
@@ -3995,8 +4030,8 @@ body.touch .steep-badge {
 }
 
 .trinket img {
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
 }
@@ -4017,9 +4052,10 @@ body.touch .steep-badge {
 
 .garden-tray.visit h2 small { display: block; margin-top: 2px; }
 
-/* The garden tray sits above the corner buttons (photo, pause, sound). */
-.menu.garden-mode {
-  padding-bottom: calc(max(16px, var(--safe-bottom)) + 52px);
+/* While editing, the 🔊 corner button sits under the bar on the right, off the tray. */
+body:has(.menu.garden-mode:not([hidden])) .corner-buttons {
+  top: calc(96px + var(--safe-top));
+  bottom: auto;
 }
 
 /* Gardens as a meeting place (v0.22) */
@@ -4286,8 +4322,23 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
 
 /* Phones (and narrow windows): icons only, and the touch targets stay full size (no zoom on short screens). */
 @media (max-width: 820px), (max-height: 500px) {
-  .menu.garden-walk > * {
+  .menu.garden-walk > *,
+  .menu.garden-mode > * {
     zoom: 1;
+  }
+
+  .menu.garden-mode .garden-status.idle {
+    display: none;
+  }
+
+  .trinkets {
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+    max-height: 168px;
+  }
+
+  .trinket img {
+    width: 40px;
+    height: 40px;
   }
 
   .garden-act {
@@ -4325,6 +4376,41 @@ body.touch:has(.menu.garden-walk:not([hidden])) .corner-buttons {
 
   .emote-sheet {
     grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  }
+}
+
+/* Phones held upright: the garden and the exit buttons on the first row, the tools centred on a second. */
+@media (max-width: 600px) {
+  .garden-where {
+    max-width: none;
+  }
+
+  .garden-where b {
+    display: inline;
+  }
+
+  .garden-acts {
+    order: 2;
+    flex-basis: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  body:has(.menu.garden-mode:not([hidden])) .corner-buttons {
+    top: calc(140px + var(--safe-top));
+    bottom: auto;
+  }
+}
+
+/* Phones held sideways: one row of trinkets, so the lawn stays in view between the bar and the tray. */
+@media (max-height: 500px) {
+  .trinkets {
+    max-height: 84px;
+  }
+
+  /* (corner buttons are zoomed to 0.7 here, which shrinks the offset too) */
+  body:has(.menu.garden-mode:not([hidden])) .corner-buttons {
+    top: calc(116px + var(--safe-top) / 0.7);
   }
 }
 
@@ -4710,16 +4796,9 @@ body:has(.menu:not([hidden])) .rotate-hint {
   font-size: 12px;
 }
 
-/* Big display text in the wordmark's font (see --display-font). Last in the file, so it wins over the weights set
-   above (Grandstander is bundled at 800 only). */
-.callout,
-.banner-title,
-.menu h1,
-.menu h2,
-.clash-label,
-.boss-card-name,
-.chest-count,
-.garden-countdown {
+/* The in-game callouts ("Brewtastic!") in the wordmark's font (see --display-font); nothing else uses it. Last in
+   the file, so it wins over the weight set above (Grandstander is bundled at 800 only). */
+.callout {
   font-family: var(--display-font);
   font-weight: 800;
 }

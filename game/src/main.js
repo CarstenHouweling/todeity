@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import '@fontsource/grandstander/800.css'; // big display text: the wordmark, callouts, banners, headings (OFL, bundled)
+import '@fontsource/grandstander/800.css'; // the "Todeity" wordmark and the in-game callouts (OFL, bundled)
 import '@fontsource/grandstander/800-italic.css'; // the callouts are italic
 import './style.css';
 import { createCamera } from './components/Camera.js';
@@ -4386,6 +4386,7 @@ garden.onPlaced = (position) => {
 garden.onSetFormed = (set) => hud.gardenFlash(`${set.icon} ${set.name} complete! +${set.beauty} beauty`);
 garden.setNight(Boolean(meta.gardenNight));
 
+let showLockedTrinkets = false; // the editor's tray also lists the trinkets still to find, with how to get them
 const gardenState = () => ({
   held: garden.held?.id ?? null,
   selected: garden.selected?.id ?? null,
@@ -4393,6 +4394,7 @@ const gardenState = () => ({
   night: garden.night,
   canUndo: garden.undoStack.length > 0,
   collapsed: trayCollapsed,
+  locked: showLockedTrinkets,
 });
 
 function refreshGardenTray() {
@@ -8127,6 +8129,10 @@ const MENU_ACTIONS = {
   'garden-collapse': () => {
     trayCollapsed = !trayCollapsed;
     refreshGardenTray();
+  },
+  'garden-locked': () => {
+    showLockedTrinkets = !showLockedTrinkets;
+    if (decorating && garden.editing) hud.showGarden(gardenState());
   },
   'turn-trinket': () => garden.turn(),
   'putaway-trinket': () => garden.putAway(),

@@ -1082,29 +1082,40 @@ export class Hud {
   }
 
   /**
-   * "My garden": a toolbar, the sets, and the tray of trinkets to drag onto the lawn. `state`: { held, selected,
-   * snap, night, canUndo, collapsed } from the garden. Later changes go through `refreshGarden`, which keeps the
-   * trinket buttons (one may be under a finger mid-drag).
+   * Editing your garden (v0.29.9, like the garden bar): the tools in a slim bar along the top with Done, a hint line
+   * while a trinket is held or picked, and at the bottom a low tray with the sets and your trinkets to drag onto the
+   * lawn (the ones still to find only on request, `state.locked`). `state`: { held, selected, snap, night, canUndo,
+   * collapsed, locked } from the garden. Later changes go through `refreshGarden`, which keeps the trinket buttons
+   * (one may be under a finger mid-drag).
    */
   showGarden(state = {}) {
     const owned = new Set(ownedTrinkets(meta));
-    const items = TRINKETS.map((t) => {
+    const button = (t) => {
       const has = owned.has(t.id);
       const picture = has ? trinketPicture(t.id) : '';
       const face = picture ? `<img src="${picture}" alt="" draggable="false">` : `<span>${has ? t.icon : '❔'}</span>`;
       return `<button type="button" class="trinket ${has ? '' : 'locked'}" ${has ? `data-trinket="${t.id}"` : ''} title="${t.name}${has ? '' : `: ${t.how}`}">
         ${face}<small>${has ? t.name : t.how}</small></button>`;
-    }).join('');
+    };
+    const mine = TRINKETS.filter((t) => owned.has(t.id));
+    const missing = TRINKETS.filter((t) => !owned.has(t.id));
+    const toggle = missing.length
+      ? `<button type="button" class="trinket-toggle" data-action="garden-locked">${state.locked ? 'Hide the ones to find' : `❔ ${missing.length} to find`}</button>`
+      : '';
     this.showMenu(
       'garden-mode',
-      `<div class="garden-flash" hidden></div>
-      <div class="garden-tray ${state.collapsed ? 'collapsed' : ''}">
-        <div class="garden-head"></div>
-        <div class="garden-tools"></div>
-        <div class="garden-body">
-          <div class="garden-sets"></div>
-          <div class="trinkets">${items}</div>
+      `<div class="garden-bar">
+        <div class="garden-top">
+          <span class="garden-where"></span>
+          <div class="garden-acts garden-tools"></div>
+          <div class="garden-exit"><button type="button" class="garden-pill solo" data-action="garden-done">Done</button></div>
         </div>
+        <p class="garden-status"></p>
+      </div>
+      <div class="garden-flash" hidden></div>
+      <div class="garden-tray ${state.collapsed ? 'collapsed' : ''}">
+        <div class="garden-sets"></div>
+        <div class="trinkets">${mine.map(button).join('')}${toggle}${state.locked ? missing.map(button).join('') : ''}</div>
       </div>`
     );
     this.refreshGarden(state);
@@ -1124,34 +1135,35 @@ export class Hud {
     const decor = meta.decor ?? [];
     const sets = gardenSets(decor);
     const active = selected ?? held;
-    tray.querySelector('.garden-head').innerHTML = `
-      <h2>🏡 Tode's garden <small>${owned.size}/${TRINKETS.length} trinkets · 🌷 ${gardenBeauty(decor)} beauty</small></h2>
-      <p class="sub">${
-        held
-          ? `Drop the ${trinketById(held).name} on the lawn. Scroll or <b>R</b> turns it.`
-          : active
-            ? `${trinketById(active).name}: drag it to move it, <b>R</b> turns it, <b>Delete</b> puts it away.`
-            : 'Drag a trinket onto the lawn. Drag the lawn to look around, scroll or pinch to zoom, right-drag or WASD to move.'
-      }</p>`;
-    const tool = (action, label, title, on = false) => `<button type="button" class="garden-tool ${on ? 'on' : ''}" data-action="${action}" title="${title}">${label}</button>`;
-    tray.querySelector('.garden-tools').innerHTML = [
-      active ? tool('turn-trinket', '↻ Turn', 'Turn it (R)') : '',
-      active ? tool('putaway-trinket', '📦 Put away', 'Back into the tray (Delete)') : '',
-      tool('garden-undo', '↶ Undo', 'Undo (Ctrl+Z)', false).replace('<button', canUndo ? '<button' : '<button disabled'),
-      tool('garden-snap', '▦ Grid', 'Line trinkets up on a grid (G)', snap),
-      tool('garden-night', night ? '🌙 Night' : '☀️ Day', 'Day or night (N)', night),
-      tool('garden-reset', '🧭 View', 'Back to the usual view'),
-      tool('garden-plan', '🗺 Top', 'Look straight down'),
-      tool('garden-share', '🔗 Share', 'Your garden code, for friends to visit'),
-      tool('garden-visit', '👀 Visit', "Look at someone else's garden"),
-      tool('garden-collapse', collapsed ? '▴ Tray' : '▾ Tray', 'Show or hide the tray'),
-      '<button type="button" class="garden-tool primary" data-action="garden-done">✓ Done</button>',
+    this.menu.querySelector('.garden-where').innerHTML = `✏️ <b>Edit garden</b> <small>${owned.size}/${TRINKETS.length} · 🌷 ${gardenBeauty(decor)}</small>`;
+    const status = this.menu.querySelector('.garden-status');
+    status.classList.toggle('idle', !active);
+    status.innerHTML = held
+      ? `Drop the ${trinketById(held).name} on the lawn. Scroll or <b>R</b> turns it.`
+      : active
+        ? `${trinketById(active).name}: drag it to move it, <b>R</b> turns it, <b>Delete</b> puts it away.`
+        : 'Drag a trinket onto the lawn. Drag the lawn to look around, scroll or pinch to zoom, right-drag or WASD to move.';
+    const act = (action, icon, label, opts) => this.gardenAct(action, icon, label, opts);
+    this.menu.querySelector('.garden-tools').innerHTML = [
+      active ? act('turn-trinket', '↻', 'Turn (R)') : '',
+      active ? act('putaway-trinket', '📦', 'Put away') : '',
+      act('garden-undo', '↶', 'Undo', { disabled: !canUndo }),
+      act('garden-snap', '▦', 'Grid', { on: snap }),
+      act('garden-night', night ? '🌙' : '☀️', night ? 'Night' : 'Day', { on: night }),
+      act('garden-reset', '🧭', 'View'),
+      act('garden-plan', '🗺', 'Top'),
+      act('garden-collapse', '🧺', collapsed ? 'Show tray' : 'Hide tray', { on: !collapsed }),
     ].join('');
     tray.querySelector('.garden-sets').innerHTML = SETS.map((set) => {
       const done = sets.some((found) => found.set.id === set.id);
       const parts = set.parts.map((id) => `<span class="${placed.has(id) ? 'have' : owned.has(id) ? '' : 'missing'}">${trinketById(id).icon}</span>`).join('');
       return `<span class="garden-set ${done ? 'done' : ''}" style="--set:${set.color}" title="${set.name}: place ${set.parts.map((id) => trinketById(id).name).join(', ')} close together (+${set.beauty} beauty)">${set.icon} <b>${set.name}</b> ${parts}${done ? ' ✓' : ''}</span>`;
     }).join('');
+  }
+
+  /** A button in the garden bars (walking and editing): an icon with a small label (icons only on phones). */
+  gardenAct(action, icon, label, { on = false, extra = '', badge = '', disabled = false } = {}) {
+    return `<button type="button" class="garden-act${on ? ' on' : ''}${extra}" data-action="${action}" title="${label}" aria-label="${label}"${disabled ? ' disabled' : ''}><span class="ga-icon">${icon}</span><small>${label}</small>${badge}</button>`;
   }
 
   /** Leaf Rush's scores and clock (GardenGames.js) under the garden toolbar; '' hides it. Called every frame. */
@@ -1200,8 +1212,7 @@ export class Hud {
    * touch, rush, public, emotes, lockedEmotes, more, wardrobe, newWear }.
    */
   showGardenWalk(info) {
-    const act = (action, icon, label, { on = false, extra = '', badge = '' } = {}) =>
-      `<button type="button" class="garden-act${on ? ' on' : ''}${extra}" data-action="${action}" title="${label}" aria-label="${label}"><span class="ga-icon">${icon}</span><small>${label}</small>${badge}</button>`;
+    const act = (action, icon, label, opts) => this.gardenAct(action, icon, label, opts);
     const party = info.leaderName
       ? act('garden-ready', '✋', info.ready ? 'Ready ✓' : 'Ready', { on: info.ready, extra: ' ready' })
       : act('garden-invite', info.inviting ? '✖' : '🚩', info.inviting ? 'Stop inviting' : 'Invite', { on: info.inviting, extra: info.inviting ? '' : ' invite' });
