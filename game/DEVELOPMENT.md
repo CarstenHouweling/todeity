@@ -657,9 +657,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   buttons in the middle. **The pause menu** (`hud.showPause`) follows the same layout: the run (frog, form, wave,
   keepsake, Steep) top left, What's new and ⚙️ Settings top right (the same popup; `inRun` leaves out Gentle Brew,
   which applies from the next run), a big Resume with Restart and Quit under it, and the build in its own scrolling
-  box. Solo, the run's HUD hides behind it (`body.run-paused`, like `run-ended`); co-op keeps it, the run goes on.
+  box. The run card shows the form only from tier 1 (the base form is also called "Tode"). Solo, the run's HUD hides
+  behind it (`body.run-paused`, like `run-ended`). Co-op (`.menu.pause.coop`, `body.coop-menu`; "Menu", Leave co-op,
+  no Restart) goes on, so hearts, score and wave stay in view above it (its top row moves down 60px) and only
+  banners, callouts and the combo hide. Checked with a host and a guest tab, on desktop and a phone held sideways.
 - **Corner buttons:** 🔊; ⏸ only while a run is playing (`hud.setPauseShown(PLAYING.has(phase))`). None on
-  the title screen (`body.title-open`): they sat on its dock, sound is in ⚙️ Settings.
+  the title screen (`body.title-open`: they sat on its dock) or in the pause menu (`run-paused`, `coop-menu`: in co-op
+  the run counts as playing, so ⏸ stayed and only reopened the menu); sound is in ⚙️ Settings.
 - **Fullscreen:** a switch in ⚙️ Settings (title and pause menu; `Fullscreen.js`, with the `webkit` API for iPad Safari).
   iPhone Safari can't make a page fullscreen at all (only videos), so there the button opens a how-to for **Add to
   Home Screen** (`needsHomeScreen`, `hud.showFullscreenHelp`, shown once by itself on the first visit): the game is

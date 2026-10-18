@@ -7851,7 +7851,7 @@ function showPauseMenu() {
     steep,
     build,
     ultimate: player.ultimate,
-    form: TIERS[ascension.tier].name,
+    form: ascension.tier ? TIERS[ascension.tier].name : null, // the base form's name is just "Tode"
     coop: Boolean(coop),
     frogClass: runClass,
     wave,

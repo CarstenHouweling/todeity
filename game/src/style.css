@@ -735,6 +735,12 @@ canvas.game {
   color: #3b2a14;
 }
 
+/* Hovered, a primary button stays gold: the plain hover's white wash (a more specific rule) left its dark text
+   nearly invisible. */
+.menu-button.primary:hover:not(:disabled) {
+  background: linear-gradient(#ffdb78, #f5b440);
+}
+
 .menu-button small {
   margin-left: 6px;
   font-size: 13px;
@@ -1842,7 +1848,9 @@ body.touch .owned {
 
 /* The title (v0.29.9, layout "3c"): level card and small extras on top, the name, the frog and Start run in the
    middle, a dock with everything else at the bottom. The corner buttons hide (sound is in ⚙️ Settings). */
-body.title-open .corner-buttons {
+body.title-open .corner-buttons,
+body.run-paused .corner-buttons,
+body.coop-menu .corner-buttons {
   display: none;
 }
 
@@ -2178,6 +2186,17 @@ body.title-open .corner-buttons {
    A darker backdrop, so banners and callouts of the run behind it don't compete. */
 .menu.pause {
   background: rgba(5, 18, 8, 0.74);
+}
+
+/* Co-op: the run goes on, so hearts, score and wave stay in view above the menu (its top row moves below them). */
+body.coop-menu .hud > .banner,
+body.coop-menu .hud > .callout,
+body.coop-menu .hud > .combo {
+  visibility: hidden;
+}
+
+.menu.pause.coop .title-top {
+  margin-top: 60px;
 }
 
 .run-card {

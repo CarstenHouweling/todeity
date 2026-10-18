@@ -770,7 +770,7 @@ export class Hud {
     document.body.classList.toggle('run-ended', this.menuName === 'game-over');
     // The title has no corner buttons (sound is in its ⚙️ Settings, screenshots are C): they would sit on its dock.
     document.body.classList.toggle('title-open', this.menuName === 'title-screen');
-    document.body.classList.remove('run-paused');
+    document.body.classList.remove('run-paused', 'coop-menu');
   }
 
   hideMenu() {
@@ -780,7 +780,7 @@ export class Hud {
     this.menu.hidden = true;
     this.menu.innerHTML = '';
     this.menuClickAction = null;
-    document.body.classList.remove('run-ended', 'title-open', 'run-paused');
+    document.body.classList.remove('run-ended', 'title-open', 'run-paused', 'coop-menu');
   }
 
   get menuOpen() {
@@ -1796,10 +1796,10 @@ export class Hud {
     const ult = ultimate ? `<p class="sub">Ultimate: ${ULTIMATES[ultimate].icon} <b>${ULTIMATES[ultimate].name}</b></p>` : '';
     const details = [`Wave ${wave}`, keepsake ? `${keepsake.icon} ${keepsake.name}` : '', steep ? `🔥 Steep ${steep}` : ''].filter(Boolean).join(' · ');
     this.showMenu(
-      'pause',
+      `pause${coop ? ' coop' : ''}`,
       `
       <div class="title-top">
-        <div class="run-card">${frogClass ? this.classFace(frogClass) : ''}<span><b>${frogClass ? `${frogClass.name} · ` : ''}${form}</b><small>${details}</small></span></div>
+        <div class="run-card">${frogClass ? this.classFace(frogClass) : ''}<span><b>${[frogClass?.name, form].filter(Boolean).join(' · ')}</b><small>${details}</small></span></div>
         <div class="title-corner">
           <button type="button" class="title-pill" data-action="changelog">📜 v${VERSION}<span class="long"> · What's new</span></button>
           <button type="button" class="title-round" data-action="settings" title="Settings" aria-label="Settings">⚙️</button>
@@ -1820,8 +1820,10 @@ export class Hud {
         <div class="build">${brews}</div>
       </section>`
     );
-    // Solo the run stands still: its HUD (banners, callouts, score) hides behind the menu. Co-op keeps it.
+    // Solo the run stands still: its HUD hides behind the menu. Co-op goes on: hearts, score and wave stay in view
+    // above the menu, only banners, callouts and the combo hide.
     document.body.classList.toggle('run-paused', !coop);
+    document.body.classList.toggle('coop-menu', coop);
   }
 
   /**
