@@ -77,8 +77,10 @@ in every browser; what touches the server is made to survive the gap:
 - **Run reports** are queued in `localStorage` (`tode-unsent-runs`) until the server answers; each has a `runId`
   and the server remembers the last 20 per save (`recentRuns`), so a report sent twice pays once. `initCloud`
   retries quietly when the server was away at start. The queue is sent after every sync and retried every 30 s.
-- **Old pages:** when the presence socket reconnects (`onServerBack`), the game asks `/api/health` for the server's
-  `version`; a different one shows a "✨ vX is out · reload" pill on the title screen (never during a run).
+- **Old pages:** the game asks `/api/health` for the server's `version` (`checkVersion` in main.js) when the presence
+  socket reconnects (`onServerBack`), when the player comes back to the tab (at most once a minute) and every 5
+  minutes while the title screen is open (v0.29.9: a socket that never noticed the restart meant no pill); a
+  different one shows a "✨ vX is out · reload" pill on the title screen (never during a run).
 
 Still lost in a deploy: anything the host sends while the server is away (one-off events like a boss intro or a
 shrine; snapshots and the wave catch up), Pantry purchases made during the gap (they are undone, the leaves come

@@ -8250,20 +8250,35 @@ hud.onAction = (action, data = {}) => {
 };
 hud.setMuted(!soundSettings().sfx && !soundSettings().music);
 
-/** Redraws the open title or pause menu, e.g. when a setting shown on a button changed outside it. */
 // After a deploy the server comes back with a newer version: players who kept the page open get a pill on the title
-// screen to reload when it suits them (never in the middle of a run).
-onServerBack(async () => {
+// screen to reload when it suits them (never in the middle of a run). The game asks when the presence socket
+// reconnects (the server restarted), when the player comes back to the tab, and every few minutes on the title: a
+// socket that never noticed the restart (a sleeping tablet, a quick deploy) used to mean no pill at all.
+const VERSION_CHECK_EVERY = 5 * 60_000; // ms between checks while the title screen is open
+const VERSION_CHECK_GAP = 60_000; // ms: coming back to the tab asks at most this often
+let versionCheckedAt = 0;
+
+async function checkVersion() {
+  versionCheckedAt = Date.now();
   try {
     const { version } = await (await fetch('/api/health', { cache: 'no-store' })).json();
     if (!version || version === VERSION || hud.newVersion === version) return;
     hud.newVersion = version;
     refreshMenu();
   } catch {
-    // not back yet after all
+    // no server (static hosting, offline), or not back yet
   }
-});
+}
 
+onServerBack(checkVersion);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - versionCheckedAt > VERSION_CHECK_GAP) checkVersion();
+});
+setInterval(() => {
+  if (phase === 'title' && document.visibilityState === 'visible' && Date.now() - versionCheckedAt >= VERSION_CHECK_EVERY) checkVersion();
+}, 30_000);
+
+/** Redraws the open title or pause menu, e.g. when a setting shown on a button changed outside it. */
 function refreshMenu() {
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pause') showPauseMenu();

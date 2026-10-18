@@ -13,6 +13,7 @@ export const CHANGELOG = [
       '⏸ A calmer pause menu: a big Resume, Restart and Quit under it, your build below, and the options behind ⚙️ Settings',
       '🖱 Gold buttons (Close, Done, Play again…) stay readable when the mouse is over them',
       '🔤 Big text (Brewtastic!, wave banners, Game Over, boss names) uses the title\'s chunky font',
+      '✨ A new version shows up on the title more reliably: the game also checks when you come back to it and every few minutes',
       '🐸 Tap your level to see your profile: name, records and your progress code',
       '🐸 Choose your frog is easier to read: one short line per frog, and all seven fit on the screen',
       '📸 The screenshot buttons are gone (C still saves a screenshot on a keyboard). Say Cheese now comes from 📤 Share run too, so tablets can earn it',
