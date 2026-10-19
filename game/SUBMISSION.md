@@ -7,6 +7,27 @@ none: all music and sound are generated in code, all scenery is procedural).
 
 Numbers below are counted from the code (v0.29.4, Oct 17; v0.29.5–6 were fixes only). Recount them if content changes before posting.
 
+## Submitting through the bot (`/register`)
+
+The bot asks for these (rules posted Oct 19):
+
+- **Game title:** Todeity: Rise of the Tea God
+- **Public GitHub repository:** https://github.com/CarstenHouweling/todeity. It must stay public until at least
+  Oct 30. The root `README.md` has the build/run steps, the attribution notice (MIT, JetBrains Academy course,
+  `LICENSE`), the third-party assets with source and license, and which AI tools were used for what.
+- **Course certificate:** from the IDE (signed in to the JetBrains Account).
+- **Gameplay video:** `promo/todeity-gameplay-20s.mp4` (19.9 s, 1080p, 15.4 MB; limit 20 s and 20 MB). Cut from
+  the 1080p trailer at its shot boundaries: the true-form cold open (0:00–0:03.4), the swarm and bullets
+  (0:08.7–0:15.9) and the ascension into the Steeping Beam (0:26.8–0:36.0, fading out). The ffmpeg command is in
+  DEVELOPMENT.md, Promo material.
+- **Description (max 500 characters; this one is 493):**
+
+```
+Todeity turns the course's frog-vs-bees garden into a full 3D roguelite bullet hell. Tode brews powers from talking tea spirits, fuses 24 auto-casting skills and ascends through five divine forms across five arenas and raid bosses, down to Bee-zebub in the Underworld. Added: 7 frog classes, bullet patterns with grazing, a seeded Daily Brew, leaderboards, 2–4 player online co-op, touch controls, a 54-item Wardrobe and visitable player gardens. All music and sound are synthesized in code.
+```
+
+- **Terms & Conditions:** confirmed in the bot.
+
 ## One-liner
 
 > A frog. A cup of tea. A thousand bees. **Todeity** is a 3D roguelite bullet hell where Tode the Frog brews divine
@@ -150,6 +171,7 @@ not in git (too big); they are in `game/promo/` on the machine that made them. B
 | `todeity-trailer-1080p.mp4` | The 66 s trailer with the game's own music: upload to YouTube, link it in the post |
 | `todeity-trailer-720p.mp4` | X / LinkedIn / anywhere that wants a smaller file |
 | `todeity-trailer-discord.mp4` | 960×540, 9.5 MB (under Discord's 10 MB): attach to the Discord post, plays inline |
+| `todeity-gameplay-20s.mp4` | 19.9 s, 1080p, 15.4 MB: the gameplay video for the submission bot (max 20 s, 20 MB) |
 | `todeity-journey-1080p.mp4`, `-720p.mp4`, `-discord.mp4` (8.5 MB) | **The Journey** (59 s): Tode's story in five chapters, from the night garden to the Underworld and home for tea. Calmer, cinematic: for YouTube, a second post or a mid-week reply |
 | `todeity-short-1080p.mp4`, `-720p.mp4`, `-discord.mp4` (4.4 MB) | **The short** (31 s, vertical 1080×1920): big hook text, fast cuts. For YouTube Shorts, TikTok, Reels, phone viewers in Discord |
 | `todeity.gif` | 12 s highlights, 480 px, 9.3 MB: for places that don't play video |
@@ -278,3 +300,5 @@ clip, record 10–15 s of a 2–3 tab co-op run with OBS (1920×1080, each frog 
 - Original course project: JetBrains Academy "Build a Game with an AI Coding Agent" (Tode and the garden).
 - `enemy.glb`: "Armabee Evolved" by Quaternius (CC0) via Poly Pizza.
 - `small_house.glb`: "Small House" by Jarlan Perez (CC-BY 3.0) via Poly Pizza. **Credit required.**
+- The full list (with the Grandstander font and the npm libraries) and the AI disclosure are in the root `README.md`;
+  keep it current when an asset or library is added.

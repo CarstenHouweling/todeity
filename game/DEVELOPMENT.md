@@ -774,6 +774,24 @@ when the image changes), `-1920x1080.png`, `-2400x1260.png` and the X header `to
 GIFs are gitignored (too big for the repo and the deploy); only the banners are committed. Shot list, chapters and
 post copy: `SUBMISSION.md`.
 
+**The submission clip** `todeity-gameplay-20s.mp4` (19.9 s, 15.4 MB; the bot allows 20 s and 20 MB) is cut from
+`todeity-trailer-1080p.mp4` at its shot boundaries (true form 0–3.43, swarm and bullets 8.67–15.93, ascension and
+beam 26.83–36.0 with a 0.8 s fade), so redo it whenever the trailer is re-rendered. From `game/promo/`, with
+`F` the filter below, run ffmpeg twice (`-pass 1 … -f mp4 /dev/null`, then `-pass 2 … todeity-gameplay-20s.mp4`)
+with `-i todeity-trailer-1080p.mp4 -filter_complex "$F" -map "[v]" -map "[a]" -c:v libx264 -preset slow -b:v 6000k
+-pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 160k`:
+
+```
+[0:v]trim=0:3.4333,setpts=PTS-STARTPTS[v0];[0:a]atrim=0:3.4333,asetpts=PTS-STARTPTS,afade=t=out:st=3.4033:d=0.03[a0];
+[0:v]trim=8.6667:15.9333,setpts=PTS-STARTPTS[v1];[0:a]atrim=8.6667:15.9333,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=7.2367:d=0.03[a1];
+[0:v]trim=26.8333:36.0,setpts=PTS-STARTPTS,fade=t=out:st=8.3667:d=0.8[v2];[0:a]atrim=26.8333:36.0,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=7.9667:d=1.2[a2];
+[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]
+```
+
+**The repository README** (root `README.md`, outside `game/`) is the challenge's required README: build/run steps,
+the MIT attribution to the JetBrains Academy course, the third-party assets with source and license, and the AI
+tools used. Update its asset table when a model, font or library is added.
+
 **Three trailers** (all in `game/promo/`, each in 1080p, 720p and a Discord cut under 10 MB):
 - `todeity-trailer-*` (66 s, `scenes/`): everything at once, cold open on Bee-zebub's true form, feature captions.
 - `todeity-journey-*` (59 s, `scenes-journey/`, harness port 9331, frames in `work/journey/`): a story in chapters,
