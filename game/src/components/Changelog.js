@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.30.0',
+    date: '2026-10-19',
+    title: 'Endless together',
+    changes: [
+      '👥 Co-op teams can keep going after Bee-zebub: the host picks ∞ Keep going (endless) or Finish the run, and everyone goes with it',
+      '🍃 Falling in endless still counts as banishing Bee-zebub: the victory\'s Golden Leaves and the Bee-zebub achievement are yours',
+    ],
+  },
+  {
     version: '0.29.9',
     date: '2026-10-18',
     title: 'A calmer title',

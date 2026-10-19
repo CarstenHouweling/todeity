@@ -132,7 +132,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   levelling up (see Experience). Every arena has its boss (cinematic entrance, rage phases, bullet patterns): Queen
   Buzzbelle (5), the Hornet Shogun (10), the Seraph Queen (15), **Empress Buzzbelle (20)**, then the ground gives
   way and the true finale is **Bee-zebub in the Underworld (21)**, then a victory screen with an optional
-  endless mode (not in the Daily Brew: `showVictory({ endless })`). Elite bees from wave 6.
+  endless mode (not in the Daily Brew: `showVictory({ endless })`; in co-op the host chooses for everyone, see Co-op
+  Flow). A run that falls in endless reports as won (`won` in `endRun`: the victory's leaves and the Bee-zebub
+  achievement; before v0.30 picking endless cost both) and gets its own line (`runLine`'s `endless`). Elite bees
+  from wave 6.
 - **Roguelite bullet hell:** ranged bees shoot harder patterns per arena (`STINGER_PATTERNS`: single shots → fans
   → wide fans → fans plus rings → fast fans), and bosses mix fans, aimed volleys, slow dense rings (`halo`), two-
   and four-armed spirals (`spiral`/`cross`), charges and summons (`ATTACKS` in `startQueenAttack`). Enemy bullets
@@ -976,8 +979,13 @@ server proxies `/ws` and `/api`).
   (stingers, storm strikes, boss rain, explosions) are simulated by everyone, each checking hits on their own Tode.
 - **Flow.** After a wave each player picks their own rewards; the host waits until everyone is ready (or 40 s).
   A fallen Tode is *downed*: it spectates a teammate and gets back up at the next wave. The run ends when everyone
-  is down. The garden grows (25 → 31 → 35 → 41 tiles), and per extra player waves get 60% more bees that are 30%
-  tougher, bosses 80% more health (`COOP_*` in main.js); bigger maps get extra spawn points on the edges. The first
+  is down. **After Bee-zebub** (v0.30) there is no ending cut-scene in co-op: the host gets the victory screen with
+  ∞ Keep going / Finish the run (`showVictory({ team })`), guests a waiting one (`waiting`, no buttons). Endless
+  sends `endless` (guests run `goEndless`: the rewards, then wave 22 as usual), Finish sends `over`. A guest that
+  reconnects meanwhile gets `endless` again after `wave`/`cleared`; a `wave` arriving on the victory screen also
+  moves it on. (Until v0.30 the host ended every co-op run at wave 21.) The garden grows (25 → 31 → 35 → 41
+  tiles), and per extra player waves get 60% more bees that are 30% tougher,
+  bosses 80% more health (`COOP_*` in main.js); bigger maps get extra spawn points on the edges. The first
   waves felt empty for a team, so they get another 100% per extra player on top (`COOP_EARLY`, fading out by wave 7,
   `coopEarly()`), and the spawn interval is divided by the same factor (`coopShare()`), so bigger swarms don't
   trickle in.

@@ -2009,8 +2009,16 @@ export class Hud {
     if (slot && retry === null) slot.innerHTML = this.scoreTable(scores, rank, board);
   }
 
-  /** `endless`: offer to keep going (not in the Daily Brew, whose run ends with Bee-zebub). */
-  showVictory({ endless = true } = {}) {
+  /**
+   * `endless`: offer to keep going (not in the Daily Brew, whose run ends with Bee-zebub). Co-op: `team` on the
+   * host's screen (its choice is everyone's); `waiting` on a guest's (no buttons: the host decides).
+   */
+  showVictory({ endless = true, team = false, waiting = false } = {}) {
+    const buttons = waiting
+      ? '<p class="sub">⏳ Waiting for the host: keep going (endless) or finish the run…</p>'
+      : `${endless ? '<button class="menu-button primary" data-action="endless">∞ Keep going (endless)</button>' : ''}
+        <button class="menu-button${endless ? '' : ' primary'}" data-action="retire">☕ Finish the run</button>
+        ${team ? '<p class="sub">👥 The whole team goes with your choice.</p>' : ''}`;
     this.showMenu(
       'game-over victory',
       `
@@ -2024,8 +2032,7 @@ export class Hud {
         <p class="thanks">Thank you for playing! 🐸☕</p>
       </div>
       <div class="menu-buttons">
-        ${endless ? '<button class="menu-button primary" data-action="endless">∞ Keep going (endless)</button>' : ''}
-        <button class="menu-button${endless ? '' : ' primary'}" data-action="retire">☕ Finish the run</button>
+        ${buttons}
       </div>`
     );
   }

@@ -136,7 +136,8 @@ export function boss(kind) {
 }
 
 /** Tode's reflection after a run: milestones first, then the next line of the story. */
-export function runLine({ wave, victory, firstBossKill, reachedGod, killer }) {
+export function runLine({ wave, victory, endless, firstBossKill, reachedGod, killer }) {
+  if (endless && !victory) return `Bee-zebub stayed banished, but the bees kept coming. Tode held out until wave ${wave}, and his tea is still warm. ☕`;
   if (victory) return 'Bee-zebub is banished and the hive is silent. Tode finally finishes his tea. It is, at last, perfectly steeped. ☕';
   if (reachedGod) return 'For a moment Tode was a god, and the garden bent around him. He wants that feeling back.';
   if (firstBossKill) return 'The Queen fell, but the hive did not. There is an Empress beyond the hedge…';

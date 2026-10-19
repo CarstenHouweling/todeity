@@ -6134,11 +6134,11 @@ function offerRewards() {
   // While the menus are open, get the next arena ready.
   const upcoming = arenaForWave(wave + 1);
   if (upcoming !== arena) setTimeout(() => prepareArena(upcoming), 150);
-  if (wave === HELL_WAVE && coop) {
-    if (coop.host) {
-      share({ k: 'over', v: true });
-      endRun({ victory: true });
-    }
+  // Co-op skips the ending cut-scene: the host picks endless or the end for everyone, guests wait for its word.
+  if (wave === HELL_WAVE && coop && !endless) {
+    setPhase('victory');
+    play('victory');
+    hud.showVictory({ endless: !isDaily(), team: coop.host, waiting: !coop.host });
     return;
   }
   if (wave === HELL_WAVE && !endless) {
@@ -6458,6 +6458,14 @@ function updateEnding(delta) {
     play('victory');
     hud.showVictory({ endless: !isDaily() }); // the Daily Brew ends with Bee-zebub: one board, one run
   }
+}
+
+/** From the victory screen into endless: the usual rewards, then wave 22 (co-op: everyone, on the host's word). */
+function goEndless() {
+  endless = true;
+  hud.hideMenu();
+  hud.showBanner('Endless Brew', 'How far can a god of tea go?', 2.2);
+  setPhase('cleared', 0);
 }
 
 // --- Boss entrance ---
@@ -6916,10 +6924,19 @@ function handleNet(from, message) {
       roomSteep = message.s ?? 0;
       if (!coop && hud.menuName === 'lobby' && net.inRoom) showRoom();
       break;
+    case 'endless':
+      // (after a reconnect it can come before our own victory screen: then that screen is skipped)
+      if (isGuest() && phase === 'victory') goEndless();
+      else if (isGuest()) endless = true;
+      break;
     case 'wave':
       // (a wave we already started comes again when the host catches us up after a reconnect)
       if (isGuest() && message.n > guestWave) {
         guestWave = message.n;
+        if (phase === 'victory') { // the host chose endless while we were away
+          endless = true;
+          hud.hideMenu();
+        }
         if (phase === 'chest') collectChest({ moveOn: true });
         if (['choosing', 'ultimate', 'skill'].includes(phase)) hud.hideMenu(); // the host moved on without us
         startWave(message.n, message.wx, message.m ?? []);
@@ -7229,6 +7246,7 @@ function teammatesChanged() {
     if (coop.host && lastWaveShare) {
       net.queue(info.id, lastWaveShare);
       if (waveClearedShared) net.queue(info.id, { k: 'cleared' });
+      if (endless && wave === HELL_WAVE) net.queue(info.id, { k: 'endless' }); // still picking after Bee-zebub
     }
   }
   roomPresent = present;
@@ -7654,7 +7672,9 @@ function endRun({ victory = false } = {}) {
   const bonus = steepBonus(steep);
   // The Daily Brew's trials raise the score and the leaves; the score already has its multiplier.
   const twistScore = twistDay?.score ?? 1;
-  const leaves = Math.round(leavesForRun({ score: finalScore / bonus / twistScore, wave, bossKills, victory }) * bonus * leafBonus * (twistDay?.leaves ?? 1) * harvestBonus(meta.levels));
+  // Falling in endless still banished Bee-zebub: the run pays and reports as won (his achievement, the victory).
+  const won = victory || endless;
+  const leaves = Math.round(leavesForRun({ score: finalScore / bonus / twistScore, wave, bossKills, victory: won }) * bonus * leafBonus * (twistDay?.leaves ?? 1) * harvestBonus(meta.levels));
   // What ended the run: the boss of a boss wave if it still stands, otherwise the swarm.
   const bossAlive = config?.isBoss && enemies.some((enemy) => enemy.type.boss && !enemy.dying);
   const killer = victory ? null : bossAlive ? config.boss : 'swarm';
@@ -7667,11 +7687,11 @@ function endRun({ victory = false } = {}) {
   saveMeta();
   // The server has the final word on the leaves (cloud saves); this screen shows the local count meanwhile.
   reportRun({
-    wave, bossKills, victory, score: finalScore, kills, time: Math.floor(timeAlive), steep,
+    wave, bossKills, victory: won, score: finalScore, kills, time: Math.floor(timeAlive), steep,
     maxTier: tier, goldLeaf: leafBonus > 1, daily: isDaily(), coop: Boolean(coop), coopSize: coop?.size ?? 0, dailyKey: twistDay?.key,
   });
 
-  const line = runLine({ wave, victory, firstBossKill, reachedGod: tier >= 4, killer });
+  const line = runLine({ wave, victory, endless, firstBossKill, reachedGod: tier >= 4, killer });
   lastRun = {
     score: finalScore,
     wave,
@@ -8307,13 +8327,15 @@ const MENU_ACTIONS = {
   'share-copy-image': shareCopyImage,
   'share-save': shareSave,
   endless: () => {
-    if (isDaily() || phase !== 'victory') return;
-    endless = true;
-    hud.hideMenu();
-    hud.showBanner('Endless Brew', 'How far can a god of tea go?', 2.2);
-    setPhase('cleared', 0);
+    if (isDaily() || phase !== 'victory' || isGuest()) return;
+    if (coop?.host) share({ k: 'endless' });
+    goEndless();
   },
-  retire: () => endRun({ victory: true }),
+  retire: () => {
+    if (phase !== 'victory' || isGuest()) return;
+    if (coop?.host) share({ k: 'over', v: true });
+    endRun({ victory: true });
+  },
   'chest-collect': () => collectChest(),
   'toggle-gentle': () => {
     meta.gentle = !meta.gentle;
