@@ -1462,7 +1462,7 @@ export class Hud {
     this.showModal(
       'daily',
       `<h2>📅 Daily Brew · ${day.title}</h2>
-      <p class="sub">The same waves, weather and offers for everyone today. Played by ${frog.icon} <b>${frog.name}</b>.</p>
+      <p class="sub">The same waves, weather and offers for everyone today. Played by ${frog.icon} <b>${frog.name}</b>, with no Pantry upgrades or keepsake: only the twists.</p>
       <h3>⚔️ Today's trial${day.trials.length > 1 ? 's' : ''}</h3>
       ${day.trials.map((id) => row(TRIALS[id], 'trial')).join('')}
       <h3>🎁 Today's boon${day.boons.length > 1 ? 's' : ''}</h3>

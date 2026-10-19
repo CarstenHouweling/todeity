@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.30.1',
+    date: '2026-10-19',
+    title: 'A fair Daily Brew',
+    changes: [
+      '📅 The Daily Brew is the same for everyone: no Pantry upgrades or keepsake, only the day\'s twists and the frog of the day',
+      '🏆 A Daily Brew run goes on the Daily Brew board only, no longer on the all-time, deepest and fastest boards',
+    ],
+  },
+  {
     version: '0.30.0',
     date: '2026-10-19',
     title: 'Endless together',

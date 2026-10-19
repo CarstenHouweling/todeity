@@ -185,12 +185,12 @@ function applyRun(save, body, now) {
   if (run.eliteKills > run.kills) return 'Too many elites for that run.';
   const bonus = steepBonus(run.steep);
   if (run.score > (2_000 + run.kills * 200 + run.wave * 2_000) * bonus * twists.score) return 'That score looks a bit too good to be true.';
-  // The Golden Leaf keepsake unlocks with the Living Legend achievement.
+  // The Golden Leaf keepsake unlocks with the Living Legend achievement; the Daily Brew carries no keepsake.
   const claimed = [...new Set((Array.isArray(body.achievements) ? body.achievements : []).map(String))];
   const fresh = claimed.filter(
     (id) => ACHIEVEMENTS.some((a) => a.id === id) && !progress.achievements.includes(id) && earned(id, run, progress)
   );
-  const goldLeaf = run.goldLeaf && (progress.achievements.includes('legendary2') || fresh.includes('legendary2'));
+  const goldLeaf = run.goldLeaf && !run.daily && (progress.achievements.includes('legendary2') || fresh.includes('legendary2'));
 
   const leaves = Math.round(
     leavesForRun({ score: run.score / bonus / twists.score, wave: run.wave, bossKills: run.bossKills, victory: run.victory }) *

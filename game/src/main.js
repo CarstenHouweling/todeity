@@ -7496,8 +7496,9 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
     },
   });
 
-  // Tode's Pantry: permanent upgrades (unless a vow locked it).
-  const pantry = (id) => (vow('pantry') ? 0 : pantryLevel(id));
+  // Tode's Pantry: permanent upgrades (unless a vow locked it). The Daily Brew is the same run for everyone:
+  // no Pantry, no keepsake (and no vows or Gentle Brew, see above), only the day's twists (`applyTwists`).
+  const pantry = (id) => (daily || vow('pantry') ? 0 : pantryLevel(id));
   stats.maxHp += pantry('heart') - vow('shell');
   stats.damageMultiplier = 1 + 0.08 * pantry('damage');
   stats.gaugeRate *= 1 + 0.12 * pantry('gauge');
@@ -7536,8 +7537,8 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   leafBonus = 1;
   fullGaugeStart = false;
   let awaken = false;
-  keepsake = currentKeepsake();
-  keepsake.apply({
+  keepsake = daily ? null : currentKeepsake();
+  keepsake?.apply({
     stats,
     player,
     grant: {

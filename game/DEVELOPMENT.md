@@ -355,6 +355,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `applyTwists`, waves in `startWave`/`beginWave`, plus `rollElite`, `healPlayer`, cursed tiles and boss health).
   The run report sends `dailyKey`; the server only pays the bonus for today's or yesterday's key. A Daily Brew
   ends with Bee-zebub: its victory screen has no endless button (and the `endless` action refuses).
+  **The same run for everyone** (v0.30.1): `startRun({ daily })` plays the frog of the day with no Pantry
+  (`pantry()` gives 0, so no Morning Brew either, which also used to shift the day's seeded rolls), no keepsake
+  (`keepsake` is null; the server ignores `goldLeaf` for Daily reports), no vows and no Gentle Brew (`runVows`,
+  `gentleRun`); only `applyTwists` changes Tode. Golden Harvest still adds to the leaves (rewards only, not the
+  score). A Daily run goes on the Daily board only (see Leaderboards).
 - **The run's form** (`runTier()` in main.js): the ending cut-scene turns Tode plain again (`ascension.setTier(0)`)
   before `endRun`, so `startEnding` keeps the form in `endingTier`. Scores (`tier`), the share card, `rememberRun`
   and the run report's `maxTier` use `runTier()`. Until v0.26 every won run said "Tode" and reported `maxTier: 0`,
@@ -716,7 +721,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Petal Shield and Stolen Honey upgrades always improve the current value (their card text depends on the level).
   The ultimate gauge fills by the health actually taken off bees divided by the wave's `hpScale`, so it charges at
   the same pace all run.
-- **Co-op carries everything:** Pantry upgrades and the keepsake apply in co-op (`startRun` is the same), and since
+- **Co-op carries everything:** Pantry upgrades and the keepsake apply in co-op (`startRun` is the same; only the
+  Daily Brew leaves them out), and since
   v0.24 so does Steeping: the host's vows go out with the `start` message (`runVows({ coop, shared })`), the room
   view shows the Steep and the host's "Change vows" button opens the Steeping screen (`showSteeping('room')`).
   Co-op scores go to their own boards (`coop2`/`coop3`/`coop4` in server.js, with the `team`); only the host
@@ -755,7 +761,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the game falls back to local progress. Forged requests can still cheat; this only stops storage edits.
   **Leaderboards** via `game/server`: score, deepest run (wave, then
   level), fastest Bee-zebub (clear time; any run with a `clear`, also one that died later in endless) and a seeded
-  **Daily Brew**. **Auto-submit** (v0.29.3): `endRun` submits every run by itself when the frog has a name
+  **Daily Brew** (since v0.30.1 the server puts a `daily` run on today's Daily board only, never on `all`, `depth`
+  or `speed`, whatever client sends it; before, Daily runs reached all of them). **Auto-submit** (v0.29.3): `endRun`
+  submits every run by itself when the frog has a name
   (`playerName()`: the player tag, else the name last typed) and isn't a co-op guest (the host submits the team);
   the game-over screen says "Submitting… as Name" and then the result. Frogs without a name get the name field and
   🏆 Submit as before, and a failed submit brings the field back to retry. `submitRun` waits out the server's 10 s per

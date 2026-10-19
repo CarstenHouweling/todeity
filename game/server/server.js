@@ -215,24 +215,31 @@ async function handleScores(req, res, url) {
       return send(res, 201, { coopRank: coop.rank, best: { coop: coop.best } });
     }
 
+    // A Daily Brew run (its own seed, twists and frog) goes on today's Daily board only, never on the all-time,
+    // deepest or fastest boards, whichever client sends it (before v0.30.1 Daily runs went on all of them).
+    if (body.daily) {
+      const date = today();
+      boards.daily[date] ??= [];
+      const daily = insert(boards.daily[date], entry);
+      // Keep only the last two weeks of daily boards.
+      for (const old of Object.keys(boards.daily).sort().slice(0, -14)) delete boards.daily[old];
+      await saveScores();
+      return send(res, 201, {
+        rank: null, dailyRank: daily.rank, depthRank: null, speedRank: null,
+        best: { all: null, daily: daily.best, depth: null, speed: null },
+      });
+    }
+
     const all = insert(boards.all, entry);
     const depth = insert(boards.depth, { ...entry }, ORDERS.depth);
     // Bee-zebub's clear time counts however the run ended: a run that went on into endless and fell still beat him.
     const beatBeezebub = entry.clear > 0 && entry.clear <= entry.time && entry.wave >= 21;
     const speed = beatBeezebub ? insert(boards.speed, { ...entry }, ORDERS.speed) : {};
-    let daily = {};
-    if (body.daily) {
-      const date = today();
-      boards.daily[date] ??= [];
-      daily = insert(boards.daily[date], { ...entry });
-      // Keep only the last two weeks of daily boards.
-      for (const old of Object.keys(boards.daily).sort().slice(0, -14)) delete boards.daily[old];
-    }
     await saveScores();
     // The …Rank fields: this run's place (null when the frog has a better one); `best`: where the frog stands.
     return send(res, 201, {
-      rank: all.rank, dailyRank: daily.rank ?? null, depthRank: depth.rank, speedRank: speed.rank ?? null,
-      best: { all: all.best, daily: daily.best ?? null, depth: depth.best, speed: speed.best ?? null },
+      rank: all.rank, dailyRank: null, depthRank: depth.rank, speedRank: speed.rank ?? null,
+      best: { all: all.best, daily: null, depth: depth.best, speed: speed.best ?? null },
     });
   }
 
