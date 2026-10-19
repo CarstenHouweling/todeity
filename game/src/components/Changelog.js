@@ -3,6 +3,26 @@
 
 export const CHANGELOG = [
   {
+    version: '0.31.0',
+    date: '2026-10-19',
+    title: "The champion's medal",
+    changes: [
+      "📅 In the Daily Brew the score line shows today's best Daily score, the one to beat, instead of your all-time best",
+      "🏅 Top the Daily Brew board and a champion's medal waits for you on the title screen the next day, beside the kettle",
+      "🎁 The medal pays Golden Leaves and a chance at a champion's trinket (the Champion's Podium or a Firework Crate) and at something to wear (Champion's Laurel, Champion's Sash, Victory Confetti)",
+      "🏡 A new garden set: Champion's Corner (the podium, the fireworks and the Golden Kettle)",
+    ],
+  },
+  {
+    version: '0.30.2',
+    date: '2026-10-19',
+    title: 'A patient ultimate',
+    changes: [
+      '⏸️ Your ultimate waits while you pick a brew, skill or ultimate, open a chest, or watch a cut-scene or clash, and carries on after: no more melting a boss behind the menus',
+      '🔋 The ultimate charges about as fast in late waves as just after the Queen: bigger swarms (and tougher, adapted hives) no longer refill it in moments',
+    ],
+  },
+  {
     version: '0.30.1',
     date: '2026-10-19',
     title: 'A fair Daily Brew',

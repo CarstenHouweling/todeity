@@ -14,7 +14,7 @@ import { loadHouse } from './components/House.js';
 import { createEnvironment, HOME, PATH, TEA_TABLE } from './components/Environment.js';
 import { circlesOverlap, circleIntersectsRect } from './components/collision.js';
 import { ALL_BREWS, BLENDS, CURSES, LIFESTEAL_COOLDOWN, brewById, describe, rollBrews } from './components/PowerUps.js';
-import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, waveConfig } from './components/Waves.js';
+import { buildSpawnQueue, FINAL_WAVE, HELL_WAVE, MODIFIERS, rollModifiers, swarmSize, waveConfig } from './components/Waves.js';
 import { Particles } from './components/Particles.js';
 import { babble, hush, meter, muffleMusic, play, setMusicScene, setSound, soundSettings, unlockAudio } from './components/Sound.js';
 import { music } from './components/Music.js';
@@ -190,7 +190,7 @@ const FREEZE_SHATTER_DELAY = 1; // seconds a dash-frozen bee stays frozen before
 const STEAM_SPACING = 18; // distance between steam puffs of the Steam Engine
 
 // Ultimate
-const GAUGE_PER_DAMAGE = 0.28; // % per point of damage dealt
+const GAUGE_PER_DAMAGE = 0.28; // % per point of a wave-1 bee's health taken off (see damageEnemy)
 const GAUGE_PER_HIT = 6; // % for getting hit
 const ULTIMATE_WAVE = 5; // the ultimate is chosen after beating the first boss
 
@@ -378,6 +378,9 @@ const beacon = new PlayerBeacon(player);
 // Phases with the run's field on screen: play, its menus and the beam clash (not the cut-scenes).
 const TOAST_HOLD_PHASES = new Set(['bossIntro', 'ascending', 'travel', 'story', 'ending', 'clash']);
 const BEACON_PHASES = new Set([...PLAYING, 'paused', 'choosing', 'skill', 'ultimate', 'chest', 'clash']);
+// Tode's ultimate stands still through the reward menus and cut-scenes (and is out of sight in the cut-scenes): a
+// Steeping Beam used to melt a boss behind the brew cards, during his entrance or in a clash. It carries on after.
+const ULTIMATE_HOLD_PHASES = new Set(['choosing', 'ultimate', 'skill', 'chest', 'victory', ...TOAST_HOLD_PHASES]);
 
 const camera = createCamera();
 player.group.add(camera);
@@ -537,7 +540,34 @@ function safeStorage(op, key, value) {
 function updateScore() {
   // In co-op the host keeps the team's score.
   score = isGuest() ? coopScore : (timeAlive * SCORE_PER_SECOND + points) * steepBonus(steep) * (twistDay?.score ?? 1) * (gentle ? GENTLE.score : 1);
-  hud.setScore(Math.floor(score), Math.max(bestScore, Math.floor(score)), timeAlive);
+  const daily = isDaily();
+  const best = daily ? Math.max(dailyBest.top, dailyBest.own) : bestScore;
+  hud.setScore(Math.floor(score), Math.max(best, Math.floor(score)), timeAlive, daily ? "Today's best" : 'Best');
+}
+
+// The Daily Brew's HUD shows the day's best Daily score instead of the all-time best: the top of today's Daily board,
+// or (without a server) this browser's own best Daily run today (`tode-daily-best`).
+const dailyBest = { key: null, top: 0, own: 0 };
+const DAILY_BEST_KEY = 'tode-daily-best';
+
+function loadDailyBest() {
+  const key = todayKey();
+  let saved = null;
+  try {
+    saved = JSON.parse(safeStorage('get', DAILY_BEST_KEY) ?? 'null');
+  } catch {
+    // a broken entry starts over
+  }
+  Object.assign(dailyBest, { key, top: 0, own: saved?.key === key ? Number(saved.score) || 0 : 0 });
+  fetchScores('daily', 1).then((scores) => {
+    if (dailyBest.key === key && scores?.[0]) dailyBest.top = Math.max(dailyBest.top, scores[0].score);
+  });
+}
+
+function rememberDailyBest(finalScore) {
+  if (finalScore <= dailyBest.own) return;
+  dailyBest.own = finalScore;
+  if (persistBest) safeStorage('set', DAILY_BEST_KEY, JSON.stringify({ key: dailyBest.key, score: finalScore }));
 }
 
 const aliveEnemies = () => enemies.filter((enemy) => !enemy.dying);
@@ -941,6 +971,8 @@ const DAMAGE_STYLES = { burn: 'burn', lightning: 'zap', ultimate: 'big', frost: 
  */
 function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit', { raw = false, steady = false } = {}) {
   if (enemy.dying) return;
+  // Only while playing: a storm's last strikes would still land behind a menu (see ULTIMATE_HOLD_PHASES).
+  if (source === 'ultimate' && !PLAYING.has(phase)) return;
   // A shielded boss shrugs everything off (now and then a 🛡 shows where the hits land).
   if (enemy.shielded) {
     if (source !== 'burn' && source !== 'net' && clock.elapsedTime - (enemy.lastShieldPing ?? 0) > 0.3) {
@@ -977,8 +1009,12 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   if (damage >= HIT_STOP_DAMAGE && !fromTeammate && !steady) hitStop(0.045);
   // (a teammate's hits show as numbers on their own screen)
   if (!fromTeammate) hud.damageNumber(enemy.position, crit ? `${damage}!` : damage, enemy.height + 4, crit ? 'crit' : DAMAGE_STYLES[source] ?? '');
-  // The gauge fills per bee's worth of health, not per raw damage: late-game hits are huge, bees too.
-  if (source !== 'ultimate' && !fromTeammate) addGauge((landed * GAUGE_PER_DAMAGE) / (config?.hpScale ?? 1));
+  // The gauge fills per bee's worth of health, not per raw damage: late-game hits are huge, bees too. The share of
+  // the bee's own health counts: dividing by the wave's hpScale left out an adapted hive's toughness (up to ×15, so
+  // the gauge filled up to 15× faster for strong builds) and a boss's co-op and vow health.
+  if (source !== 'ultimate' && !fromTeammate && enemy.maxHp > 0) {
+    addGauge(((landed / enemy.maxHp) * enemy.baseHp * GAUGE_PER_DAMAGE) / (enemy.type.boss ? 1 : swarmGauge()));
+  }
   if (procs) charmHit(enemy, amount, crit);
   if (killed) {
     onEnemyKilled(enemy);
@@ -1230,6 +1266,13 @@ function healPlayer(amount) {
     });
   }
 }
+
+/**
+ * The swarm grows (24 bees in wave 6, 65 in wave 16, ~90 in wave 19, 120 in endless waves) and the gauge filled with
+ * it (wave 16 charged it 2.7× as fast as wave 6). Bees, grazes and the Leaf Battery charge less in a bigger
+ * swarm, so a wave fills about as much of it as the first wave after the Queen. Getting hit and bosses don't.
+ */
+const swarmGauge = () => Math.max(1, swarmSize(wave) / swarmSize(ULTIMATE_WAVE + 1));
 
 function addGauge(amount) {
   if (!player.ultimate || player.gauge >= 100) return;
@@ -3232,7 +3275,7 @@ let lastGrazeChime = 0;
 function graze(bullet) {
   bullet.grazed = true;
   grazes++;
-  addGauge(GRAZE.gauge);
+  addGauge(GRAZE.gauge / swarmGauge());
   if (!isGuest()) points += GRAZE.points;
   const at = new THREE.Vector3(bullet.x, bullet.y, 0);
   particles.burst(at, { count: 5, colors: ['#ffffff', '#bff4ff', '#ffe9a0'], speed: 70, up: 40, size: 1.4, height: 10, life: 0.35, glow: true });
@@ -3792,6 +3835,7 @@ function tryUltimate() {
   if (!player.ultimate || player.gauge < 100 || ultimateEffect) return;
   player.gauge = 0;
   ultimateEffect = startUltimate(player.ultimate, ctx);
+  ultimateEffect.waitsForPlay = true; // (see ULTIMATE_HOLD_PHASES; a teammate's is only a picture of theirs)
   share({ k: 'ult', id: player.ultimate, a: [ctx.aimGround.x, ctx.aimGround.y] });
 }
 
@@ -3962,7 +4006,7 @@ function charmHit(enemy, amount, crit) {
 }
 
 function charmKill(enemy) {
-  if (charms('battery')) addGauge(batteryCharge(charms('battery')));
+  if (charms('battery')) addGauge(batteryCharge(charms('battery')) / swarmGauge());
   if (charms('firecracker') && procs(0.25)) {
     const at = enemy.position.clone().setZ(0);
     const n = charms('firecracker');
@@ -4873,7 +4917,9 @@ async function claim(kind) {
   if (result.reward) {
     play('legendary');
     postfx.flash('#fff1c0', 0.4);
-    particles.burst(player.position, { count: 50, colors: ['#ffd36b', '#7ed957', '#ffffff'], speed: 160, up: 220, size: 2.2, glow: true });
+    // (a champion's medal throws confetti)
+    const colors = kind === 'medal' ? ['#ff5a7a', '#ffd23f', '#5fb8ff', '#7ed957', '#c58aff'] : ['#ffd36b', '#7ed957', '#ffffff'];
+    particles.burst(player.position, { count: kind === 'medal' ? 90 : 50, colors, speed: 160, up: 220, size: 2.2, glow: true });
     if (result.reward.trinket) garden.autoPlace([result.reward.trinket]);
     meta.trinketsSeen = ownedTrinkets(meta);
     saveMeta();
@@ -7442,8 +7488,10 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   if (!coopRun && coop) leaveCoop();
   if (!coopRun && worldTiles !== SOLO_TILES) buildWorld(SOLO_TILES);
   // The Daily Brew rolls waves, weather and offers from today's seed, the same for everyone.
-  if (daily) startDaily();
-  else stopDaily();
+  if (daily) {
+    startDaily();
+    loadDailyBest();
+  } else stopDaily();
   twistDay = daily ? dailyTwists(todayKey()) : null;
   twistIds = new Set(twistDay ? [...twistDay.trials, ...twistDay.boons] : []);
   submitted = false;
@@ -7662,6 +7710,7 @@ function endRun({ victory = false } = {}) {
   stormCloud.visible = false;
 
   const finalScore = Math.floor(score);
+  if (isDaily()) rememberDailyBest(finalScore);
   const isRecord = finalScore > bestScore;
   if (isRecord) {
     bestScore = finalScore;
@@ -7842,7 +7891,8 @@ async function submitRun(name, { auto = false } = {}) {
   const wait = lastSubmitAt + 10_500 - Date.now();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   lastSubmitAt = Date.now();
-  const result = await submitScore({ ...run, name: cleanName, tag });
+  // A Daily run carries the save code: the server marks whose save it is, for the champion's medal tomorrow.
+  const result = await submitScore({ ...run, name: cleanName, tag, save: run.daily ? cloud.code ?? undefined : undefined });
   // Already playing again: the run is on the boards, there's just no game-over screen to show it on.
   const shown = () => lastRun === run && phase === 'gameover';
   if (!shown()) return;
@@ -8071,6 +8121,7 @@ const MENU_ACTIONS = {
   daily: () => (phase === 'title' || phase === 'gameover') && hud.showDaily(dailyTwists(todayKey())),
   'claim-gift': () => claim('gift'),
   'claim-kettle': () => claim('kettle'),
+  'claim-medal': () => claim('medal'),
   garden: () => needName(openGarden),
   'garden-done': doneEditing,
   'garden-leave': closeGarden,
@@ -8623,7 +8674,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
 
   // The world keeps living while menus are open (except when paused).
   if (phase !== 'paused') {
-    effects.update(delta);
+    effects.update(delta, { hold: ULTIMATE_HOLD_PHASES.has(phase), hide: TOAST_HOLD_PHASES.has(phase) });
     updateSplashEffects(delta);
     particles.update(delta);
     weather.update(delta, player.position, clock.elapsedTime);

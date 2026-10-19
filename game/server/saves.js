@@ -5,7 +5,8 @@
 //   GET  /api/save/:code                 → { code, progress }
 //   POST /api/save/:code/run  { report } → { code, progress, leaves }    leaves for a finished run (`runId`: once)
 //   POST /api/save/:code/buy  { id }     → { code, progress }            a Pantry upgrade
-//   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift') or the kettle ('kettle')
+//   POST /api/save/:code/claim { kind }  → { code, progress, reward }    the daily gift ('gift'), the kettle ('kettle')
+//                                                                          or a Daily Brew champion's medal ('medal')
 //   POST /api/save/:code/decor { decor } → { code, progress }            trinkets placed in the title garden
 //   POST /api/save/:code/garden { public? } → { garden, public }        this save's garden code (and make it public)
 //   POST /api/save/:code/profile { name, color } → { code, progress, profile }   the player tag (name, #tag, colour)
@@ -25,8 +26,8 @@ import { PANTRY, harvestBonus, leavesForRun } from '../src/components/Meta.js';
 import { ACHIEVEMENTS, rewardFor } from '../src/components/Achievements.js';
 import { STEEP_MAX, steepBonus } from '../src/components/Steeping.js';
 import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
-import { accountLevel, claimGift, claimKettle, cleanDecor, gardenBeauty, ownedTrinkets, songUnlocked, withRewards } from '../src/components/Rewards.js';
-import { randomInt } from 'node:crypto';
+import { MEDAL, accountLevel, claimGift, claimKettle, claimMedal, cleanDecor, dayKey, gardenBeauty, ownedTrinkets, songUnlocked, withRewards } from '../src/components/Rewards.js';
+import { randomBytes, randomInt } from 'node:crypto';
 import { TAG_COLORS, cleanName, nameProblem, newTag, publicName } from '../src/components/PlayerTag.js';
 import { cleanOutfit } from '../src/components/Wearables.js';
 
@@ -105,7 +106,38 @@ function overLimit(kind, ip, limit) {
 }
 const count = (kind, ip) => counters.get(`${kind}:${ip}`).count++;
 
-const view = (save) => ({ code: save.code, progress: save.progress, profile: save.profile });
+// `medals`: the Daily Brew days this save topped and hasn't claimed the medal of yet (see medalsWaiting).
+const view = (save) => ({ code: save.code, progress: save.progress, profile: save.profile, medals: medalsWaiting(save, Date.now()) });
+
+// --- The Daily Brew's champion ------------------------------------------------------------------------------------
+// Whoever tops a day's Daily board gets a champion's medal the next day (claimable for MEDAL.days days). A Daily
+// score sent with the save code (`save` in POST /api/scores) carries the save's private `owner` id, never the code;
+// server.js tells this module whose entry is on top of a day's board (`setDailyWinner`).
+let dailyWinner = () => null;
+export const setDailyWinner = (winner) => (dailyWinner = winner);
+
+/** The private id that marks a save's Daily scores, made (and saved) the first time; null for an unknown code. */
+export async function scoreOwner(code) {
+  const save = saves[normalizeCode(code)];
+  if (!save) return null;
+  if (!save.owner) {
+    save.owner = randomBytes(9).toString('hex');
+    await persist();
+  }
+  return save.owner;
+}
+
+/** The finished days (oldest first, at most MEDAL.days back) this save won the Daily Brew and hasn't claimed. */
+function medalsWaiting(save, now) {
+  if (!save.owner) return [];
+  const claimed = new Set(save.progress.medals ?? []);
+  const days = [];
+  for (let back = MEDAL.days; back >= 1; back--) {
+    const date = dayKey(now - back * 86_400_000);
+    if (!claimed.has(date) && dailyWinner(date) === save.owner) days.push(date);
+  }
+  return days;
+}
 
 /** The player tag of a save (older saves get one, keeping the name they gave their garden). */
 function withProfile(save) {
@@ -271,7 +303,7 @@ export async function handleSave(req, res, url, { send, ip, readJson }) {
     return send(res, 200, { ...view(save), leaves: result });
   }
   if (action === 'claim') {
-    const claim = { gift: claimGift, kettle: claimKettle }[body.kind];
+    const claim = { gift: claimGift, kettle: claimKettle, medal: (progress) => claimMedal(progress, medalsWaiting(save, now)[0]) }[body.kind];
     if (!claim) return send(res, 400, { error: 'Unknown reward.', ...view(save) });
     const reward = claim(save.progress, now);
     if (typeof reward === 'string') return send(res, 400, { error: reward, ...view(save) });

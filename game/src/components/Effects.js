@@ -400,11 +400,19 @@ export class Effects {
     if (count > 0) ctx.play('zap');
   }
 
-  update(delta) {
+  /**
+   * `hold`: effects marked `waitsForPlay` (Tode's own ultimate) stand still while a menu or cut-scene is up and carry
+   * on after it; `hide`: and are out of sight meanwhile (cut-scenes).
+   */
+  update(delta, { hold = false, hide = false } = {}) {
     // Effects can start new effects while updating (a storm calls strikes), so collect those separately.
     const current = this.list;
     this.list = [];
     const survivors = current.filter((effect) => {
+      if (effect.waitsForPlay) {
+        effect.show?.(!(hold && hide));
+        if (hold) return true;
+      }
       try {
         const alive = effect.update(delta);
         if (!alive) effect.dispose();

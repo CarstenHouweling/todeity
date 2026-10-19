@@ -298,8 +298,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Beam clash** (solo): when the Empress or Bee-zebub hits a rage phase they fire a beam at Tode, he answers, and
   the player mashes Space/click/tap to push the clash point back (`CLASH` in main.js). Winning deals 10% of the
   boss's health and **shatters reality** (`postfx.shatter()`: the screen cracks into shifted shards with an
-  inverted flash); losing costs a heart. Effects keep running during the clash (a Steeping Beam still burns the
-  boss), so the boss can fall or lose Bee-zebub's first life mid-clash. **Since v0.29.5** `setPhase` calls
+  inverted flash); losing costs a heart. Effects keep running during the clash, except Tode's own ultimate (since
+  v0.30.2 a Steeping Beam no longer burns the boss mid-clash; see Ultimates). **Since v0.29.5** `setPhase` calls
   `closeClash()` (beams, prompt, camera) whenever the game leaves `clash` for anything but `paused`, `updateClash`
   ends it when its boss is dying, reviving or gone, and `startClash` refuses such a boss. Before, his true-form
   intro took over the phase and "TAP! TAP! TAP!" and both clash beams (gold and white, like a Steeping Beam) stayed
@@ -313,6 +313,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame). The giant is a copy of the caster's frog made with
   `rig.cloneAtRest()`: a plain `model.clone()` froze the pose of the moment, often a spit with the tongue flicked out
   (a second, static tongue).
+  **Since v0.30.2 the ultimate waits out menus and cut-scenes:** `tryUltimate` marks the effect `waitsForPlay`, and
+  `effects.update(delta, { hold, hide })` skips it during `ULTIMATE_HOLD_PHASES` (the brew/skill/ultimate picks, the
+  chest, the victory menu and the cut-scenes of `TOAST_HOLD_PHASES`, clash included) and hides it (`show()` on the
+  beam and the summon) during the cut-scenes; it carries on afterwards. `damageEnemy` also drops `ultimate` hits
+  outside `PLAYING` (a storm's strikes already in flight). A teammate's ultimate is only a picture and isn't held.
 - **Achievements** (`components/Achievements.js`): 39, each with its own `reward` (3 to 60 Golden Leaves), shown
   in the Pantry. The server checks each against the run report (`earned()` in `server/saves.js`), so a new
   achievement needs a rule there too. Run bookkeeping for them lives in `feats` (main.js).
@@ -359,7 +364,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (`pantry()` gives 0, so no Morning Brew either, which also used to shift the day's seeded rolls), no keepsake
   (`keepsake` is null; the server ignores `goldLeaf` for Daily reports), no vows and no Gentle Brew (`runVows`,
   `gentleRun`); only `applyTwists` changes Tode. Golden Harvest still adds to the leaves (rewards only, not the
-  score). A Daily run goes on the Daily board only (see Leaderboards).
+  score). A Daily run goes on the Daily board only (see Leaderboards). **The score line** (v0.31.0) says "Today's
+  best" in a Daily run: the top of today's Daily board (`loadDailyBest` fetches it when the run starts), or this
+  browser's own best Daily run today (`tode-daily-best`) without a server. The winner gets a champion's medal (see
+  Coming back).
 - **The run's form** (`runTier()` in main.js): the ending cut-scene turns Tode plain again (`ascension.setTier(0)`)
   before `endRun`, so `startEnding` keeps the form in `endingTier`. Scores (`tier`), the share card, `rememberRun`
   and the run report's `maxTier` use `runTier()`. Until v0.26 every won run said "Tode" and reported `maxTier: 0`,
@@ -367,8 +375,19 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
-  27): milestones unlock by themselves from the progress (`unlock`), gift and kettle ones are stored in
-  `progress.trinkets`. They stand around Tode on the title screen (`TitleGarden.js`, models in `TrinketModels.js`,
+  29): milestones unlock by themselves from the progress (`unlock`), gift, kettle and champion ones are stored in
+  `progress.trinkets`.
+  **The champion's medal** (v0.31.0, 🏅): whoever tops a day's Daily Brew board gets a medal the next day,
+  claimable for `MEDAL.days` (7) days (`claimMedal` in Rewards.js, `kind: 'medal'`): 60–100 leaves, a 50% chance at
+  a champion trinket (Champion's Podium, Firework Crate; with both owned, any gift or kettle trinket still missing)
+  and a 40% chance at a champion wearable (`CHAMPION_WEARABLES`: Champion's Laurel, Champion's Sash, Victory
+  Confetti; `unlock: { champion }`, kept in `progress.wearables`). Claimed days go in `progress.medals`. How the
+  server knows the winner: a Daily score is sent with the save code (`save`, `submitRun`); server.js stores the save's
+  private `owner` id on the entry (`scoreOwner` in saves.js, made once and saved; never the code, and GET
+  /api/scores strips it) and `setDailyWinner` tells saves.js the owner on top of a day's board. Every save view
+  carries `medals` (the won days still to claim, `medalsWaiting`), which CloudSave.js keeps in `cloud.medals`; the
+  title dock shows the medal tile (`hud.medalTile`, after the kettle) only while one waits and the save is online.
+  The admin removing the top entry moves the medal to the next frog (if theirs was sent with a save code). They stand around Tode on the title screen (`TitleGarden.js`, models in `TrinketModels.js`,
   placements in `progress.decor`, saved with `POST …/decor` via `saveDecor`). New ones place themselves
   (`syncTrinkets`, `meta.trinketsSeen` is local).
 - **The garden editor** (🏡 My garden, v0.21, `TitleGarden.js`): the camera is the player's (`updateCamera`: yaw,
@@ -494,10 +513,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   boops** (`MouseRight` in Input.js; `TitleGarden.down` ignores it while walking, so it doesn't turn the camera),
   and the walking camera starts at `WALK_VIEW` (410 away; it was 300, too close when joining).
 - **Wardrobe** (v0.29.0, `components/Wearables.js` for the items and rules, shared with the server;
-  `components/WearableModels.js` for the models): 54 wearables in five slots (14 hats, 9 face, 9 body, 10 back, 12
+  `components/WearableModels.js` for the models): 57 wearables in five slots (15 hats, 9 face, 10 body, 10 back, 13
   auras; 21 added in v0.29.1), one per slot. Four are free (Leaf Cap, Round Specs, Rosy Cheeks, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
   the server can work out itself (`unlock`: an achievement, an account level or the best form), so nothing new is
-  stored per item. The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
+  stored per item, except the champion's three from the Daily Brew medal (`unlock: { champion }`, in
+  `progress.wearables`; see Coming back). The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
   `saveOutfit` in CloudSave.js, sent 1.5 s after the last click; the server keeps only unlocked items with
   `cleanOutfit(outfit, progress)`, and its cleaned copy replaces the local one). Until the server has confirmed the
   latest pick, `noteOutfit` keeps it over any server reply (`outfitWanted` in CloudSave.js `apply`): before v0.29.6 the
@@ -693,7 +713,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the wordmark and the in-game callouts ("Brewtastic!", one rule at the end of `style.css`) use it (`--display-font`);
   everything else keeps the system font (headings and banners had it briefly, the owner wanted it only there), the class chip and a big Start run. At the bottom a dock (`hud.titleDock`): Daily
   Brew, Co-op, Leaderboard | Pantry, Keepsake, Steeping, Wardrobe, My garden, Visit | the gift and the kettle
-  (`rewardTile`: a ring fills as they count down, `--p` from `rewardProgress`; they glow when ready). The menu
+  (`rewardTile`: a ring fills as they count down, `--p` from `rewardProgress`; they glow when ready), and the 🏅
+  champion's medal while one waits (`medalTile`). The menu
   scrolls when it doesn't fit, the dock wraps on tablets and phones held upright, and short screens tighten the
   spacing so a phone held sideways needs no scrolling. Settings toggles redraw through `refreshMenu()`, which also
   redraws an open settings popup (`hud.modalIs('settings')`). New things go in the dock or a popup, not as more
@@ -719,8 +740,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   zoom. Menus redraw on `fullscreenchange` (`refreshMenu`).
 - **Healing and the ultimate:** Stolen Honey and Herbal Remedy share a 12 s cooldown (`LIFESTEAL_COOLDOWN`);
   Petal Shield and Stolen Honey upgrades always improve the current value (their card text depends on the level).
-  The ultimate gauge fills by the health actually taken off bees divided by the wave's `hpScale`, so it charges at
-  the same pace all run.
+  The ultimate gauge fills by the share of a bee's own health taken off, times its wave-1 health (`enemy.baseHp`),
+  so tougher bees don't charge it faster. Until v0.30.2 it divided by the wave's `hpScale` only, which left out an
+  adapted hive (up to ×15) and a boss's co-op/vow health. Bees (not bosses), grazes and the Leaf Battery are also
+  divided by `swarmGauge()` (`swarmSize(wave)` from Waves.js over wave 6's 24 bees: ×2.7 at wave 16, ×5 in endless),
+  so each wave fills about as much as wave 6 did; getting hit (`GAUGE_PER_HIT`) is not scaled.
 - **Co-op carries everything:** Pantry upgrades and the keepsake apply in co-op (`startRun` is the same; only the
   Daily Brew leaves them out), and since
   v0.24 so does Steeping: the host's vows go out with the `start` message (`runVows({ coop, shared })`), the room
@@ -773,7 +797,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   stays. The response's `…Rank` fields are this run's place (null when the frog has a better one); `best` says where
   the frog stands, so the game-over screen shows "Your best run stays #N". Entries from before v0.29.3 have no tag
   and only match each other by name, so old duplicates age out rather than merge. The run timer (top right) only counts
-  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`.
+  fighting: menus, skill picks, cut-scenes and pauses don't count. Saved in `localStorage`: `tode-meta` (also vows, keepsake and memory), `tode-best-score`, `tode-sound`, `tode-settings`, `tode-name`, `tode-save-code`, `tode-unsent-runs`, `tode-daily-best`.
 
 ## Promo material
 
@@ -786,16 +810,17 @@ GIFs are gitignored (too big for the repo and the deploy); only the banners are 
 post copy: `SUBMISSION.md`.
 
 **The submission clip** `todeity-gameplay-20s.mp4` (19.9 s, 15.4 MB; the bot allows 20 s and 20 MB) is cut from
-`todeity-trailer-1080p.mp4` at its shot boundaries (true form 0–3.43, swarm and bullets 8.67–15.93, ascension and
-beam 26.83–36.0 with a 0.8 s fade), so redo it whenever the trailer is re-rendered. From `game/promo/`, with
+`todeity-trailer-1080p.mp4` at its shot boundaries (true form 0.4–3.43, swarm and bullets 8.67–15.93, ascension and
+beam 26.83–36.4 with a 0.8 s fade), so redo it whenever the trailer is re-rendered. It starts at 0.4 s, after the
+trailer's fade-in: Discord uses the first frame as the preview, and a black one looks broken. From `game/promo/`, with
 `F` the filter below, run ffmpeg twice (`-pass 1 … -f mp4 /dev/null`, then `-pass 2 … todeity-gameplay-20s.mp4`)
 with `-i todeity-trailer-1080p.mp4 -filter_complex "$F" -map "[v]" -map "[a]" -c:v libx264 -preset slow -b:v 6000k
 -pix_fmt yuv420p -movflags +faststart -c:a aac -b:a 160k`:
 
 ```
-[0:v]trim=0:3.4333,setpts=PTS-STARTPTS[v0];[0:a]atrim=0:3.4333,asetpts=PTS-STARTPTS,afade=t=out:st=3.4033:d=0.03[a0];
+[0:v]trim=0.4:3.4333,setpts=PTS-STARTPTS[v0];[0:a]atrim=0.4:3.4333,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=3.0033:d=0.03[a0];
 [0:v]trim=8.6667:15.9333,setpts=PTS-STARTPTS[v1];[0:a]atrim=8.6667:15.9333,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=7.2367:d=0.03[a1];
-[0:v]trim=26.8333:36.0,setpts=PTS-STARTPTS,fade=t=out:st=8.3667:d=0.8[v2];[0:a]atrim=26.8333:36.0,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=7.9667:d=1.2[a2];
+[0:v]trim=26.8333:36.4,setpts=PTS-STARTPTS,fade=t=out:st=8.7667:d=0.8[v2];[0:a]atrim=26.8333:36.4,asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=8.3667:d=1.2[a2];
 [v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]
 ```
 

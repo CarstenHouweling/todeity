@@ -4,7 +4,8 @@
  * (achievements, account level, the best form), so only the chosen outfit is saved (`profile.outfit`, see
  * saves.js). The models are in WearableModels.js. No three.js here (the server imports it).
  *
- * `unlock`: { achievement } | { level } | { tier } (the best form reached); none: free.
+ * `unlock`: { achievement } | { level } | { tier } (the best form reached) | { champion } (a chance in the Daily Brew
+ * champion's medal, kept in `progress.wearables`, see Rewards.js); none: free.
  */
 import { accountLevel } from './Rewards.js';
 import { bestTier } from './Emotes.js';
@@ -33,6 +34,7 @@ export const WEARABLES = [
   { id: 'beehat', slot: 'head', name: "Beekeeper's Hat", icon: '🐝', unlock: { achievement: 'kills1000' } },
   { id: 'toque', slot: 'head', name: "Chef's Toque", icon: '👨‍🍳', unlock: { achievement: 'mastery' } },
   { id: 'antlers', slot: 'head', name: 'Antlers', icon: '🦌', unlock: { level: 20 } },
+  { id: 'laurel', slot: 'head', name: "Champion's Laurel", icon: '🌿', unlock: { champion: true } },
   // Face
   { id: 'specs', slot: 'face', name: 'Round Specs', icon: '👓' },
   { id: 'shades', slot: 'face', name: 'Cool Shades', icon: '😎', unlock: { level: 4 } },
@@ -53,6 +55,7 @@ export const WEARABLES = [
   { id: 'lei', slot: 'body', name: 'Flower Lei', icon: '🌺', unlock: { achievement: 'shrines' } },
   { id: 'charmbelt', slot: 'body', name: 'Charm Belt', icon: '🧿', unlock: { achievement: 'charms' } },
   { id: 'apron', slot: 'body', name: 'Tea Apron', icon: '🍵', unlock: { level: 18 } },
+  { id: 'sash', slot: 'body', name: "Champion's Sash", icon: '🎗️', unlock: { champion: true } },
   // Back
   { id: 'cape', slot: 'back', name: 'Hero Cape', icon: '🦸', unlock: { level: 2 } },
   { id: 'teapack', slot: 'back', name: 'Teapot Backpack', icon: '🫖', unlock: { level: 5 } },
@@ -77,6 +80,7 @@ export const WEARABLES = [
   { id: 'leaves', slot: 'aura', name: 'Falling Leaves', icon: '🍂', unlock: { level: 20 } },
   { id: 'notes', slot: 'aura', name: 'Music Notes', icon: '🎵', unlock: { level: 22 } },
   { id: 'rainbow', slot: 'aura', name: 'Rainbow Ring', icon: '🌈', unlock: { level: 30 } },
+  { id: 'confetti', slot: 'aura', name: 'Victory Confetti', icon: '🎊', unlock: { champion: true } },
 ];
 
 export const wearableById = (id) => WEARABLES.find((item) => item.id === id);
@@ -88,6 +92,7 @@ export function wearableUnlocked(item, progress = {}) {
   const unlock = item?.unlock;
   if (!item) return false;
   if (!unlock) return true;
+  if (unlock.champion) return Boolean(progress.wearables?.includes(item.id));
   if (unlock.achievement) return Boolean(progress.achievements?.includes(unlock.achievement));
   if (unlock.tier) return bestTier(progress) >= unlock.tier;
   return accountLevel(progress).level >= unlock.level;
@@ -97,6 +102,7 @@ export function wearableUnlocked(item, progress = {}) {
 export function wearableHint(item, achievementName = (id) => id) {
   const unlock = item.unlock;
   if (!unlock) return 'Free';
+  if (unlock.champion) return 'Win a Daily Brew: a chance in the champion\'s medal';
   if (unlock.achievement) return `Achievement: ${achievementName(unlock.achievement)}`;
   if (unlock.tier) return `Become ${FORMS[unlock.tier]} Tode in a run`;
   return `Reach level ${unlock.level}`;

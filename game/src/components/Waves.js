@@ -11,6 +11,13 @@ const ENDLESS_SWARM = 120; // at most this many bees in an endless wave (each to
 const endlessHit = (endless) => (endless ? Math.floor((endless + 2) / 4) : 0);
 const ENDLESS_BOSSES = ['queen', 'shogun', 'seraph', 'empress', 'beezebub'];
 
+/** How many bees a normal (not boss) wave sends. */
+export function swarmSize(wave) {
+  const late = Math.max(0, wave - 10);
+  const endless = Math.max(0, wave - HELL_WAVE);
+  return Math.min(endless ? ENDLESS_SWARM : 160, Math.round(6 + wave * 3 + Math.max(0, 4 - wave) * 2 + late * late * 0.3 + endless * 2));
+}
+
 export function waveConfig(wave) {
   const isBoss = wave % BOSS_EVERY === 0 || wave === HELL_WAVE;
   const late = Math.max(0, wave - 10); // past the first two arenas the swarm grows faster
@@ -24,7 +31,7 @@ export function waveConfig(wave) {
       ? ENDLESS_BOSSES[Math.floor(wave / BOSS_EVERY) % ENDLESS_BOSSES.length]
       : wave >= HELL_WAVE ? 'beezebub' : wave >= FINAL_WAVE ? 'empress' : wave === 15 ? 'seraph' : wave === 10 ? 'shogun' : 'queen',
     // The first waves get a few extra bees, spawning quickly, so the run gets going right away.
-    count: isBoss ? 4 + wave : Math.min(endless ? ENDLESS_SWARM : 160, Math.round(6 + wave * 3 + Math.max(0, 4 - wave) * 2 + late * late * 0.3 + endless * 2)),
+    count: isBoss ? 4 + wave : swarmSize(wave),
     // Bees toughen up faster later on, to keep pace with a powered-up Tode. Endless mode: 18% more every wave, and
     // fewer but tougher bees (a level-46 build at Steep 18 couldn't die by wave 31 with +10%, and 160 bees lagged).
     hpScale: (1 + 0.2 * (wave - 1) + 0.024 * (wave - 1) ** 2) * 1.18 ** endless * (endless ? 160 / ENDLESS_SWARM : 1),

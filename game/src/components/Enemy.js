@@ -313,7 +313,8 @@ export class Enemy {
       : (radiusByType[kind] ??= computeFootprintRadius(this.group) / size) * size;
 
     const eliteHp = elite === 'giant' ? 4 : elite ? 2.5 : 1;
-    this.hp = this.maxHp = Math.max(1, Math.round(BASE_HP * type.hp * hpScale * eliteHp));
+    this.baseHp = BASE_HP * type.hp * eliteHp; // its health in wave 1 (a bee's worth for the ultimate gauge)
+    this.hp = this.maxHp = Math.max(1, Math.round(this.baseHp * hpScale));
     this.speed = BASE_SPEED * type.speed * speedScale * (elite === 'swift' ? 1.6 : 1);
     this.score = type.score * (elite ? 3 : 1);
     if (this.elite) {

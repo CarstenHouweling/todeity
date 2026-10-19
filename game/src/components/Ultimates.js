@@ -164,6 +164,10 @@ class SteepingBeam {
     return t < BEAM_FIRE;
   }
 
+  show(shown) {
+    this.group.visible = shown;
+  }
+
   dispose() {
     this.ctx.player.channeling = false;
     disposeTree(this.group);
@@ -379,6 +383,11 @@ class GreatTodeSummon {
       this.toad.visible = false;
     }
     return t < SUMMON.end;
+  }
+
+  show(shown) {
+    this.seal.visible = shown;
+    if (this.toad) this.toad.visible = shown && !this.vanished;
   }
 
   appear() {

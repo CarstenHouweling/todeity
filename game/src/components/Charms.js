@@ -41,7 +41,7 @@ export const CHARMS = [
   { id: 'cup', icon: '☕', name: 'Hot Cup', rarity: 'uncommon', text: (n) => `Critical hits splash ${3 + 2 * n} damage around the bee.` },
   // On kill
   { id: 'firecracker', icon: '🧨', name: 'Sugar Firecracker', rarity: 'common', text: (n) => `Defeated bees have a 25% chance to explode for ${3 + 3 * n} damage.` },
-  { id: 'battery', icon: '🔋', name: 'Leaf Battery', rarity: 'common', text: (n) => `Every defeated bee charges your ultimate by ${batteryCharge(n).toFixed(1)}% (up to 3%).` },
+  { id: 'battery', icon: '🔋', name: 'Leaf Battery', rarity: 'common', text: (n) => `Every defeated bee charges your ultimate by ${batteryCharge(n).toFixed(1)}% (up to 3%; less in the bigger swarms of later waves).` },
   // Rare
   { id: 'dice', icon: '🎲', name: 'Loaded Dice', rarity: 'rare', text: (n) => `Every chance effect gets ${Math.min(n, DICE_MAX)} extra roll${n > 1 ? 's' : ''}${n >= DICE_MAX ? ' (the most)' : ''}.` },
   { id: 'bell', icon: '🔔', name: 'Echo Bell', rarity: 'rare', text: (n) => `Spit has a ${pct(Math.min(1, 0.2 * n))} chance to fire a second volley.` },

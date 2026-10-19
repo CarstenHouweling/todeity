@@ -196,6 +196,25 @@ const MODELS = {
     });
   },
 
+  laurel(rig, f) {
+    // The Daily Brew champion's wreath: golden-green leaves round the head, two branches meeting over the brow.
+    piece(rig.parts.head, [0, HAT_Y - 0.6, 2.5], (add) => {
+      const leaves = ['#8fc23a', '#d9c050', '#6fa82e'];
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 7; i++) {
+          // From the back round to the front on this side.
+          const angle = -Math.PI / 2 + s * (0.25 + (i / 6) * (Math.PI - 0.55));
+          const x = Math.sin(angle) * (f.headW / 2 + 0.2);
+          const z = -Math.cos(angle) * 5;
+          add([0.8, 1, 5], [x, 0.6, z], '#7a5a2a', { rotation: [0, angle, 0] });
+          for (const up of [-1, 1]) add([1.8, 0.6, 3], [x, 0.9 + up * 0.9, z], leaves[(i + (up > 0 ? 1 : 0)) % leaves.length], { rotation: [up * 0.5, angle + s * 0.6, 0], material: 'shiny' });
+        }
+      }
+      add([1.6, 1.6, 1.6], [0, 1, 5.4], '#ffcf3a', { material: 'shiny' });
+      add([1, 1, 1], [0, 1, 6.2], '#fff2a0', { material: 'glow' });
+    });
+  },
+
   // --- Face ---------------------------------------------------------------------------------------
   specs(rig, f) {
     piece(rig.parts.head, [0, EYE_Y, EYE_Z], (add) => {
@@ -371,6 +390,30 @@ const MODELS = {
       add([4.2, 4.2, 0.9], [0, -0.6, 0], '#ffcf3a', { rotation: [0, 0, Math.PI / 4], material: 'shiny' });
       add([2, 2, 0.5], [0, -0.6, 0.55], '#fff2a0', { material: 'shiny' });
     }, [-0.35, 0, 0]);
+  },
+  sash(rig, f) {
+    // The champion's sash: a red band with gold edges from the front of one shoulder diagonally over the back to the
+    // other hip, where a gold rosette hangs. (Across the chest it hid under the head.)
+    const top = backTop(f);
+    const cloth = { material: 'cloth' };
+    const across = Math.hypot(f.W, f.L - 4);
+    const angle = Math.atan2(f.W, f.L - 4);
+    piece(rig.parts.body, [0, top + 0.25, 0], (add) => {
+      add([2.8, 0.6, across], [0, 0, 0], '#c8202a', { rotation: [0, angle, 0], ...cloth });
+      for (const s of [-1, 1]) add([0.5, 0.65, across], [s * 1.5, 0.02, 0], '#ffcf3a', { rotation: [0, angle, 0], ...cloth });
+    });
+    for (const [side, z] of [[-1, f.L / 2 - 2.6], [1, -f.L / 2 + 2.6]]) {
+      piece(rig.parts.body, [side * (f.W / 2 + 0.35), top - f.H / 2 + 0.6, z], (add) => {
+        add([0.6, f.H - 1.2, 2.8], [0, 0, 0], '#c8202a', cloth);
+        for (const s of [-1, 1]) add([0.65, f.H - 1.2, 0.5], [0.02 * side, 0, s * 1.5], '#ffcf3a', cloth);
+      });
+    }
+    piece(rig.parts.body, [f.W / 2 + 0.9, top - f.H + 2, -f.L / 2 + 2.6], (add) => {
+      for (const s of [-1, 1]) add([0.5, 3, 1.2], [0, -2, s * 0.8], '#c8202a', { rotation: [s * 0.35, 0, 0], ...cloth });
+      add([0.8, 3.8, 3.8], [0, 0, 0], '#ffcf3a', { material: 'shiny' });
+      add([0.8, 3.8, 3.8], [0, 0, 0], '#ffcf3a', { rotation: [Math.PI / 4, 0, 0], material: 'shiny' });
+      add([0.5, 1.6, 1.6], [0.5, 0, 0], '#3a6ad9', { material: 'shiny' });
+    });
   },
   lei(rig, f) {
     const top = backTop(f);
@@ -622,6 +665,7 @@ const AURAS = {
   notes: { motion: 'orbit', shape: 'note', colors: ['#3a2a6a', '#5a3aa8', '#1a1a3a'], size: [1.7, 1.7, 1.7], speed: 0.6, face: true },
   leaves: { motion: 'fall', shape: 'leaf', colors: ['#e8801a', '#f0a020', '#c2402a', '#d9b03a'], size: [1.8, 1.8, 1.8], spin: 2.4, speed: 7 },
   sparks: { motion: 'orbit', colors: ['#bfe8ff', '#ffffff', '#7fd8ff'], size: [0.5, 2.2, 0.5], speed: 2.6, twinkle: true, spin: 9 },
+  confetti: { motion: 'fall', colors: ['#ff5a7a', '#ffd23f', '#5fb8ff', '#7ed957', '#c58aff', '#ff9a3a'], size: [1.4, 0.2, 0.9], spin: 6, speed: 8, wobble: 4 },
   rainbow: { motion: 'orbit', colors: ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5fd85a', '#4ab8ff', '#9a6aff'], size: [1.2, 1.2, 1.2], speed: 0.9, ring: true, rainbow: true },
 };
 

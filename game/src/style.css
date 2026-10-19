@@ -2136,6 +2136,23 @@ body.coop-menu .corner-buttons {
   color: #ffe680;
 }
 
+/* The champion's medal (only there while one waits): a ribbon-red ring of light round a gold coin */
+.medal-tile.ready .dock-icon {
+  background: radial-gradient(circle, #fff3b0 0 30%, #f0b020 58%, #d9443a 60% 70%, #8a1a2a 72%);
+}
+
+.reward-medal {
+  font-size: 64px;
+  filter: drop-shadow(0 0 16px rgba(255, 200, 60, 0.95));
+  animation: medal-swing 1.6s ease-in-out infinite alternate;
+  transform-origin: 50% 0;
+}
+
+@keyframes medal-swing {
+  from { transform: rotate(-8deg); }
+  to { transform: rotate(8deg); }
+}
+
 /* Phones held sideways: the whole title fits without scrolling (menus are zoomed to 0.68 there too). */
 @media (max-height: 500px) {
   .title-main {

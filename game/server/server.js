@@ -2,7 +2,8 @@
 // Runs on any Node 18+ host (Azure App Service, a VM, locally). Its only dependency is `ws`.
 //
 //   GET  /api/scores?board=all|daily|depth|speed&date=YYYY-MM-DD&limit=10
-//   POST /api/scores  { name, tag, score, wave, level, tier, kills, time, clear, victory, daily, steep }
+//   POST /api/scores  { name, tag, score, wave, level, tier, kills, time, clear, victory, daily, steep, save }
+//                     (`save`: the save code, Daily runs only: the day's winner gets a champion's medal, saves.js)
 //   /api/save…        cloud saves with easy save codes (see saves.js)
 //
 // Boards: `all` (score), `daily` (score, today's seeded run), `depth` (wave, then level) and `speed` (runs that
@@ -24,7 +25,7 @@ import { dirname, extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { randomBytes, randomInt } from 'node:crypto';
-import { flushSaves, gardenName, handleGarden, handleSave, loadSaves, loveliestGardens, publicGarden, saveCount } from './saves.js';
+import { flushSaves, gardenName, handleGarden, handleSave, loadSaves, loveliestGardens, publicGarden, saveCount, scoreOwner, setDailyWinner } from './saves.js';
 import { jsonFile } from './store.js';
 import { acceptPresence, presenceStats } from './presence.js';
 import { adminEnabled, handleAdmin, serveAdminPage } from './admin.js';
@@ -190,7 +191,7 @@ async function handleScores(req, res, url) {
     const name = ['daily', 'depth', 'speed', ...COOP_BOARDS].includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'all';
     const date = url.searchParams.get('date') || today();
     const board = name === 'daily' ? boards.daily[date] ?? [] : boards[name];
-    return send(res, 200, { board: name, date, scores: board.slice(0, limit) });
+    return send(res, 200, { board: name, date, scores: board.slice(0, limit).map(({ owner, ...entry }) => entry) });
   }
 
   if (req.method === 'POST') {
@@ -219,6 +220,9 @@ async function handleScores(req, res, url) {
     // deepest or fastest boards, whichever client sends it (before v0.30.1 Daily runs went on all of them).
     if (body.daily) {
       const date = today();
+      // Whose save the run belongs to (a private id, not the code), for the champion's medal tomorrow.
+      const owner = typeof body.save === 'string' ? await scoreOwner(body.save.slice(0, 40)) : null;
+      if (owner) entry.owner = owner;
       boards.daily[date] ??= [];
       const daily = insert(boards.daily[date], entry);
       // Keep only the last two weeks of daily boards.
@@ -621,6 +625,8 @@ setInterval(() => {
 
 await loadScores();
 await loadSaves(DATA_DIR);
+// A day's Daily Brew champion: the save behind the top entry of its board (gone if the admin removed that entry).
+setDailyWinner((date) => boards.daily[date]?.[0]?.owner ?? null);
 
 // Extra fields for GET /api/admin/stats (admin.js adds the score counts).
 const adminStats = () => ({

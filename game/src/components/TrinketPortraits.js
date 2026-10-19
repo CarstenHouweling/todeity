@@ -9,6 +9,11 @@ import { TRINKETS } from './Rewards.js';
 const pictures = new Map();
 let tried = false;
 
+const unframed = (part) => {
+  for (let p = part; p; p = p.parent) if (p.userData.unframed) return true;
+  return false;
+};
+
 export function trinketPicture(id) {
   if (!tried) renderAll();
   return pictures.get(id) ?? '';
@@ -43,7 +48,11 @@ function renderAll() {
     model.userData.animate?.(1.2, false);
     scene.add(model);
     model.updateMatrixWorld(true);
-    box.setFromObject(model.children[0]); // the model itself, not its (hidden) night glow
+    // The model itself: not its (hidden) night glow, nor parts that fly off (`userData.unframed`, the fireworks).
+    box.makeEmpty();
+    model.children[0].traverse((part) => {
+      if (part.isMesh && part.visible && !unframed(part)) box.expandByObject(part);
+    });
     box.getCenter(center);
     box.getSize(extent);
     // Frame it from the front and a little above, so every trinket fills the picture the same way.

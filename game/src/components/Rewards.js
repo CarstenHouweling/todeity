@@ -1,6 +1,7 @@
 /**
  * Reasons to come back: a **daily gift** (once per UTC day; a streak of days pays more and gives trinkets on days 3
- * and 7), the **tea kettle** (it brews a reward every few hours) and **trinkets**: little ornaments Tode collects and
+ * and 7), the **tea kettle** (it brews a reward every few hours), the **champion's medal** (the day after topping the
+ * Daily Brew board: leaves and a chance at a champion's trinket or wearable) and **trinkets**: little ornaments Tode collects and
  * places in his garden on the title screen. Some trinkets come from milestones (runs, bosses, achievements), some from
  * gifts and the kettle. The account level sums up how much someone has played.
  *
@@ -47,6 +48,9 @@ export const TRINKETS = [
   { id: 'duck', name: 'Pond Duck', icon: '🦆', source: 'kettle', how: 'Brewed by the tea kettle' },
   { id: 'snail', name: 'Snail Buddy', icon: '🐌', source: 'kettle', how: 'Brewed by the tea kettle' },
   { id: 'scarebee', name: 'Scare-bee', icon: '🎃', source: 'kettle', how: 'Brewed by the tea kettle' },
+  // The Daily Brew's champions (v0.31): a chance in the medal's reward.
+  { id: 'podium', name: "Champion's Podium", icon: '🥇', source: 'champion', how: 'Win a Daily Brew (a chance in the medal)' },
+  { id: 'fireworks', name: 'Firework Crate', icon: '🎆', source: 'champion', how: 'Win a Daily Brew (a chance in the medal)' },
   // The playground (v0.24): things to play with together in a garden.
   { id: 'trampoline', name: 'Lily Pad Trampoline', icon: '🤸', source: 'milestone', how: 'Play your first run', unlock: (p) => p.runs >= 1, play: 'Bounce on it' },
   { id: 'ball', name: 'Tea Ball', icon: '⚪', source: 'milestone', how: 'Play 2 runs', unlock: (p) => p.runs >= 2, play: 'Hop into it to kick it' },
@@ -55,6 +59,10 @@ export const TRINKETS = [
 ];
 export const trinketById = (id) => TRINKETS.find((t) => t.id === id);
 const KETTLE_TRINKET_CHANCE = 0.3;
+// The champion's medal: leaves, then a chance at a champion's trinket and one at a champion's wearable (Wearables.js
+// `unlock: { champion }`, kept in `progress.wearables`). With all of them collected it gives any trinket still missing.
+export const MEDAL = { leaves: [60, 100], trinket: 0.5, wearable: 0.4, extra: 25, days: 7 };
+export const CHAMPION_WEARABLES = ['laurel', 'sash', 'confetti'];
 export const MAX_DECOR = 40;
 export const DECOR_RADIUS = 240; // how far from Tode trinkets may stand
 
@@ -71,6 +79,8 @@ export function withRewards(progress) {
   progress.kettles ??= 0;
   progress.trinkets ??= [];
   progress.decor ??= [];
+  progress.medals ??= []; // the Daily Brew days whose champion's medal was claimed
+  progress.wearables ??= []; // wearables given as rewards (the rest unlock from the progress)
   return progress;
 }
 
@@ -98,7 +108,8 @@ export function kettleStatus(progress, now) {
 
 function giveTrinket(progress, source, random) {
   const owned = new Set(ownedTrinkets(progress));
-  const pool = TRINKETS.filter((t) => t.source === source && !owned.has(t.id));
+  const sources = [source].flat();
+  const pool = TRINKETS.filter((t) => sources.includes(t.source) && !owned.has(t.id));
   if (!pool.length) return null;
   const trinket = pool[Math.floor(random() * pool.length)];
   progress.trinkets.push(trinket.id);
@@ -129,6 +140,33 @@ export function claimKettle(progress, now, random = Math.random) {
   const trinket = random() < KETTLE_TRINKET_CHANCE ? giveTrinket(progress, 'kettle', random) : null;
   progress.leaves += leaves;
   return { leaves, trinket };
+}
+
+/**
+ * The champion's medal for topping the Daily Brew board on `date` (the server works out who won; see saves.js).
+ * Returns { leaves, trinket, wearable, date } or an error string.
+ */
+export function claimMedal(progress, date, random = Math.random) {
+  withRewards(progress);
+  if (!date) return "No champion's medal is waiting for you.";
+  if (progress.medals.includes(date)) return 'That medal is already yours.';
+  progress.medals = [...progress.medals, date].slice(-30);
+  let leaves = MEDAL.leaves[0] + Math.floor(random() * (MEDAL.leaves[1] - MEDAL.leaves[0] + 1));
+  let trinket = null;
+  if (random() < MEDAL.trinket) {
+    trinket = giveTrinket(progress, 'champion', random) ?? giveTrinket(progress, ['gift', 'kettle'], random);
+    if (!trinket) leaves += MEDAL.extra;
+  }
+  let wearable = null;
+  if (random() < MEDAL.wearable) {
+    const pool = CHAMPION_WEARABLES.filter((id) => !progress.wearables.includes(id));
+    if (pool.length) {
+      wearable = pool[Math.floor(random() * pool.length)];
+      progress.wearables.push(wearable);
+    } else leaves += MEDAL.extra;
+  }
+  progress.leaves += leaves;
+  return { leaves, trinket, wearable, date };
 }
 
 /** Only owned trinkets, at most MAX_DECOR, positions rounded and kept near Tode. */
@@ -214,8 +252,9 @@ export const SETS = [
   { id: 'guardians', name: 'Garden Guardians', icon: '🐸', parts: ['gnome', 'scarebee', 'tulips'], beauty: 50, color: '#7ed957', effect: 'leaves' },
   { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', effect: 'beam' },
   { id: 'playground', name: 'Playground', icon: '🎪', parts: ['trampoline', 'ball', 'launcher', 'stage'], beauty: 90, color: '#ff9ec7', effect: 'confetti' },
+  { id: 'champions', name: "Champion's Corner", icon: '🏅', parts: ['podium', 'fireworks', 'trophy'], beauty: 100, color: '#ffd36b', effect: 'confetti' },
 ];
-const BEAUTY = { milestone: 15, gift: 20, kettle: 12 };
+const BEAUTY = { milestone: 15, gift: 20, kettle: 12, champion: 30 };
 
 /** The sets a garden shows: [{ set, x, y }] (the middle of its parts). */
 export function gardenSets(decor = []) {

@@ -11,7 +11,7 @@ const API = '/api/save';
 const CODE_KEY = 'tode-save-code';
 const RUNS_KEY = 'tode-unsent-runs'; // run reports the server hasn't answered yet (a restart, no connection)
 const RUN_GAP = 11_000; // ms between reports (the server allows one per 10 s)
-const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills', 'streak', 'kettleAt', 'kettles', 'trinkets', 'decor'];
+const FIELDS = ['leaves', 'levels', 'achievements', 'runs', 'bestWave', 'bossKills', 'victories', 'maxTier', 'eliteKills', 'streak', 'kettleAt', 'kettles', 'trinkets', 'decor', 'medals', 'wearables'];
 
 const storage = (action, key, value) => {
   try {
@@ -28,7 +28,7 @@ const storage = (action, key, value) => {
  * `status`: 'connecting', 'online' or 'offline'. `onChange` runs after the progress changed from the server;
  * `onRefused(error)` when the server refused a run report (it pays no leaves).
  */
-export const cloud = { code: storage('get', CODE_KEY), status: 'connecting', onChange: null, onRefused: null };
+export const cloud = { code: storage('get', CODE_KEY), status: 'connecting', onChange: null, onRefused: null, medals: [] };
 
 // Achievements unlocked this session that the server hasn't confirmed yet: they go with the next run report.
 // Only in memory: kept in storage, they could be edited to unlock keepsakes early.
@@ -50,6 +50,7 @@ function apply(data) {
   for (const id of progress.achievements) pending.delete(id);
   withRewards(progress);
   for (const field of FIELDS) meta[field] = structuredClone(progress[field]);
+  cloud.medals = Array.isArray(data.medals) ? data.medals : []; // Daily Brew days won, their medals still to claim
   meta.achievements.push(...pending.keys());
   for (const reward of pending.values()) meta.leaves += reward;
   eliteBase = progress.eliteKills;
@@ -199,8 +200,9 @@ export async function reportBuy(id) {
 }
 
 /**
- * Claims the daily gift ('gift') or pours the kettle ('kettle'). The server pays it; without a server the local
- * progress does. Resolves with { reward } or { error }.
+ * Claims the daily gift ('gift'), pours the kettle ('kettle') or takes a champion's medal ('medal'). The server pays
+ * it; without a server the local progress does (but there is no Daily Brew champion offline). Resolves with
+ * { reward } or { error }.
  */
 export async function claimReward(kind) {
   if (cloud.status === 'online' && cloud.code && isPersisting()) {
@@ -213,6 +215,7 @@ export async function claimReward(kind) {
     }
   }
   if (cloud.status === 'connecting') return { error: 'Still connecting to your save…' };
+  if (kind === 'medal') return { error: "Can't reach the server right now." };
   const reward = (kind === 'gift' ? claimGift : claimKettle)(meta, Date.now());
   if (typeof reward === 'string') return { error: reward };
   saveMeta();

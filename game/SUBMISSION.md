@@ -17,8 +17,9 @@ The bot asks for these (rules posted Oct 19):
   `LICENSE`), the third-party assets with source and license, and which AI tools were used for what.
 - **Course certificate:** from the IDE (signed in to the JetBrains Account).
 - **Gameplay video:** `promo/todeity-gameplay-20s.mp4` (19.9 s, 1080p, 15.4 MB; limit 20 s and 20 MB). Cut from
-  the 1080p trailer at its shot boundaries: the true-form cold open (0:00–0:03.4), the swarm and bullets
-  (0:08.7–0:15.9) and the ascension into the Steeping Beam (0:26.8–0:36.0, fading out). The ffmpeg command is in
+  the 1080p trailer at its shot boundaries: the true-form cold open (0:00.4–0:03.4, after the trailer's
+  fade-in so Discord's preview isn't black), the swarm and bullets (0:08.7–0:15.9) and the ascension into the
+  Steeping Beam (0:26.8–0:36.4, fading out). The ffmpeg command is in
   DEVELOPMENT.md, Promo material.
 - **Description (max 500 characters; this one is 493):**
 

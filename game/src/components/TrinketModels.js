@@ -410,6 +410,77 @@ const BUILDERS = {
     });
     g.userData.anim = (t) => wings.forEach(({ hinge, side }) => (hinge.rotation.y = side * Math.sin(t * 30) * 0.35 * (Math.sin(t * 0.7) > 0.3 ? 1 : 0.15)));
   },
+  // The Daily Brew champion's trinkets (Rewards.js, source 'champion').
+  podium: (g) => {
+    // Three steps, gold in the middle, with a star spinning over the winner's step.
+    const steps = [
+      { x: 0, h: 16, top: GOLD(), mark: 1 },
+      { x: -13, h: 11, top: mat('#d8dee8', { metal: 0.6, rough: 0.3 }), mark: 2 },
+      { x: 13, h: 7, top: mat('#d0884a', { metal: 0.5, rough: 0.35 }), mark: 3 },
+    ];
+    for (const { x, h, top, mark } of steps) {
+      g.add(box(13, h, 13, mat('#f4efe4', { rough: 0.7 }), [x, h / 2, 0]));
+      g.add(box(13.4, 1.2, 13.4, top, [x, h + 0.6, 0]));
+      // Its place in little bars on the front (1, 2 or 3 of them).
+      for (let i = 0; i < mark; i++) g.add(box(1.2, Math.min(5, h - 3), 0.6, top, [x + (i - (mark - 1) / 2) * 2.4, h / 2, 6.6]));
+    }
+    g.add(cyl(1.6, 2.4, 3, GOLD(), [0, 18.7, 0], 8));
+    g.add(ball(3.6, GOLD(), [0, 22.6, 0]));
+    const star = new THREE.Group();
+    star.position.set(0, 32, 0);
+    const glow = mat('#fff27a', { emissive: '#ffd36b', intensity: 1.4 });
+    star.add(box(5.5, 1.6, 1.6, glow, [0, 0, 0]), box(1.6, 5.5, 1.6, glow, [0, 0, 0]));
+    star.add(box(4, 1.4, 1.4, glow, [0, 0, 0], [0, 0, Math.PI / 4]), box(1.4, 4, 1.4, glow, [0, 0, 0], [0, 0, Math.PI / 4]));
+    g.add(star);
+    g.userData.anim = (t) => {
+      star.rotation.y = t * 1.6;
+      star.position.y = 32 + Math.sin(t * 2) * 1.5;
+    };
+  },
+  fireworks: (g) => {
+    // A crate of rockets: one by one they whoosh up and burst into a ring of sparks.
+    g.add(box(22, 10, 16, WOOD(), [0, 5, 0]));
+    for (const z of [-8.2, 8.2]) g.add(box(22.4, 1.6, 0.6, mat('#5a3a1e', { rough: 0.8 }), [0, 7.5, z]));
+    g.add(box(14, 4, 0.6, mat('#d9443a', { rough: 0.6 }), [0, 4.5, 8.3]));
+    const colors = ['#ff5a7a', '#ffd23f', '#5fb8ff'];
+    const rockets = colors.map((color, i) => {
+      const x = (i - 1) * 6.5;
+      g.add(cyl(1.6, 1.6, 9, mat(color, { rough: 0.5 }), [x, 14.5, 0], 8));
+      g.add(cone(1.8, 3, mat('#f4efe4'), [x, 20.5, 0], 8));
+      const spark = mat(color, { emissive: color, intensity: 1.6 });
+      const rocket = ball(1.2, spark, [x, 22.5, 0], 0);
+      rocket.visible = false;
+      rocket.userData.unframed = true; // (the tray's picture frames the crate, see TrinketPortraits.js)
+      const burst = new THREE.Group();
+      burst.userData.unframed = true;
+      const sparks = Array.from({ length: 10 }, (_, k) => {
+        const piece = ball(1.1, spark, [0, 0, 0], 0);
+        piece.userData.angle = (k / 10) * Math.PI * 2;
+        burst.add(piece);
+        return piece;
+      });
+      burst.visible = false;
+      g.add(rocket, burst);
+      return { x, rocket, burst, sparks, offset: i * 1.4 };
+    });
+    const CYCLE = 4.2;
+    g.userData.anim = (t) => {
+      for (const { x, rocket, burst, sparks, offset } of rockets) {
+        const k = ((t + offset) % CYCLE) / CYCLE;
+        rocket.visible = k < 0.25;
+        rocket.position.set(x + Math.sin(k * 30) * 0.6, 22.5 + (k / 0.25) * 48, 0);
+        const b = (k - 0.25) / 0.3;
+        burst.visible = b >= 0 && b < 1;
+        if (!burst.visible) continue;
+        burst.position.set(x, 72 - b * 6, 0);
+        for (const piece of sparks) {
+          const r = 4 + b * 16;
+          piece.position.set(Math.cos(piece.userData.angle) * r, Math.sin(piece.userData.angle) * r, 0);
+          piece.scale.setScalar(1.3 * (1 - b) + 0.2);
+        }
+      }
+    };
+  },
 };
 
 /** The model for a trinket, Z-up, standing on the ground. */
@@ -567,6 +638,7 @@ const GLOWS = {
   idol: { color: '#ffe680', radius: 40 },
   mushrooms: { color: '#c58aff', radius: 34 },
   fountain: { color: '#7fd8ff', radius: 36 },
+  podium: { color: '#ffe680', radius: 36 },
 };
 
 /** Frees a trinket's geometries (the materials are shared and kept). */

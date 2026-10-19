@@ -19,7 +19,7 @@ import { GRAPHICS, GRAPHICS_LABELS } from './Quality.js';
 import { NAME_MAX, TAG_COLORS } from './PlayerTag.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
 import { KETTLE_HOURS, SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
-import { WEARABLES, unlockedWearables } from './Wearables.js';
+import { WEARABLES, unlockedWearables, wearableById } from './Wearables.js';
 import { trinketPicture } from './TrinketPortraits.js';
 import { viewHeight, viewWidth } from './Viewport.js';
 
@@ -231,8 +231,9 @@ export class Hud {
   }
 
   /** `time`: the run's play time in seconds (menus and pauses don't count). */
-  setScore(score, best, time = 0) {
-    setText(this.score, `Score: ${score}   Best: ${best}   ⏱ ${formatTime(time)}`);
+  /** `label`: what `best` is ("Best" all time, "Today's best" in the Daily Brew). */
+  setScore(score, best, time = 0, label = 'Best') {
+    setText(this.score, `Score: ${score}   ${label}: ${best}   ⏱ ${formatTime(time)}`);
   }
 
   setHealth(hp, maxHp, shield = false) {
@@ -1035,8 +1036,16 @@ export class Hud {
       visit,
     ];
     const now = Date.now();
-    const rewards = [this.rewardTile('gift', giftStatus(meta, now)), this.rewardTile('kettle', kettleStatus(meta, now))];
+    const rewards = [this.rewardTile('gift', giftStatus(meta, now)), this.rewardTile('kettle', kettleStatus(meta, now)), this.medalTile()];
     return [...play, sep, ...prepare, sep, ...rewards].join('');
+  }
+
+  /** The 🏅 champion's medal beside the kettle, only while one is waiting (the frog topped a day's Daily Brew). */
+  medalTile() {
+    const waiting = cloud.status === 'online' ? cloud.medals.length : 0;
+    if (!waiting) return '';
+    const badge = waiting > 1 ? `<em class="dock-badge">${waiting}</em>` : '';
+    return `<button type="button" class="dock-tile reward-tile medal-tile ready" data-action="claim-medal" title="You won the Daily Brew! Claim your champion's medal" style="--p:1"><span class="dock-icon">🏅</span><span class="dock-label">Champion!</span>${badge}</button>`;
   }
 
   /** The daily gift or the kettle in the dock: a ring fills while it counts down, and it glows when it's ready. */
@@ -1062,13 +1071,14 @@ export class Hud {
     return false;
   }
 
-  /** What the gift or the kettle gave. */
+  /** What the gift, the kettle or the champion's medal gave. */
   showReward(kind, { reward, error }) {
     if (error) {
-      this.showModal('reward', `<h2>${kind === 'gift' ? '🎁' : '🫖'} Not yet</h2><p class="sub">${escapeHtml(error)}</p><div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">OK</button></div>`);
+      this.showModal('reward', `<h2>${{ gift: '🎁', kettle: '🫖', medal: '🏅' }[kind]} Not yet</h2><p class="sub">${escapeHtml(error)}</p><div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">OK</button></div>`);
       return;
     }
     const trinket = reward.trinket && trinketById(reward.trinket);
+    if (kind === 'medal') return this.showMedal(reward, trinket);
     const calendar =
       kind === 'gift'
         ? `<div class="streak">${STREAK_GIFTS.map(
@@ -1083,6 +1093,25 @@ export class Hud {
       }</div>
       ${calendar}
       <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Lovely!</button>${trinket ? '<button class="menu-button" data-action="garden">🏡 See it</button>' : ''}</div>`
+    );
+  }
+
+  /** The champion's medal: leaves, maybe a trinket and maybe a wearable, for topping a day's Daily Brew. */
+  showMedal(reward, trinket) {
+    const wearable = reward.wearable && wearableById(reward.wearable);
+    const day = new Date(`${reward.date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+    const more = cloud.medals.length ? `<p class="sub">🏅 ${cloud.medals.length} more medal${cloud.medals.length > 1 ? 's' : ''} waiting!</p>` : '';
+    this.showModal(
+      'reward',
+      `<h2>🏅 Daily Brew champion!</h2>
+      <p class="sub">Your frog topped the Daily Brew on <b>${escapeHtml(day)}</b>. The whole garden cheers!</p>
+      <div class="reward-prize medal-prize"><span class="reward-medal">🏅</span><span class="reward-leaves">+${reward.leaves} 🍃</span>${
+        trinket ? `<span class="reward-trinket"><em>${trinket.icon}</em><b>New trinket: ${trinket.name}</b><small>It's waiting in your garden</small></span>` : ''
+      }${wearable ? `<span class="reward-trinket"><em>${wearable.icon}</em><b>New to wear: ${wearable.name}</b><small>In your wardrobe</small></span>` : ''}</div>
+      ${trinket || wearable ? '' : '<p class="sub">Win another day for a chance at a champion\'s trinket or something to wear.</p>'}${more}
+      <div class="menu-buttons"><button class="menu-button primary" data-action="close-modal">Hooray!</button>${trinket ? '<button class="menu-button" data-action="garden">🏡 See it</button>' : ''}${
+        wearable ? '<button class="menu-button" data-action="wardrobe">👕 Wear it</button>' : ''
+      }</div>`
     );
   }
 
