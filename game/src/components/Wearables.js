@@ -119,7 +119,7 @@ export function wearableUnlocked(item, progress = {}) {
 export function wearableHint(item, achievementName = (id) => id) {
   const unlock = item.unlock;
   if (!unlock) return 'Free';
-  if (unlock.champion) return 'Win a Daily Brew: a chance in the champion\'s medal';
+  if (unlock.champion) return 'Win a Daily Brew';
   if (unlock.achievement) return `Achievement: ${achievementName(unlock.achievement)}`;
   if (unlock.tier) return `Become ${FORMS[unlock.tier]} Tode in a run`;
   if (unlock.trinkets) return `Collect ${unlock.trinkets} garden trinkets`;
