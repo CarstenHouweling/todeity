@@ -499,6 +499,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4 })`
   and main.js damps the form's screen warp (`soft`): at garden camera distance on a sunny lawn the full form washed
   the screen out white.
+  **v0.33 added 9** (26 in the panel): Cheer, Applause, Big Croak, Meditate (a loop), Juggle, Rainbow, Leaf
+  Tornado, Thunder Clap and Wicked Laugh, each unlocked by an achievement no emote used yet; new rig moves `cheer`,
+  `clap`, `croak`, `meditate`, `juggle`, `cackle` and a `croak` sound. Juggle's balls are `fx.add` meshes that
+  follow the frog; the rainbow is short-lived glowing particles laid along an arc across my view (`awayFromCamera`).
+  Keep additive layers thin (the Thunder Clap's first version washed the lawn out white, like the Power Up's).
 - **Garden games** (v0.28, `components/GardenGames.js`, wired into `GardenHub`): **the pond** (`GardenPond`,
   `POND` in Environment.js, `inPond`): a frog on the lawn's level inside the water swims (`SWIM`: 55% speed, sunk
   in, paddling, ripples). Since v0.29.1 the paddle is calmer (`SWIM.paddle`: the run pose at 0.28 ± 0.17 and 5.5 rad/s,

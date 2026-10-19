@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.33.0',
+    date: '2026-10-19',
+    title: 'More emotes',
+    changes: [
+      '😀 9 new garden emotes to collect (26 in all): Cheer, Applause, Big Croak, Meditate, Juggle, Rainbow, Leaf Tornado, Thunder Clap and Wicked Laugh',
+      '🏆 Each one unlocks with an achievement: Pond Party, Say Cheese, Light Feet, Pilgrim, Trinket Hoarder, Legendary Leaf, Boiling Over, Full Kit and Perfectly Steeped',
+      '🐸 Croak like you mean it: the throat balloons out three times, RIBBIT!',
+    ],
+  },
+  {
     version: '0.32.0',
     date: '2026-10-19',
     title: 'More to collect',

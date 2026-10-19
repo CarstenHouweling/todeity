@@ -26,6 +26,16 @@ export const EMOTES = [
   { id: 'pound', icon: '💥', name: 'Ground Pound', move: 'flip', time: 2.2, fx: 'pound', unlock: 'tower' },
   { id: 'stars', icon: '🌠', name: 'Star Shower', move: 'victory', time: 3.6, fx: 'starfall', unlock: 'god' },
   { id: 'power', icon: '⚡', name: 'Power Up', move: 'power', time: 6.5, fx: 'power', minTier: 1, how: 'Reach any divine form in a run' },
+  // More to collect (v0.33).
+  { id: 'cheer', icon: '🙌', name: 'Cheer', move: 'cheer', time: 2.4, fx: 'cheer', unlock: 'coop' },
+  { id: 'clap', icon: '👏', name: 'Applause', move: 'clap', time: 2.4, fx: 'clap', unlock: 'photo' },
+  { id: 'croak', icon: '📣', name: 'Big Croak', move: 'croak', time: 2.6, fx: 'croak', unlock: 'lightfeet' },
+  { id: 'meditate', icon: '🧘', name: 'Meditate', move: 'meditate', loop: true, fx: 'meditate', unlock: 'shrines' },
+  { id: 'juggle', icon: '🤹', name: 'Juggle', move: 'juggle', time: 3.2, fx: 'juggle', unlock: 'charms' },
+  { id: 'rainbow', icon: '🌈', name: 'Rainbow', move: 'victory', time: 3.2, fx: 'rainbow', unlock: 'legendary' },
+  { id: 'tornado', icon: '🌪️', name: 'Leaf Tornado', spin: 4, time: 2.4, fx: 'tornado', unlock: 'combo150' },
+  { id: 'thunder', icon: '🌩️', name: 'Thunder Clap', move: 'slam', time: 2.2, fx: 'thunder', unlock: 'skills6' },
+  { id: 'cackle', icon: '😈', name: 'Wicked Laugh', move: 'cackle', time: 3, fx: 'cackle', unlock: 'beezebub' },
   // Played by the garden: sitting on the bench with a cup of tea, until you hop off.
   { id: 'rest', icon: '🪑', name: 'Rest', move: 'sip', loop: true, fx: 'rest', hidden: true },
 ];

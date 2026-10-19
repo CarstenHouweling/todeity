@@ -1252,6 +1252,161 @@ const EMOTE_FX = {
     },
   },
 
+  // More emotes (v0.33).
+  cheer: {
+    start(state) {
+      this.sound(state.actor, 'waveClear');
+    },
+    update(state) {
+      for (const [i, at] of [0.3, 0.9, 1.5].entries()) {
+        if (!once(state, `yay${i}`, at)) continue;
+        const head = this.headOf(state.actor).add(new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, 0));
+        this.fx.float(['Yay!', 'Woo!', 'Hooray!'][i], head, { size: 6, rise: 20, drift: 10, life: 1.2, color: ['#ffe066', '#7fd8ff', '#ff9ec7'][i] });
+        this.particles?.burst(head, { count: 14, colors: ['#ffd23f', '#ff9ec7', '#7ed957', '#5fb8ff'], speed: 70, up: 120, size: 1.8, height: 0, life: 0.9 });
+      }
+    },
+  },
+
+  clap: {
+    update(state) {
+      // A clap when the hands meet (the move claps six times in 2.4 s).
+      for (let i = 0; i < 6; i++) {
+        if (!once(state, `clap${i}`, 0.3 + i * 0.4)) continue;
+        this.sound(state.actor, 'clap');
+        const hands = this.headOf(state.actor, -12);
+        this.particles?.burst(hands, { count: 5, colors: ['#ffffff', '#fff3c4'], speed: 50, up: 40, size: 1.4, height: 0, glow: true, life: 0.4 });
+        if (i % 2 === 0) this.fx.float('👏', hands.clone().add(new THREE.Vector3((Math.random() - 0.5) * 16, 0, 6)), { size: 6, rise: 18, drift: 8, life: 1 });
+      }
+    },
+  },
+
+  croak: {
+    update(state) {
+      for (let i = 0; i < 3; i++) {
+        if (!once(state, `croak${i}`, (0.3 + i * 0.3) * 2.6)) continue;
+        this.sound(state.actor, 'croak');
+        const mouth = this.headOf(state.actor, -6);
+        this.fx.float(i === 2 ? 'RIBBIT!' : 'Croak!', mouth.clone().add(new THREE.Vector3(0, 0, 6)), { size: 5 + i * 1.5, rise: 20, drift: 10, life: 1.1, color: '#c8f77a' });
+        this.fx.ring(state.actor.position.clone().setZ(state.actor.z + 1), { radius: 40 + i * 20, color: '#c8f77a', life: 0.6, opacity: 0.5 });
+      }
+    },
+  },
+
+  meditate: {
+    start(state) {
+      this.sound(state.actor, 'heal');
+    },
+    update(state, delta) {
+      // A calm glow under him and motes of light drifting up around him.
+      const at = state.actor.position.clone().setZ(state.actor.z);
+      if (every(state, 'mote', 0.12, delta)) this.particles?.burst(at, { count: 1, colors: ['#fff3c4', '#c8f7ff', '#e8d0ff'], speed: 4, up: 26, gravity: -6, size: 1.6, height: 4, ring: 18 + Math.random() * 10, glow: true, life: 2 });
+      if (every(state, 'ring', 2, delta)) this.fx.ring(at.setZ(at.z + 0.5), { radius: 34, color: '#fff3c4', life: 1.8, opacity: 0.35 });
+      if (state.t > 1 && every(state, 'om', 4, delta)) this.fx.float('Ommm…', this.headOf(state.actor), { size: 5, rise: 20, drift: 6, life: 2.2, color: '#e8d0ff' });
+    },
+  },
+
+  juggle: {
+    start(state) {
+      // Three tea-coloured balls in a cascade over his hands, in the plane across his facing.
+      const { actor } = state;
+      const colors = ['#ff5a7a', '#ffd23f', '#5fb8ff'];
+      const group = new THREE.Group();
+      const balls = colors.map((color) => {
+        const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2, 1), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.4, flatShading: true }));
+        ball.castShadow = true;
+        group.add(ball);
+        return ball;
+      });
+      const life = (state.emote.time ?? EMOTE_TIME) - 0.2;
+      state.parts.balls = this.fx.add(group, life, (k, age) => {
+        const top = (actor.top ??= this.topOf(actor));
+        const facing = actor.player.facing;
+        group.position.set(actor.position.x + facing.x * 6, actor.position.y + facing.y * 6, actor.z + top * 0.75);
+        const across = new THREE.Vector3(-facing.y, facing.x, 0);
+        const fade = Math.min(1, age * 4, (life - age) * 4);
+        balls.forEach((ball, i) => {
+          const a = age * 5.5 + (i / balls.length) * Math.PI * 2;
+          ball.position.copy(across).multiplyScalar(Math.cos(a) * 8).setZ(10 + Math.sin(a) * 9 + Math.abs(Math.sin(a)) * 3);
+          ball.scale.setScalar(Math.max(0.01, fade));
+        });
+      });
+      this.sound(actor, 'pick');
+    },
+    update(state) {
+      if (once(state, 'ta', 2.8)) this.fx.float('Ta-da!', this.headOf(state.actor), { size: 6, rise: 18, life: 1.2, color: '#ffe066' });
+    },
+    end(state) {
+      this.fx.end(state.parts.balls);
+    },
+  },
+
+  rainbow: {
+    start(state) {
+      this.sound(state.actor, 'legendary');
+    },
+    update(state, delta) {
+      // An arc of glowing bands over the frog, across my view of it, shimmering for a while.
+      if (state.t < 0.3 || state.t > 2.8 || !every(state, 'arc', 0.15, delta)) return;
+      const at = state.actor.position;
+      const away = this.awayFromCamera(at);
+      const across = new THREE.Vector3(-away.y, away.x, 0);
+      const bands = ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5fd85a', '#4ab8ff', '#9a6aff'];
+      const grow = Math.min(1, (state.t - 0.3) / 0.6);
+      bands.forEach((color, b) => {
+        const radius = 62 - b * 4.5;
+        for (let i = 0; i <= 20; i++) {
+          const angle = (i / 20) * Math.PI * grow;
+          const point = new THREE.Vector3(at.x + across.x * Math.cos(angle) * radius, at.y + across.y * Math.cos(angle) * radius, state.actor.z + Math.sin(angle) * radius * 0.85);
+          this.particles?.burst(point, { count: 1, colors: [color], speed: 1, up: 0, gravity: 0, size: 2, height: 0, glow: true, life: 0.3 });
+        }
+      });
+      if (once(state, 'sparkle', 2.6)) this.particles?.burst(at.clone().setZ(state.actor.z), { count: 18, colors: bands, speed: 70, up: 120, size: 1.6, height: 30, glow: true, life: 0.9 });
+    },
+  },
+
+  tornado: {
+    start(state) {
+      this.sound(state.actor, 'leafStorm');
+    },
+    update(state, delta) {
+      // A funnel of leaves whirling up around him while he spins.
+      if (state.t > 2 || !every(state, 'leaf', 0.04, delta)) return;
+      const at = state.actor.position.clone().setZ(state.actor.z);
+      const k = state.t / 2;
+      this.particles?.burst(at, { count: 3, colors: ['#7ed957', '#c8f77a', '#4f9a2e', '#ffd36b'], speed: 40, up: 150 + k * 80, gravity: 40, size: 2, height: 2, ring: 10 + k * 18, life: 0.9 });
+      if (once(state, 'whoosh', 1.2)) this.sound(state.actor, 'dash');
+    },
+  },
+
+  thunder: {
+    update(state) {
+      // The slam brings down a bolt: a flash of light from the sky, a crackling shockwave and sparks.
+      if (!once(state, 'bolt', 1.25)) return;
+      const at = state.actor.position.clone().setZ(state.actor.z);
+      this.fx.pillar(() => state.actor.position.clone().setZ(state.actor.z), { color: '#bfe8ff', life: 0.45, radius: 4, height: 320, opacity: 0.35 });
+      this.fx.shockwave(at, { radius: 120, color: '#9fd8ff', life: 0.7, opacity: 0.14 });
+      this.fx.ring(at, { radius: 180, color: '#ffffff', life: 0.9, opacity: 0.4 });
+      this.particles?.burst(at, { count: 40, colors: ['#bfe8ff', '#ffffff', '#7fd8ff'], speed: 220, up: 180, size: 1.8, height: 6, glow: true, life: 0.7 });
+      this.sound(state.actor, 'thunder');
+      if (state.actor.own) this.postfx?.flash('#dff4ff', 0.1);
+    },
+  },
+
+  cackle: {
+    start(state) {
+      this.sound(state.actor, 'boss');
+      this.fx.ring(state.actor.position.clone().setZ(state.actor.z + 0.5), { radius: 70, color: '#ff3a10', life: 2.8, opacity: 0.35 });
+    },
+    update(state, delta) {
+      const at = state.actor.position.clone().setZ(state.actor.z);
+      if (state.t < 2.8 && every(state, 'ember', 0.08, delta)) this.particles?.burst(at, { count: 2, colors: ['#ff6a00', '#ff3a1a', '#ffb020', '#3a0a0a'], speed: 10, up: 60, gravity: -20, size: 1.8, height: 2, ring: 24 + Math.random() * 20, glow: true, life: 1.2 });
+      if (once(state, 'mwah', 1.1)) {
+        this.sound(state.actor, 'laugh');
+        this.fx.float('MWAHAHA!', this.headOf(state.actor), { size: 7, rise: 22, drift: 6, life: 1.8, color: '#ff5a3a' });
+      }
+    },
+  },
+
   rest: {
     update(state, delta) {
       // Steam from the cup.

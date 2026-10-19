@@ -284,6 +284,11 @@ const SOUNDS = {
     syllable({ pitch: 420, to: 300, vowel: 5, length: 0.16, volume: 0.9, delay: 0.17 });
   },
   boing: () => tone({ type: 'sine', frequency: 220, to: 880, duration: 0.3, volume: 0.16 }),
+  // A frog's croak: two quick, throaty "rrbt"s.
+  croak: () => {
+    syllable({ pitch: vary(170, 0.05), to: 130, vowel: 3, length: 0.12, volume: 0.9 });
+    syllable({ pitch: vary(210, 0.05), to: 150, vowel: 3, length: 0.16, volume: 0.9, delay: 0.13 });
+  },
   // A gong or temple bell: a low hum under bright, slowly fading partials.
   gong: () => {
     for (const [frequency, volume] of [[vary(330, 0.02), 0.1], [495, 0.06], [742, 0.05], [1110, 0.03]]) tone({ frequency, to: frequency * 0.99, duration: 2.2, volume, attack: 0.004 });

@@ -1014,6 +1014,111 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     },
   });
 
+  // More garden emotes (v0.33).
+  Object.assign(MOVES, {
+    cheer: {
+      length: 2.4,
+      pose: (t) => {
+        // Up on his hind legs, jumping for joy four times, arms pumping over his head.
+        const on = ramp(t, 0, 0.1) - ramp(t, 0.9, 1);
+        const jump = Math.abs(Math.sin(t * Math.PI * 4)) * on;
+        frame.position.y += 3 * on + jump * 7;
+        body.rotation.x += -0.8 * on;
+        head.rotation.x += 0.45 * on;
+        moveArms(0, on * (0.55 + 0.5 * jump));
+        stretchLegs(jump * 0.5, on * 0.25);
+        jaw.rotation.x += on * 0.55;
+      },
+    },
+    clap: {
+      length: 2.4,
+      pose: (t) => {
+        // Sitting up and clapping six times, hands meeting in front of the chest.
+        const on = ramp(t, 0, 0.1) - ramp(t, 0.9, 1);
+        const apart = Math.sin(t * Math.PI * 12) * 0.5 + 0.5;
+        frame.position.y += 3 * on;
+        body.rotation.x += -0.6 * on;
+        head.rotation.x += 0.35 * on;
+        for (const { side, arm, forearm, hand } of arms) {
+          arm.rotation.x += -1.15 * on;
+          arm.rotation.z += -side * (0.55 - apart * 0.55) * on;
+          forearm.rotation.x += -0.7 * on;
+          forearm.rotation.z += side * (0.95 - apart * 0.7) * on;
+          hand.rotation.x += -0.9 * on;
+        }
+        jaw.rotation.x += on * 0.3;
+        for (const eye of eyes) eye.scale.y *= 1 - on * 0.35;
+      },
+    },
+    meditate: {
+      length: 4,
+      pose: (t) => {
+        // Floating cross-legged, hands together, eyes closed, breathing slowly.
+        const breath = Math.sin(t * Math.PI * 2);
+        frame.position.y += 7 + breath * 1.5;
+        body.rotation.x += -0.55;
+        head.rotation.x += 0.3;
+        handSign(0.8);
+        for (const eye of eyes) eye.scale.y *= 0.1;
+        for (const { side, thigh, shin } of hindLegs) {
+          thigh.rotation.x += 0.3;
+          thigh.rotation.z += side * 0.5;
+          shin.rotation.x += -0.4;
+        }
+        throat.scale.setScalar(1 + (breath * 0.5 + 0.5) * 0.3);
+      },
+    },
+    croak: {
+      length: 2.6,
+      pose: (t) => {
+        // Three big croaks: the throat balloons out, then the mouth pops open as it empties.
+        const on = ramp(t, 0, 0.08) - ramp(t, 0.92, 1);
+        const puff = [0.08, 0.38, 0.68].reduce((sum, at) => sum + bump(t, at, at + 0.24), 0);
+        const pop = [0.3, 0.6, 0.9].reduce((sum, at) => sum + bump(t, at, at + 0.07), 0);
+        throat.scale.setScalar(1 + puff * 1.6);
+        head.rotation.x += on * 0.25 + puff * 0.1;
+        body.rotation.x += -on * 0.2;
+        frame.position.y += puff * 1.5 + pop * 2;
+        jaw.rotation.x += pop * 0.45;
+        for (const eye of eyes) eye.scale.y *= 1 - puff * 0.4;
+      },
+    },
+    juggle: {
+      length: 3.2,
+      pose: (t) => {
+        // Up on his hind legs, looking up, hands tossing in turn.
+        const on = ramp(t, 0, 0.08) - ramp(t, 0.92, 1);
+        frame.position.y += 3 * on;
+        body.rotation.x += -0.6 * on;
+        head.rotation.x += 0.5 * on;
+        for (const { side, arm, forearm } of arms) {
+          const toss = Math.max(0, Math.sin(time * 9 + (side > 0 ? 0 : Math.PI)));
+          arm.rotation.x += (-1 - toss * 0.6) * on;
+          arm.rotation.z += -side * 0.2 * on;
+          forearm.rotation.x += -0.5 * on;
+        }
+        jaw.rotation.x += on * 0.15;
+      },
+    },
+    cackle: {
+      length: 3,
+      pose: (t) => {
+        // A wicked laugh: rubbing his hands, then leaning back, shoulders shaking.
+        const on = ramp(t, 0, 0.1) - ramp(t, 0.9, 1);
+        const rub = Math.sin(time * 18);
+        handSign(on * 0.8);
+        for (const { side, forearm } of arms) forearm.rotation.y += side * rub * 0.2 * on;
+        const back = bump(t, 0.35, 0.95);
+        const shake = Math.abs(Math.sin(time * 22));
+        body.rotation.x += -on * 0.3 - back * 0.45;
+        head.rotation.x += -back * 0.5;
+        frame.position.y += shake * back * 1.2;
+        jaw.rotation.x += back * (0.4 + shake * 0.4);
+        for (const eye of eyes) eye.scale.y *= 1 - on * 0.55;
+      },
+    },
+  });
+
   /**
    * Starts a move ('idle', 'hop', 'attack', 'dash', 'victory' or 'signature'). `once`: back to idle afterwards;
    * `length`: play it in this many seconds instead.
