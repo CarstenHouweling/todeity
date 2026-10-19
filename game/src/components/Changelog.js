@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.32.0',
+    date: '2026-10-19',
+    title: 'More to collect',
+    changes: [
+      '🏡 14 new garden trinkets (43 in all): a Tea Windmill, a Bee Totem, a Victory Gong, a Star Orrery, the Endless Gate, a Temple Bell, a Tea Pagoda and a Sundial for long-term milestones, a Birdhouse and a Bird Bath in the daily gifts, and a Night Owl, a Koi Bowl, a Tea Bush and a Leaf Barrow from the kettle',
+      '✨ Four new garden sets: Temple Grounds, Stargazing, Birdsong Corner and Harvest Fields, with mist, starlight and drifting feathers',
+      '👉 Boop them: the gong booms, the owl hoots, birds tweet, koi splash. The owl, orrery, gate and pagoda light up the lawn at night',
+      '👕 15 new things to wear (72 in all): an Acorn Cap, a Captain\'s Tricorn, a steaming Teacup Hat, Freckles, Star Glasses, a Masquerade Mask, a Bandana, a Gardener\'s Vest, Pond Pearls, Feather Wings, a Lantern Pole, a Koi Streamer, and auras of friendly bees, golden leaves and butterflies',
+      '🧺 Some wearables now unlock by collecting garden trinkets',
+    ],
+  },
+  {
     version: '0.31.0',
     date: '2026-10-19',
     title: "The champion's medal",

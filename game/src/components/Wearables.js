@@ -4,10 +4,11 @@
  * (achievements, account level, the best form), so only the chosen outfit is saved (`profile.outfit`, see
  * saves.js). The models are in WearableModels.js. No three.js here (the server imports it).
  *
- * `unlock`: { achievement } | { level } | { tier } (the best form reached) | { champion } (a chance in the Daily Brew
- * champion's medal, kept in `progress.wearables`, see Rewards.js); none: free.
+ * `unlock`: { achievement } | { level } | { tier } (the best form reached) | { trinkets } (how many garden trinkets
+ * are owned, `ownedTrinkets` in Rewards.js) | { champion } (a chance in the Daily Brew champion's medal, kept in
+ * `progress.wearables`, see Rewards.js); none: free.
  */
-import { accountLevel } from './Rewards.js';
+import { accountLevel, ownedTrinkets } from './Rewards.js';
 import { bestTier } from './Emotes.js';
 
 export const SLOTS = [
@@ -35,6 +36,9 @@ export const WEARABLES = [
   { id: 'toque', slot: 'head', name: "Chef's Toque", icon: '👨‍🍳', unlock: { achievement: 'mastery' } },
   { id: 'antlers', slot: 'head', name: 'Antlers', icon: '🦌', unlock: { level: 20 } },
   { id: 'laurel', slot: 'head', name: "Champion's Laurel", icon: '🌿', unlock: { champion: true } },
+  { id: 'acorn', slot: 'head', name: 'Acorn Cap', icon: '🌰', unlock: { achievement: 'skills3' } },
+  { id: 'tricorn', slot: 'head', name: "Captain's Tricorn", icon: '⛵', unlock: { achievement: 'wave30' } },
+  { id: 'teacup', slot: 'head', name: 'Teacup Hat', icon: '☕', unlock: { trinkets: 10 } },
   // Face
   { id: 'specs', slot: 'face', name: 'Round Specs', icon: '👓' },
   { id: 'shades', slot: 'face', name: 'Cool Shades', icon: '😎', unlock: { level: 4 } },
@@ -45,6 +49,9 @@ export const WEARABLES = [
   { id: 'heartshades', slot: 'face', name: 'Heart Shades', icon: '😍', unlock: { achievement: 'openhouse' } },
   { id: 'eyepatch', slot: 'face', name: 'Eye Patch', icon: '🏴‍☠️', unlock: { achievement: 'untouchable' } },
   { id: 'goggles', slot: 'face', name: 'Flight Goggles', icon: '🥽', unlock: { achievement: 'breaker' } },
+  { id: 'freckles', slot: 'face', name: 'Freckles', icon: '🟤', unlock: { trinkets: 5 } },
+  { id: 'starglasses', slot: 'face', name: 'Star Glasses', icon: '⭐', unlock: { achievement: 'flawless' } },
+  { id: 'mask', slot: 'face', name: 'Masquerade Mask', icon: '🎭', unlock: { level: 16 } },
   // Body
   { id: 'scarf', slot: 'body', name: 'Cozy Scarf', icon: '🧣' },
   { id: 'bowtie', slot: 'body', name: 'Bow Tie', icon: '🎀', unlock: { achievement: 'photo' } },
@@ -56,6 +63,9 @@ export const WEARABLES = [
   { id: 'charmbelt', slot: 'body', name: 'Charm Belt', icon: '🧿', unlock: { achievement: 'charms' } },
   { id: 'apron', slot: 'body', name: 'Tea Apron', icon: '🍵', unlock: { level: 18 } },
   { id: 'sash', slot: 'body', name: "Champion's Sash", icon: '🎗️', unlock: { champion: true } },
+  { id: 'bandana', slot: 'body', name: 'Bandana', icon: '🔴', unlock: { achievement: 'bitter' } },
+  { id: 'vest', slot: 'body', name: "Gardener's Vest", icon: '🦺', unlock: { level: 14 } },
+  { id: 'pearls', slot: 'body', name: 'Pond Pearls', icon: '📿', unlock: { trinkets: 15 } },
   // Back
   { id: 'cape', slot: 'back', name: 'Hero Cape', icon: '🦸', unlock: { level: 2 } },
   { id: 'teapack', slot: 'back', name: 'Teapot Backpack', icon: '🫖', unlock: { level: 5 } },
@@ -67,6 +77,9 @@ export const WEARABLES = [
   { id: 'fairy', slot: 'back', name: 'Fairy Wings', icon: '🧚', unlock: { achievement: 'legendary' } },
   { id: 'jetpack', slot: 'back', name: 'Steam Jetpack', icon: '🚀', unlock: { achievement: 'combo50' } },
   { id: 'shell', slot: 'back', name: 'Snail Shell', icon: '🐚', unlock: { level: 25 } },
+  { id: 'featherwings', slot: 'back', name: 'Feather Wings', icon: '🕊️', unlock: { tier: 1 } },
+  { id: 'lanternpole', slot: 'back', name: 'Lantern Pole', icon: '🏮', unlock: { trinkets: 20 } },
+  { id: 'koikite', slot: 'back', name: 'Koi Streamer', icon: '🎏', unlock: { level: 28 } },
   // Auras
   { id: 'petals', slot: 'aura', name: 'Petal Drift', icon: '🌸', unlock: { level: 7 } },
   { id: 'fireflies', slot: 'aura', name: 'Fireflies', icon: '✨', unlock: { level: 15 } },
@@ -81,6 +94,9 @@ export const WEARABLES = [
   { id: 'notes', slot: 'aura', name: 'Music Notes', icon: '🎵', unlock: { level: 22 } },
   { id: 'rainbow', slot: 'aura', name: 'Rainbow Ring', icon: '🌈', unlock: { level: 30 } },
   { id: 'confetti', slot: 'aura', name: 'Victory Confetti', icon: '🎊', unlock: { champion: true } },
+  { id: 'bees', slot: 'aura', name: 'Friendly Bees', icon: '🐝', unlock: { level: 26 } },
+  { id: 'goldleaf', slot: 'aura', name: 'Golden Leaf Fall', icon: '🍁', unlock: { trinkets: 30 } },
+  { id: 'butterflies', slot: 'aura', name: 'Butterflies', icon: '🦋', unlock: { trinkets: 35 } },
 ];
 
 export const wearableById = (id) => WEARABLES.find((item) => item.id === id);
@@ -95,6 +111,7 @@ export function wearableUnlocked(item, progress = {}) {
   if (unlock.champion) return Boolean(progress.wearables?.includes(item.id));
   if (unlock.achievement) return Boolean(progress.achievements?.includes(unlock.achievement));
   if (unlock.tier) return bestTier(progress) >= unlock.tier;
+  if (unlock.trinkets) return ownedTrinkets(progress).length >= unlock.trinkets;
   return accountLevel(progress).level >= unlock.level;
 }
 
@@ -105,6 +122,7 @@ export function wearableHint(item, achievementName = (id) => id) {
   if (unlock.champion) return 'Win a Daily Brew: a chance in the champion\'s medal';
   if (unlock.achievement) return `Achievement: ${achievementName(unlock.achievement)}`;
   if (unlock.tier) return `Become ${FORMS[unlock.tier]} Tode in a run`;
+  if (unlock.trinkets) return `Collect ${unlock.trinkets} garden trinkets`;
   return `Reach level ${unlock.level}`;
 }
 

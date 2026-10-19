@@ -284,6 +284,16 @@ const SOUNDS = {
     syllable({ pitch: 420, to: 300, vowel: 5, length: 0.16, volume: 0.9, delay: 0.17 });
   },
   boing: () => tone({ type: 'sine', frequency: 220, to: 880, duration: 0.3, volume: 0.16 }),
+  // A gong or temple bell: a low hum under bright, slowly fading partials.
+  gong: () => {
+    for (const [frequency, volume] of [[vary(330, 0.02), 0.1], [495, 0.06], [742, 0.05], [1110, 0.03]]) tone({ frequency, to: frequency * 0.99, duration: 2.2, volume, attack: 0.004 });
+    noise({ duration: 0.25, volume: 0.08, frequency: 900, q: 1.2 });
+  },
+  tweet: () => [0, 0.14].forEach((delay) => tone({ frequency: vary(2600, 0.05), to: 3600, duration: 0.09, volume: 0.07, delay })),
+  hoot: () => {
+    tone({ frequency: 440, to: 400, duration: 0.3, volume: 0.14, attack: 0.05 });
+    tone({ frequency: 420, to: 360, duration: 0.45, volume: 0.14, attack: 0.06, delay: 0.38 });
+  },
   launch: () => {
     tone({ type: 'sine', frequency: 700, to: 2600, duration: 0.85, volume: 0.09 });
     noise({ duration: 0.8, volume: 0.07, filter: 'highpass', frequency: 2500 });

@@ -90,6 +90,20 @@ const POKES = {
   launcher: { sound: 'whistle', steam: true },
   stage: { sound: 'fanfare', colors: ['#ff9ec7', '#7ed957', '#5fb8ff', '#ffd23f'] },
   bench: { sound: 'click', word: 'Sit?' },
+  windmill: { sound: 'dash', colors: ['#fff8e8', '#ffd36b'], spin: true },
+  totem: { sound: 'sting', word: 'Bzz!', colors: ['#ffd23f', '#2b2b2b'] },
+  gong: { sound: 'gong', word: 'GONG!', colors: ['#ffd36b', '#fff3a0', '#ffffff'] },
+  orrery: { sound: 'chime', emoji: ['🪐', '⭐'], colors: ['#cfe0ff', '#fff2a0', '#ffffff'] },
+  torii: { sound: 'legendary', colors: ['#c8b0ff', '#ffffff', '#9fd8ff'] },
+  bell: { sound: 'gong', emoji: ['🔔'] },
+  pagoda: { sound: 'heal', fireflies: true },
+  sundial: { sound: 'tick', emoji: ['⏳'] },
+  birdhouse: { sound: 'tweet', word: 'Tweet!', emoji: ['🐦'] },
+  birdbath: { sound: 'tweet', water: true },
+  owl: { sound: 'hoot', word: 'Hoo-hoo!' },
+  koi: { sound: 'splash', water: true, emoji: ['🫧'] },
+  sprout: { sound: 'pop', emoji: ['🍃'], colors: ['#7ed957', '#ffffff'] },
+  barrow: { sound: 'tick', word: 'Creak!', colors: ['#ffd36b', '#c98a2b', '#7ed957'] },
 };
 
 /** A frog's height (feet to the top of its head): where its aura's halo floats. */

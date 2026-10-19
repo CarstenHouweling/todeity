@@ -481,6 +481,356 @@ const BUILDERS = {
       }
     };
   },
+  // More to collect (v0.32). Milestones first.
+  windmill: (g) => {
+    g.add(cyl(7, 10, 26, mat('#f4efe4', { rough: 0.8 }), [0, 13, 0], 8));
+    g.add(cone(9.5, 10, mat('#b8322a', { rough: 0.6 }), [0, 31, 0], 8));
+    g.add(box(4.5, 7, 1, WOOD(), [0, 3.5, 9.6]));
+    g.add(box(3.4, 3.4, 0.6, mat('#5b8fd6'), [0, 16, 8.4]));
+    // The sails turn on a hub on the front.
+    const sails = new THREE.Group();
+    sails.position.set(0, 25, 9.4);
+    sails.add(cyl(1.6, 1.6, 3, WOOD(), [0, 0, 0], 8, [Math.PI / 2, 0, 0]));
+    const cloth = mat('#fff8e8', { rough: 0.9 });
+    for (let i = 0; i < 4; i++) {
+      const arm = new THREE.Group();
+      arm.rotation.z = (i / 4) * Math.PI * 2;
+      arm.add(box(1.1, 17, 0.8, WOOD(), [0, 9, 1]), box(5, 12, 0.4, cloth, [3.2, 11, 1.4]));
+      sails.add(arm);
+    }
+    g.add(sails);
+    g.userData.anim = (t) => (sails.rotation.z = -t * 1.1);
+  },
+  totem: (g) => {
+    g.add(cyl(6.5, 7.5, 3, STONE(), [0, 1.5, 0], 8));
+    // Three carved bee heads stacked up, wings on top: it keeps the swarm off the harvest.
+    const faces = ['#8a5a32', '#ffd23f', '#6a4024'];
+    const dark = mat('#1a1a1a');
+    faces.forEach((color, i) => {
+      const y = 7.5 + i * 9;
+      g.add(box(10, 8.4, 10, mat(color, { rough: 0.8 }), [0, y, 0]));
+      g.add(box(10.4, 1.4, 10.4, mat(i === 1 ? '#2b2b2b' : '#ffd23f', { rough: 0.8 }), [0, y - 3.4, 0]));
+      for (const side of [-1, 1]) g.add(box(2.4, 2.4, 0.8, dark, [side * 2.4, y + 1.2, 5.1]));
+      g.add(box(4.5, 1, 0.8, dark, [0, y - 1.4, 5.1]));
+    });
+    for (const side of [-1, 1]) {
+      g.add(cyl(0.4, 0.4, 6, dark, [side * 2.5, 33, 0], 4, [0, 0, -side * 0.35]));
+      g.add(ball(1.2, mat('#ffd23f', { emissive: '#8a5a00', intensity: 0.4 }), [side * 3.6, 36, 0], 0));
+    }
+    const wing = mat('#e8f8ff', { opacity: 0.6, rough: 0.1 });
+    const wings = [-1, 1].map((side) => {
+      const hinge = new THREE.Group();
+      hinge.position.set(side * 5, 27, -2);
+      const w = ball(5, wing, [side * 6, 2, 0]);
+      w.scale.set(1.5, 0.8, 0.2);
+      hinge.add(w);
+      g.add(hinge);
+      return { hinge, side };
+    });
+    g.userData.anim = (t) => wings.forEach(({ hinge, side }) => (hinge.rotation.z = side * (0.15 + Math.sin(t * 3) * 0.2)));
+  },
+  gong: (g) => {
+    const lacquer = mat('#8a2a1e', { rough: 0.5 });
+    for (const side of [-1, 1]) {
+      g.add(box(6, 3, 8, WOOD(), [side * 14, 1.5, 0]));
+      g.add(box(2.6, 38, 2.6, lacquer, [side * 14, 20, 0]));
+    }
+    g.add(box(36, 3, 3.4, lacquer, [0, 39, 0]));
+    g.add(box(30, 1.6, 2.6, lacquer, [0, 34, 0]));
+    for (const side of [-1, 1]) g.add(box(4, 2, 3.6, GOLD(), [side * 17, 40.5, 0], [0, 0, side * 0.3]));
+    // The gong hangs on two cords and shimmers; it sways a little when the wind takes it.
+    const disc = new THREE.Group();
+    disc.position.set(0, 33, 0);
+    for (const side of [-1, 1]) disc.add(cyl(0.3, 0.3, 6, mat('#3a2a1a'), [side * 4, -3, 0], 4));
+    const face = cyl(10, 10, 1.4, GOLD(), [0, -15, 0], 20, [Math.PI / 2, 0, 0]);
+    disc.add(face, cyl(4, 4, 1.8, mat('#ffe680', { emissive: '#a06a00', intensity: 0.6, metal: 0.8, rough: 0.2 }), [0, -15, 0], 16, [Math.PI / 2, 0, 0]));
+    disc.add(torus(10, 0.8, mat('#b07a10', { metal: 0.8, rough: 0.3 }), [0, -15, 0]));
+    g.add(disc);
+    g.add(cyl(0.6, 0.6, 14, WOOD(), [17, 6, 4], 5, [0, 0, 0.5]), ball(2.4, mat('#f4efe4', { rough: 0.9 }), [20.5, 12, 4], 1));
+    g.userData.anim = (t) => (disc.rotation.x = Math.sin(t * 1.2) * 0.06);
+  },
+  orrery: (g) => {
+    g.add(cyl(9, 10, 4, STONE(), [0, 2, 0], 10));
+    const brass = mat('#d8a84a', { metal: 0.8, rough: 0.3 });
+    g.add(cyl(1, 1.4, 22, brass, [0, 15, 0], 6));
+    const sun = ball(4.5, new THREE.MeshStandardMaterial({ color: '#ffd36b', emissive: '#ff9a2a', emissiveIntensity: 1.2, flatShading: true }), [0, 28, 0], 1);
+    g.add(sun);
+    // Planets on brass arms, each at its own pace.
+    const planets = [
+      { r: 9, size: 1.6, color: '#7fd8ff', speed: 1.3, tilt: 0.1 },
+      { r: 14, size: 2.4, color: '#ff8a6b', speed: 0.8, tilt: -0.15 },
+      { r: 19, size: 2, color: '#c58aff', speed: 0.5, tilt: 0.2, ring: true },
+    ].map((p, i) => {
+      const arm = new THREE.Group();
+      arm.position.y = 26 - i * 3;
+      arm.add(cyl(0.35, 0.35, p.r, brass, [p.r / 2, 0, 0], 4, [0, 0, Math.PI / 2]));
+      arm.add(ball(p.size, mat(p.color, { emissive: p.color, intensity: 0.4, rough: 0.4 }), [p.r, 1.6, 0], 1));
+      if (p.ring) arm.add(torus(p.size * 1.8, 0.35, brass, [p.r, 1.6, 0], [Math.PI / 2 + 0.4, 0, 0]));
+      g.add(arm);
+      return { arm, ...p, at: i * 2 };
+    });
+    g.userData.anim = (t, night) => {
+      for (const p of planets) p.arm.rotation.y = t * p.speed + p.at;
+      sun.material.emissiveIntensity = (night ? 2.2 : 1.1) + Math.sin(t * 2) * 0.25;
+    };
+  },
+  torii: (g) => {
+    const red = mat('#d9443a', { rough: 0.5 });
+    const black = mat('#2a1a1a', { rough: 0.6 });
+    for (const side of [-1, 1]) {
+      g.add(box(5, 3, 5, black, [side * 13, 1.5, 0]));
+      g.add(cyl(1.8, 2.2, 36, red, [side * 13, 20, 0], 8));
+    }
+    g.add(box(40, 2.4, 4, black, [0, 39.5, 0]));
+    for (const side of [-1, 1]) g.add(box(5, 2.4, 4, black, [side * 21.5, 40.4, 0], [0, 0, side * 0.2]));
+    g.add(box(36, 3, 3, red, [0, 36.6, 0]));
+    g.add(box(31, 2, 2.4, red, [0, 30, 0]));
+    g.add(box(4, 5, 0.8, GOLD(), [0, 33.5, 1.6]));
+    // Between the posts the way to the endless waves shimmers.
+    const glow = new THREE.MeshStandardMaterial({ color: '#c8b0ff', emissive: '#8a6aff', emissiveIntensity: 0.6, transparent: true, opacity: 0.28, flatShading: true, side: THREE.DoubleSide, depthWrite: false });
+    const veil = box(22, 26, 0.3, glow, [0, 15.5, 0]);
+    veil.castShadow = false;
+    g.add(veil);
+    const motes = Array.from({ length: 8 }, () => ball(0.8, mat('#ffffff', { emissive: '#c8b0ff', intensity: 1.6 }), [0, 0, 0], 0));
+    g.add(...motes);
+    g.userData.anim = (t, night) => {
+      glow.emissiveIntensity = (night ? 1.3 : 0.6) + Math.sin(t * 1.7) * 0.25;
+      motes.forEach((mote, i) => {
+        const a = t * 0.9 + (i / motes.length) * Math.PI * 2;
+        mote.position.set(Math.cos(a) * 8, 15.5 + Math.sin(a) * 11, Math.sin(t * 2 + i) * 1.2);
+      });
+    };
+  },
+  bell: (g) => {
+    g.add(box(24, 3, 24, STONE(), [0, 1.5, 0]));
+    for (const x of [-9, 9]) for (const z of [-9, 9]) g.add(box(2.4, 28, 2.4, WOOD(), [x, 17, z]));
+    g.add(box(24, 2, 24, WOOD(), [0, 32, 0]));
+    g.add(cone(20, 9, mat('#3a4a5a', { rough: 0.5 }), [0, 37.5, 0], 4, [0, Math.PI / 4, 0]));
+    g.add(ball(1.6, GOLD(), [0, 42.5, 0], 0));
+    // The bronze bell swings gently on its beam.
+    const bronze = mat('#b07a3a', { metal: 0.7, rough: 0.35 });
+    const swing = new THREE.Group();
+    swing.position.y = 31;
+    swing.add(cyl(0.5, 0.5, 4, mat('#3a2a1a'), [0, -2, 0], 4));
+    swing.add(mesh(new THREE.SphereGeometry(5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), bronze, [0, -8, 0]));
+    swing.add(cyl(5, 7, 11, bronze, [0, -13.5, 0], 12));
+    swing.add(torus(7, 0.6, GOLD(), [0, -18.6, 0], [Math.PI / 2, 0, 0]));
+    swing.add(cyl(1.2, 1.2, 2, GOLD(), [0, -20.5, 0], 6));
+    g.add(swing);
+    g.userData.anim = (t) => (swing.rotation.z = Math.sin(t * 1.5) * 0.06 * (0.6 + 0.4 * Math.sin(t * 0.4)));
+  },
+  pagoda: (g) => {
+    const wall = mat('#f4efe4', { rough: 0.8 });
+    const roof = mat('#3f7a5a', { rough: 0.5 });
+    const lights = [];
+    const glow = new THREE.MeshStandardMaterial({ color: '#ffcf6b', emissive: '#ff9a2a', emissiveIntensity: 1.2, flatShading: true });
+    g.add(box(22, 3, 22, STONE(), [0, 1.5, 0]));
+    // Three storeys, each smaller, each under a wide upturned roof, with a lit window on the front.
+    let y = 3;
+    for (let i = 0; i < 3; i++) {
+      const w = 14 - i * 3;
+      const h = 8 - i;
+      g.add(box(w, h, w, wall, [0, y + h / 2, 0]));
+      g.add(box(w * 0.4, h * 0.5, 0.6, glow, [0, y + h / 2, w / 2 + 0.1]));
+      g.add(cone(w * 0.95 + 4, 4.5, roof, [0, y + h + 2.2, 0], 4, [0, Math.PI / 4, 0]));
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(ball(0.9, GOLD(), [sx * (w / 2 + 2.6), y + h + 0.3, sz * (w / 2 + 2.6)], 0));
+      lights.push(y + h / 2);
+      y += h + 3.6;
+    }
+    g.add(cyl(0.6, 0.9, 9, GOLD(), [0, y + 3.5, 0], 6));
+    for (let k = 0; k < 3; k++) g.add(cyl(1.6 - k * 0.4, 1.6 - k * 0.4, 0.6, GOLD(), [0, y + 1.5 + k * 2.2, 0], 8));
+    g.userData.anim = (t, night) => (glow.emissiveIntensity = (night ? 2.2 : 1) + 0.25 * Math.sin(t * 2.6) * Math.sin(t * 1.1));
+  },
+  sundial: (g) => {
+    g.add(cyl(7, 8, 3, STONE(), [0, 1.5, 0], 8));
+    g.add(cyl(3.5, 4.5, 12, STONE(), [0, 9, 0], 8));
+    g.add(cyl(11, 10, 2.4, mat('#d8d0c0', { rough: 0.85 }), [0, 16, 0], 16));
+    const brass = mat('#d8a84a', { metal: 0.8, rough: 0.3 });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      g.add(box(i % 3 ? 0.7 : 1.2, 0.4, i % 3 ? 2 : 3, brass, [Math.cos(a) * 8.6, 17.3, Math.sin(a) * 8.6], [0, -a + Math.PI / 2, 0]));
+    }
+    // The gnomon: a brass fin; its shadow creeps around the dial.
+    const fin = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -7), new THREE.Vector3(0, 0, 3), new THREE.Vector3(0, 9, -7)]);
+    fin.computeVertexNormals();
+    const gnomon = new THREE.Mesh(fin, new THREE.MeshStandardMaterial({ color: '#d8a84a', metalness: 0.8, roughness: 0.3, flatShading: true, side: THREE.DoubleSide }));
+    gnomon.position.y = 17.2;
+    gnomon.castShadow = true;
+    g.add(gnomon);
+    const shadow = new THREE.Group();
+    shadow.position.y = 17.3;
+    shadow.add(box(0.9, 0.2, 8, mat('#4a4438', { rough: 1 }), [0, 0, 4]));
+    g.add(shadow);
+    g.userData.anim = (t) => (shadow.rotation.y = -0.9 + Math.sin(t * 0.15) * 1.3);
+  },
+  // Daily gifts.
+  birdhouse: (g) => {
+    g.add(cyl(1.2, 1.5, 24, WOOD(), [0, 12, 0], 6));
+    g.add(box(12, 12, 10, mat('#5fb8ff', { rough: 0.7 }), [0, 30, 0]));
+    for (const side of [-1, 1]) g.add(box(8.4, 1, 12, mat('#d9443a', { rough: 0.6 }), [side * 3.5, 38.5, 0], [0, 0, -side * 0.75]));
+    g.add(cyl(2.4, 2.4, 1, mat('#1a1a1a'), [0, 31, 5.1], 10, [Math.PI / 2, 0, 0]));
+    g.add(cyl(0.4, 0.4, 5, WOOD(), [0, 27, 6.5], 4, [Math.PI / 2, 0, 0]));
+    g.add(ball(1.4, mat('#ffd23f'), [3.5, 34, 5.1], 0));
+    // Now and then a little bird hops out onto the perch, looks around and goes back in.
+    const bird = new THREE.Group();
+    const feathers = mat('#ff8a6b', { rough: 0.5 });
+    bird.add(ball(2.2, feathers, [0, 0, 0], 1), ball(1.6, feathers, [0, 2.2, 0.8], 1));
+    bird.add(cone(0.6, 1.6, mat('#ffb000'), [0, 2.1, 2.6], 4, [Math.PI / 2, 0, 0]));
+    bird.add(cone(1.2, 3, feathers, [0, 0.4, -2.6], 4, [-Math.PI / 2 - 0.4, 0, 0]));
+    for (const side of [-1, 1]) bird.add(ball(0.4, mat('#1a1a1a'), [side * 1, 2.7, 1.8], 0));
+    g.add(bird);
+    g.userData.anim = (t) => {
+      const k = (t % 7) / 7;
+      const out = k < 0.15 ? k / 0.15 : k < 0.6 ? 1 : k < 0.75 ? 1 - (k - 0.6) / 0.15 : 0;
+      bird.visible = out > 0.05;
+      bird.position.set(0, 29.6 + Math.abs(Math.sin(k * 40)) * (out === 1 ? 0.8 : 0), 3 + out * 5);
+      bird.rotation.y = out === 1 ? Math.sin(t * 3) * 0.8 : 0;
+    };
+  },
+  birdbath: (g) => {
+    g.add(cyl(7, 8, 3, STONE(), [0, 1.5, 0], 10));
+    g.add(cyl(2.5, 3.5, 14, STONE(), [0, 10, 0], 8));
+    g.add(cyl(13, 6, 5, STONE(), [0, 19, 0], 14));
+    g.add(cyl(11.5, 11.5, 0.6, mat('#7fd8ff', { emissive: '#2a7aaa', intensity: 0.5, rough: 0.1, opacity: 0.85 }), [0, 21.2, 0], 14));
+    // A bird on the rim dips its head for a drink.
+    const bird = new THREE.Group();
+    bird.position.set(-10, 23, 3);
+    bird.rotation.y = Math.PI / 2;
+    const feathers = mat('#7fb8ff', { rough: 0.5 });
+    bird.add(ball(2.4, feathers, [0, 1.6, 0], 1), cone(1.3, 3.2, feathers, [0, 2, -2.8], 4, [-Math.PI / 2 - 0.3, 0, 0]));
+    const head = new THREE.Group();
+    head.position.set(0, 3.2, 1.4);
+    head.add(ball(1.7, feathers, [0, 0.8, 0.6], 1), cone(0.6, 1.8, mat('#ffb000'), [0, 0.7, 2.6], 4, [Math.PI / 2, 0, 0]));
+    for (const side of [-1, 1]) head.add(ball(0.4, mat('#1a1a1a'), [side * 1.1, 1.3, 1.5], 0));
+    bird.add(head);
+    g.add(bird);
+    const drop = ball(0.7, mat('#bfefff', { emissive: '#4ab8ff', intensity: 0.6, opacity: 0.8 }), [0, 0, 0], 0);
+    g.add(drop);
+    g.userData.anim = (t) => {
+      const dip = Math.max(0, Math.sin(t * 1.4)) ** 6;
+      head.rotation.x = dip * 1.1;
+      const k = (t * 1.4) % (Math.PI * 2);
+      drop.visible = k > 1.6 && k < 2.6;
+      drop.position.set(-10 + (k - 1.6) * 3, 22 + Math.sin((k - 1.6) * Math.PI) * 3, 6);
+    };
+  },
+  // Kettle brews.
+  owl: (g) => {
+    g.add(cyl(8, 9, 10, WOOD(), [0, 5, 0], 9));
+    g.add(cyl(7, 7, 0.4, mat('#c9a06a', { rough: 0.9 }), [0, 10.2, 0], 9));
+    const brown = mat('#8a6a4a', { rough: 0.7 });
+    const body = ball(7, brown, [0, 17, 0], 1);
+    body.scale.set(1, 1.15, 0.9);
+    const belly = ball(4.6, mat('#e8d0a0', { rough: 0.8 }), [0, 16, 3.8], 1);
+    belly.scale.set(1, 1.15, 0.6);
+    g.add(body, belly);
+    for (const side of [-1, 1]) {
+      const wing = ball(4, mat('#6a4a2a', { rough: 0.7 }), [side * 6, 17, -0.5], 1);
+      wing.scale.set(0.5, 1.2, 0.9);
+      g.add(wing, cone(0.8, 2, mat('#ffb000'), [side * 2, 10.6, 3], 4));
+    }
+    // Its head turns to look around; the big eyes glow at night and blink.
+    const head = new THREE.Group();
+    head.position.y = 26;
+    head.add(ball(6, brown, [0, 0, 0], 1));
+    const eye = new THREE.MeshStandardMaterial({ color: '#ffd23f', emissive: '#ffb000', emissiveIntensity: 0.5, flatShading: true });
+    const eyes = [-1, 1].map((side) => {
+      head.add(cyl(2.8, 2.8, 0.6, mat('#e8d8b8', { rough: 0.8 }), [side * 2.6, 0.5, 4.8], 10, [Math.PI / 2, 0, 0]));
+      const ring = cyl(1.8, 1.8, 0.6, eye, [side * 2.6, 0.5, 5.3], 10, [Math.PI / 2, 0, 0]);
+      head.add(ring, ball(0.8, mat('#1a1a1a'), [side * 2.6, 0.5, 5.8], 0));
+      head.add(cone(1.6, 4, brown, [side * 4, 5.6, 0], 4, [0, 0, -side * 0.35]));
+      return ring;
+    });
+    head.add(cone(0.9, 2.4, mat('#ffb000'), [0, -1.6, 5.6], 4, [Math.PI, 0, 0]));
+    g.add(head);
+    g.userData.anim = (t, night) => {
+      head.rotation.y = Math.sin(t * 0.5) ** 3 * 1.4;
+      eye.emissiveIntensity = night ? 2.2 : 0.5;
+      const blink = Math.sin(t * 0.8) > 0.985 ? 0.1 : 1;
+      for (const ring of eyes) ring.scale.set(1, 1, blink);
+    };
+  },
+  koi: (g) => {
+    g.add(torus(8, 1.6, WOOD(), [0, 3, 0], [Math.PI / 2, 0, 0]));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      g.add(box(2, 6, 2, WOOD(), [Math.cos(a) * 8, 3, Math.sin(a) * 8]));
+    }
+    g.add(mesh(new THREE.SphereGeometry(10, 14, 10, 0, Math.PI * 2, 0.35, Math.PI - 0.35), mat('#d8f4ff', { rough: 0.05, opacity: 0.4 }), [0, 14, 0]));
+    g.add(cyl(9.2, 7.8, 9, mat('#5fb8ff', { emissive: '#2a7aaa', intensity: 0.35, rough: 0.1, opacity: 0.55 }), [0, 9.5, 0], 14));
+    g.add(cyl(3.2, 3.2, 0.4, mat('#4caf3a'), [3, 14.2, -2], 10));
+    // Two koi circle each other.
+    const fish = ['#ff7a2a', '#ffffff'].map((color, i) => {
+      const swim = new THREE.Group();
+      const koi = new THREE.Group();
+      koi.position.x = 4.5;
+      const body = ball(1.8, mat(color, { rough: 0.4 }), [0, 0, 0], 1);
+      body.scale.set(0.8, 0.7, 1.8);
+      koi.add(body, ball(0.9, mat(i ? '#ff7a2a' : '#ffffff'), [0, 0.8, 0.4], 0));
+      const tail = cone(1.4, 2.4, mat(color, { rough: 0.4 }), [0, 0, -3.8], 4, [-Math.PI / 2, 0, 0]);
+      koi.add(tail);
+      swim.add(koi);
+      swim.position.y = 8 + i * 2.5;
+      g.add(swim);
+      return { swim, tail, i };
+    });
+    g.userData.anim = (t) => fish.forEach(({ swim, tail, i }) => {
+      swim.rotation.y = -t * (0.7 + i * 0.15) + i * Math.PI;
+      tail.rotation.y = Math.sin(t * 8 + i) * 0.4;
+    });
+  },
+  sprout: (g) => {
+    g.add(cyl(8, 6, 9, mat('#c8693a', { rough: 0.7 }), [0, 4.5, 0], 10));
+    g.add(cyl(8.6, 8.6, 1.6, mat('#a8552e', { rough: 0.7 }), [0, 9, 0], 10));
+    g.add(cyl(7.4, 7.4, 0.4, mat('#4a3020', { rough: 1 }), [0, 9.6, 0], 10));
+    g.add(cyl(0.9, 1.3, 8, WOOD(), [0, 13, 0], 5));
+    // A little tea bush: glossy leaf clumps and white tea flowers, swaying.
+    const bush = new THREE.Group();
+    bush.position.y = 16;
+    const leaf = mat('#3f9d3a', { rough: 0.35 });
+    const light = mat('#6cc04a', { rough: 0.35 });
+    for (const [x, y, z, r, m] of [[0, 4, 0, 6, leaf], [-5, 1, 2, 4.4, light], [5, 2, -1, 4.8, leaf], [1, 7.5, -2, 4, light], [-2, 3, -4, 4, leaf], [3, 2, 4, 3.6, light]]) {
+      bush.add(ball(r, m, [x, y, z], 0));
+    }
+    const petal = mat('#ffffff', { rough: 0.5 });
+    for (const [x, y, z] of [[4, 6, 3], [-5, 4, 4], [2, 10, -1], [-3, 7, -4]]) {
+      bush.add(ball(1.2, petal, [x, y, z], 0), ball(0.5, mat('#ffd23f'), [x, y + 0.2, z + 1], 0));
+    }
+    g.add(bush);
+    g.userData.anim = (t) => {
+      bush.rotation.z = Math.sin(t * 1.2) * 0.05;
+      bush.rotation.x = Math.sin(t * 0.9 + 1) * 0.04;
+    };
+  },
+  barrow: (g) => {
+    const red = mat('#d9443a', { rough: 0.6 });
+    // Tray, legs and handles pointing back (−X), the wheel in front (+X).
+    g.add(box(18, 2, 14, red, [0, 9, 0]));
+    for (const side of [-1, 1]) g.add(box(18, 6, 1.2, red, [0, 12, side * 6.6], [side * 0.15, 0, 0]));
+    g.add(box(1.2, 6, 14, red, [-8.6, 12, 0], [0, 0, -0.2]));
+    g.add(box(1.2, 6, 14, red, [8.6, 12, 0], [0, 0, 0.3]));
+    for (const side of [-1, 1]) {
+      g.add(box(26, 1.4, 1.4, WOOD(), [-2, 8, side * 5], [0, 0, 0.1]));
+      g.add(box(1.4, 7, 1.4, WOOD(), [-6, 4, side * 5]));
+    }
+    g.add(cyl(6, 6, 2.6, mat('#3a3a3a', { rough: 0.8 }), [12, 6, 0], 14, [Math.PI / 2, 0, 0]));
+    g.add(cyl(2, 2, 3, mat('#d8dde6', { metal: 0.8, rough: 0.3 }), [12, 6, 0], 8, [Math.PI / 2, 0, 0]));
+    // Heaped with golden tea leaves; one keeps blowing off and floating back.
+    const colors = ['#ffd36b', '#c98a2b', '#7ed957', '#ffb000'];
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.4;
+      const r = 2 + (i % 4) * 1.6;
+      g.add(box(3.4, 0.5, 2, mat(colors[i % 4], { rough: 0.6 }), [Math.cos(a) * r * 1.3, 12.5 + (4 - (i % 4)) * 0.9, Math.sin(a) * r], [0.3 * (i % 3), a, 0.2]));
+    }
+    const flyer = box(3, 0.4, 1.8, GOLD(), [0, 0, 0]);
+    g.add(flyer);
+    g.userData.anim = (t) => {
+      const k = (t * 0.25) % 1;
+      const up = Math.sin(k * Math.PI);
+      flyer.position.set(Math.sin(t * 1.3) * 6, 16 + up * 14, Math.cos(t * 0.9) * 4);
+      flyer.rotation.set(t * 2, t * 1.4, Math.sin(t * 3) * 0.6);
+    };
+  },
 };
 
 /** The model for a trinket, Z-up, standing on the ground. */
@@ -639,6 +989,10 @@ const GLOWS = {
   mushrooms: { color: '#c58aff', radius: 34 },
   fountain: { color: '#7fd8ff', radius: 36 },
   podium: { color: '#ffe680', radius: 36 },
+  orrery: { color: '#ffd36b', radius: 36 },
+  torii: { color: '#c8b0ff', radius: 40 },
+  pagoda: { color: '#ffb040', radius: 40 },
+  owl: { color: '#ffd23f', radius: 26 },
 };
 
 /** Frees a trinket's geometries (the materials are shared and kept). */

@@ -33,6 +33,9 @@ const SET_EFFECTS = {
   leaves: { colors: ['#7ed957', '#c8f77a', '#ffd36b'], up: 30, gravity: 30, size: 1.8, height: 8, count: 2, every: 0.2, spread: 70 },
   beam: { colors: ['#fff2a0', '#ffffff'], up: 160, gravity: -40, size: 2, height: 4, count: 2, every: 0.08, spread: 8, glow: true },
   confetti: { colors: ['#ff9ec7', '#7ed957', '#5fb8ff', '#ffd23f', '#c58aff'], up: 120, gravity: 160, size: 1.8, height: 40, count: 3, every: 0.25, spread: 80, life: 1.4 },
+  mist: { colors: ['#ffffff', '#ffe9f0', '#ffd1c8'], up: 6, gravity: -2, size: 3.6, height: 4, count: 2, every: 0.18, spread: 90, life: 2.4 },
+  stars: { colors: ['#cfe0ff', '#ffffff', '#fff2a0'], up: 30, gravity: -6, size: 1.5, height: 50, count: 1, every: 0.1, spread: 80, glow: true, life: 1.6 },
+  feathers: { colors: ['#ffffff', '#bfe8ff', '#ffd1e3'], up: -6, gravity: 14, size: 2, height: 60, count: 1, every: 0.25, spread: 70, life: 2.6 },
 };
 
 export class TitleGarden {

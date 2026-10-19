@@ -144,13 +144,13 @@ for the Wardrobe, `todeity-garden.gif` when inviting people to your garden.
 - **Meta progression:** Golden Leaves for Tode's Pantry (13 permanent upgrades), 17 keepsakes, 39 achievements, cloud
   saves with a save code, a daily gift and a kettle that brews rewards every 4 hours, and an account level with seven
   ranks from Tadpole to Todeity that shows as an aura around your frog in gardens.
-- **The Wardrobe:** 54 wearables in five slots (14 hats, 9 face, 9 body, 10 back, 12 auras): a crown, a ronin helm,
+- **The Wardrobe:** 72 wearables in five slots (18 hats, 12 face, 13 body, 13 back, 16 auras): a crown, a ronin helm,
   devil horns, a grand moustache, a golden breastplate, draped capes, butterfly and infernal wings, a steam jetpack,
-  auras of petals, embers and stardust. Four are free; the rest are earned with achievements, levels and divine forms.
+  auras of petals, embers and stardust. Four are free; the rest are earned with achievements, levels, divine forms and trinkets collected.
   Every class can wear everything, and you wear it in runs, in co-op and in gardens.
 - **Community:** leaderboards (score, deepest run, fastest Bee-zebub, Daily Brew, co-op; every run goes on by itself,
   one best entry per frog), a seeded **Daily Brew** with daily twists (13 trials, 12 boons), **co-op for 2–4** with
-  public rooms and Quick play, and **gardens**: decorate yours with 27 trinkets in 8 sets, pick one of 7 garden songs
+  public rooms and Quick play, and **gardens**: decorate yours with 43 trinkets in 13 sets, pick one of 7 garden songs
   and day or night, visit other players' gardens, hop on each other's heads, play **Leaf Rush** (30 s, grab the most
   leaves), swim in the pond and skip stones, kick the Tea Ball, fire the Teapot Cannon, boop frogs and trinkets, use
   17 emotes (Power Up shows your highest divine form with a sonic boom), and form a party that sets off on a co-op run

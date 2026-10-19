@@ -572,6 +572,224 @@ Object.assign(MODELS, {
   },
 });
 
+// More to wear (v0.32).
+Object.assign(MODELS, {
+  acorn(rig, f) {
+    // An acorn's cup worn as a cap: a scaly rim, a rounded top and a little stalk.
+    piece(rig.parts.head, [0, HAT_Y - 0.8, 2.5], (add) => {
+      add([f.headW + 1.4, 2.6, 11], [0, 1.3, 0], '#8a5a2a');
+      add([f.headW - 0.8, 2, 9], [0, 3.4, 0], '#9a6a32');
+      add([f.headW - 4.4, 1.6, 6], [0, 5, 0], '#8a5a2a');
+      for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2;
+        add([2.2, 1.2, 2.2], [Math.cos(angle) * (f.headW / 2 + 0.3), 0.5 + (i % 2) * 0.8, Math.sin(angle) * 5.3], '#6a4020');
+      }
+      add([1.2, 3, 1.2], [0.6, 7, 0], '#5a3a1a', { rotation: [0, 0, -0.3] });
+    });
+  },
+  tricorn(rig, f) {
+    // A captain's three-cornered hat: a crown and three upturned brims, gold-edged, with a feather.
+    piece(rig.parts.head, [0, HAT_Y - 0.2, 2], (add) => {
+      const felt = '#2a2230';
+      add([f.headW - 1, 4.2, 8.6], [0, 2.1, -0.4], felt);
+      add([f.headW + 4, 0.8, 12], [0, 0.4, 0], felt);
+      add([f.headW + 5, 3.4, 1], [0, 2.2, -6], felt, { rotation: [-0.35, 0, 0] });
+      add([f.headW + 5, 0.6, 1.2], [0, 3.9, -6.6], '#e8c050', { rotation: [-0.35, 0, 0], material: 'shiny' });
+      for (const s of [-1, 1]) {
+        add([1, 3.4, 11], [s * (f.headW / 2 + 0.6), 2.2, 0.8], felt, { rotation: [0, -s * 0.5, -s * 0.3] });
+        add([1.2, 0.6, 11], [s * (f.headW / 2 + 1.3), 3.8, 0.8], '#e8c050', { rotation: [0, -s * 0.5, -s * 0.3], material: 'shiny' });
+      }
+      add([1.6, 1.6, 1.6], [0, 2, 5.4], '#e8c050', { material: 'shiny' });
+      add([1.2, 7, 0.6], [-3, 6.2, -3], '#f4f1ea', { rotation: [-0.6, 0, 0.5], material: 'cloth' });
+      add([1.6, 4, 0.5], [-3.6, 7, -3.5], '#d9443a', { rotation: [-0.6, 0, 0.5], material: 'cloth' });
+    });
+  },
+  teacup(rig, f) {
+    // A whole teacup on its saucer, still steaming.
+    piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
+      add([f.headW + 5, 0.8, 14], [0, 0.4, 0], '#f4f1ea', { material: 'shiny' });
+      add([f.headW + 5.2, 0.4, 3], [0, 0.6, 5.6], '#7fb8e8');
+      add([f.headW - 3, 2, 7], [0, 1.8, 0], '#f4f1ea', { material: 'shiny' });
+      add([f.headW - 1, 3.6, 8.6], [0, 4.4, 0], '#f4f1ea', { material: 'shiny' });
+      add([f.headW - 0.8, 1, 8.8], [0, 4.6, 0], '#7fb8e8');
+      add([f.headW - 2.6, 0.4, 7], [0, 6.1, 0], '#b8722a');
+      const x = f.headW / 2 - 0.2;
+      add([2.6, 0.9, 1.2], [x + 1, 5.4, 0], '#f4f1ea');
+      add([2.6, 0.9, 1.2], [x + 1, 2.8, 0], '#f4f1ea');
+      add([0.9, 3.4, 1.2], [x + 2.1, 4.1, 0], '#f4f1ea');
+    });
+    const steam = [0, 1, 2].map((i) =>
+      piece(rig.parts.head, [(i - 1) * 2.2, HAT_Y + 7, 2.5], (add) => add([1.2, 1.2, 1.2], [0, 0, 0], '#ffffff', { material: 'glow' }))
+    );
+    return {
+      update(time) {
+        steam.forEach((puff, i) => {
+          const k = (time * 0.6 + i / 3) % 1;
+          puff.position.y = HAT_Y + 6.6 + k * 7;
+          puff.position.x = (i - 1) * 2.2 + Math.sin(time * 3 + i * 2) * 0.8;
+          puff.scale.setScalar(Math.sin(k * Math.PI) * 1.2 + 0.05);
+        });
+      },
+    };
+  },
+  freckles(rig, f) {
+    piece(rig.parts.head, [0, 2.8, rig.id === 'ninja' ? 9.7 : 8.6], (add) => {
+      for (const s of [-1, 1]) {
+        for (const [x, y] of [[0, 0.6], [1.4, -0.3], [-1.2, -0.5], [0.4, -1.4]]) add([0.8, 0.8, 1], [s * (f.headW / 2 - 2.2 + x), y, 0.6], '#b8682a');
+      }
+    });
+  },
+  starglasses(rig, f) {
+    piece(rig.parts.head, [0, EYE_Y, EYE_Z + 0.2], (add) => {
+      const ex = eyeX(f);
+      for (const s of [-1, 1]) {
+        // An eight-pointed star round each eye: two squares, one turned.
+        add([4.4, 4.4, 0.6], [s * ex, 0, 0], '#ffcf3a', { material: 'shiny' });
+        add([4.4, 4.4, 0.6], [s * ex, 0, 0], '#ffcf3a', { rotation: [0, 0, Math.PI / 4], material: 'shiny' });
+        add([2.8, 2.8, 0.4], [s * ex, 0, 0.3], '#ff7ae0', { material: 'shiny' });
+        add([1, 0.8, 0.3], [s * ex - 0.6, 0.7, 0.55], '#ffffff', { material: 'glow' });
+        add([0.6, 0.6, 6], [s * (ex + 2.6), 1.2, -3], '#ffcf3a');
+      }
+      add([Math.max(0.6, 2 * ex - 5), 0.7, 0.6], [0, 0.6, 0], '#ffcf3a', { material: 'shiny' });
+    });
+  },
+  mask(rig, f) {
+    // A masquerade mask: a purple band round the eyes, swept up at the sides, a feather on one side.
+    piece(rig.parts.head, [0, EYE_Y, EYE_Z + 0.25], (add) => {
+      const ex = eyeX(f);
+      const purple = '#6a2a9a';
+      for (const s of [-1, 1]) {
+        add([6.4, 2.2, 0.6], [s * ex, 3.2, 0], purple, { material: 'shiny' });
+        add([6.4, 1.8, 0.6], [s * ex, -2.9, 0], purple, { material: 'shiny' });
+        add([2, 7.6, 0.6], [s * (ex + 3.2), 0.2, 0], purple, { material: 'shiny' });
+        add([2, 2, 0.6], [s * (ex + 2.6), -3.6, 0], purple, { rotation: [0, 0, Math.PI / 4], material: 'shiny' });
+        add([3, 1.4, 0.6], [s * (ex + 4), 3.2, -0.4], purple, { rotation: [0, 0, s * 0.5], material: 'shiny' });
+        add([1, 1, 0.4], [s * (ex + 2.9), 2.8, 0.4], '#ffcf3a', { material: 'glow' });
+      }
+      add([Math.max(1.4, 2 * ex - 5), 5, 0.6], [0, 1, 0], purple, { material: 'shiny' });
+      add([1.2, 7, 0.4], [ex + 4.6, 6.4, -0.6], '#ff7ae0', { rotation: [0, 0, -0.4], material: 'cloth' });
+      add([0.4, 7.4, 0.5], [ex + 4.6, 6.4, -0.6], '#ffffff', { rotation: [0, 0, -0.4] });
+    });
+  },
+  bandana(rig, f) {
+    // A spotted neckerchief: tied round the neck, a stepped triangle on the chest.
+    const top = backTop(f);
+    piece(rig.parts.body, [0, 0, f.L / 2 - 3.2], (add) => {
+      add([f.W + 1.2, 1.4, 4.6], [0, top - 0.3, 0], '#d9443a', { material: 'cloth' });
+      for (const s of [-1, 1]) add([1.2, 4.2, 4.6], [s * (f.W / 2 + 0.5), top - 2.4, 0], '#d9443a', { material: 'cloth' });
+      add([f.W + 1.2, 2.2, 1.2], [0, top - 4.2, 2.8], '#d9443a', { material: 'cloth' });
+    });
+    piece(rig.parts.body, [0, 1.5 - f.H / 2 + 3, f.L / 2 + 0.7], (add) => {
+      add([f.W - 3, 1.6, 0.6], [0, 0, 0], '#d9443a', { material: 'cloth' });
+      add([f.W - 6, 1.6, 0.6], [0, -1.6, 0], '#d9443a', { material: 'cloth' });
+      add([Math.max(1.6, f.W - 9), 1.6, 0.6], [0, -3.2, 0], '#d9443a', { material: 'cloth' });
+      for (const [x, y] of [[-2.4, 0], [1.8, 0.2], [-0.4, -1.6], [0.6, -3.1], [3.6, -0.2], [-3.8, -0.3]]) add([0.8, 0.8, 0.3], [x * f.W / 16, y, 0.4], '#ffffff');
+    }, [-0.25, 0, 0]);
+  },
+  vest(rig, f) {
+    // A gardener's vest: open at the front, buttons, a pocket with a leaf in it.
+    const top = backTop(f);
+    piece(rig.parts.body, [0, 0, 0], (add) => {
+      const cloth = '#b8763a';
+      add([f.W + 1, 0.8, f.L - 4], [0, top + 0.3, -1], cloth, { material: 'cloth' });
+      for (const s of [-1, 1]) {
+        add([0.8, f.H - 2.6, f.L - 3], [s * (f.W / 2 + 0.5), 0.8, -0.5], cloth, { material: 'cloth' });
+        add([f.W / 2 - 2, f.H - 2.6, 0.8], [s * (f.W / 4 + 1.3), 0.8, f.L / 2 + 0.5], cloth, { material: 'cloth' });
+        add([0.9, f.H - 2.4, 0.9], [s * 2.3, 0.8, f.L / 2 + 0.6], '#8a5226', { material: 'cloth' });
+      }
+      for (const y of [2.6, 0, -2.6]) add([1, 1, 0.6], [-2.6, y, f.L / 2 + 1.1], '#e8c050', { material: 'shiny' });
+      add([2.8, 2.4, 0.6], [f.W / 4 + 1.3, -1.6, f.L / 2 + 1.1], '#8a5226');
+      add([1, 3, 0.4], [f.W / 4 + 1.3, 0.2, f.L / 2 + 1.2], '#7ed957', { rotation: [0, 0, -0.3] });
+    });
+  },
+  pearls(rig, f) {
+    // A string of pond pearls round the neck with a pink one in front.
+    const top = backTop(f);
+    piece(rig.parts.body, [0, 0, f.L / 2 - 3.4], (add) => {
+      for (let x = -f.W / 2; x <= f.W / 2 + 0.01; x += 1.6) add([1.3, 1.3, 1.3], [x, top + 0.1, 0], '#f8f4ec', { material: 'shiny' });
+      for (const s of [-1, 1]) for (let y = top - 1.4; y > top - 5.5; y -= 1.5) add([1.3, 1.3, 1.3], [s * (f.W / 2 + 0.6), y, 0.8], '#f8f4ec', { material: 'shiny' });
+      for (let x = -f.W / 2 + 1; x <= f.W / 2 - 1 + 0.01; x += 1.6) add([1.3, 1.3, 1.3], [x, top - 6.2, 3], '#f8f4ec', { material: 'shiny' });
+      add([2.4, 2.4, 2.4], [0, top - 7.6, 3.4], '#ffb6d0', { material: 'shiny' });
+      add([0.8, 0.8, 0.4], [-0.4, top - 7.1, 4.6], '#ffffff', { material: 'glow' });
+    });
+  },
+  featherwings(rig, f) {
+    // White feathered wings: rows of feathers, longest at the top, beating slowly.
+    const wings = [-1, 1].map((s) =>
+      piece(rig.parts.body, [s * 1, backTop(f) + 0.6, -2.2], (add) => {
+        add([10, 2.4, 1], [s * 5, 8, 0], '#f4f1ea');
+        add([3, 3, 1.2], [s * 1.5, 7, 0], '#ffffff');
+        [[12, '#ffffff'], [10.5, '#f4f1ea'], [9, '#ffffff'], [7, '#e8f0ff']].forEach(([length, color], i) =>
+          add([2, length, 0.5], [s * (2.4 + i * 2.4), 7 - length / 2, -0.2 - i * 0.05], color, { rotation: [0, 0, s * (0.1 + i * 0.12)], material: 'cloth' })
+        );
+        add([1.6, 7, 0.5], [s * 11.4, 4, -0.4], '#ffffff', { rotation: [0, 0, s * 0.65], material: 'cloth' });
+      }, [-0.25, 0, 0])
+    );
+    return { update: (time) => wings.forEach((wing, i) => (wing.rotation.y = (i ? 1 : -1) * (0.25 + 0.3 * Math.sin(time * 2.2)))) };
+  },
+  lanternpole(rig, f) {
+    // A bamboo pole over the shoulder with a paper lantern swinging at its end.
+    const pole = piece(rig.parts.body, [-2.4, backTop(f) + 0.6, -3], (add) => {
+      add([0.8, 20, 0.8], [0, 10, 0], '#a8c060');
+      for (const y of [5, 11, 17]) add([1, 0.5, 1], [0, y, 0], '#7a9a3a');
+      add([0.6, 0.6, 7], [0, 20, 3.4], '#a8c060');
+    }, [0.25, 0, 0.12]);
+    const lantern = piece(pole, [0, 20, 6.8], (add) => {
+      add([0.2, 3, 0.2], [0, -1.5, 0], '#3a2a1a');
+      add([1.6, 0.8, 1.6], [0, -3.2, 0], '#2a1a1a');
+      add([4.4, 5.6, 4.4], [0, -6.4, 0], '#ff6a4a', { material: 'glow' });
+      add([5, 3.6, 3.6], [0, -6.4, 0], '#ff8a5a', { material: 'glow' });
+      add([1.6, 0.8, 1.6], [0, -9.6, 0], '#2a1a1a');
+      add([0.6, 1.6, 0.6], [0, -10.8, 0], '#ffcf3a');
+    });
+    return {
+      update(time) {
+        lantern.rotation.x = Math.sin(time * 1.8) * 0.25;
+        lantern.rotation.z = Math.sin(time * 1.3 + 1) * 0.12;
+      },
+    };
+  },
+  koikite(rig, f) {
+    // A koi streamer on a pole: a cloth fish in segments flying out to the side, rippling in the wind.
+    const pole = piece(rig.parts.body, [2.4, backTop(f) + 0.6, -3.4], (add) => {
+      add([0.7, 28, 0.7], [0, 14, 0], '#8a5a2a');
+      add([1.8, 1.8, 1.8], [0, 28.4, 0], '#ffcf3a', { material: 'shiny' });
+    });
+    const colors = ['#ff5a3a', '#ff7a4a', '#ff9a5a', '#ffb06a'];
+    const LENGTH = 5;
+    let parent = pole;
+    let at = [0.4, 27, 0];
+    const segments = colors.map((color, i) => {
+      const size = 6.4 - i * 0.8;
+      const segment = piece(parent, at, (add) => {
+        add([LENGTH, size, size * 0.45], [LENGTH / 2, -size / 2, 0], color, { material: 'cloth' });
+        add([LENGTH, 1, size * 0.47], [LENGTH / 2, -size * 0.35, 0], i % 2 ? '#ffffff' : '#ffd23f', { material: 'cloth' }); // a stripe
+        if (i === 0) {
+          add([1, size + 0.4, size * 0.5], [0.4, -size / 2, 0], '#ffffff', { material: 'cloth' }); // the open mouth's ring
+          for (const s of [-1, 1]) {
+            add([1.6, 1.6, 0.4], [2, -size * 0.3, s * (size * 0.23 + 0.1)], '#ffffff', { material: 'cloth' });
+            add([0.8, 0.8, 0.4], [2.2, -size * 0.3, s * (size * 0.23 + 0.3)], '#1a1a1a');
+          }
+        }
+        if (i === colors.length - 1) {
+          for (const s of [-1, 1]) add([4, 1.4, 0.4], [LENGTH + 1.4, -size / 2 + s * 1.4, 0], color, { rotation: [0, 0, s * 0.5], material: 'cloth' });
+        }
+      });
+      parent = segment;
+      at = [LENGTH, 0, 0];
+      return segment;
+    });
+    return {
+      update(time) {
+        segments.forEach((segment, i) => {
+          segment.rotation.y = Math.sin(time * 3 - i * 0.9) * (0.12 + i * 0.05);
+          segment.rotation.z = (i ? -0.08 : -0.15) + Math.sin(time * 2.2 - i * 0.7) * 0.06;
+        });
+      },
+    };
+  },
+});
+
 /**
  * A cape that drapes like cloth: a collar with clasps at the neck, a panel lying along the back, then two hanging
  * panels that flare a little and sway in a wave (the lower one follows the upper a moment later). One flat slab
@@ -647,6 +865,19 @@ const AURA_SHAPES = {
     add([1, 0.12, 0.5], [0, 0, 0]);
     add([0.6, 0.12, 0.8], [0, 0, 0]);
   }),
+  bee: shape((add) => {
+    add([0.5, 0.45, 0.75], [0, 0, 0]);
+    add([0.4, 0.4, 0.3], [0, 0.05, 0.45]);
+    add([0.5, 0.08, 0.35], [-0.35, 0.3, -0.05]);
+    add([0.5, 0.08, 0.35], [0.35, 0.3, -0.05]);
+  }),
+  butterfly: shape((add) => {
+    add([0.12, 0.12, 0.6], [0, 0, 0]);
+    add([0.45, 0.06, 0.4], [-0.28, 0, 0.12]);
+    add([0.45, 0.06, 0.4], [0.28, 0, 0.12]);
+    add([0.32, 0.06, 0.3], [-0.22, 0, -0.22]);
+    add([0.32, 0.06, 0.3], [0.22, 0, -0.22]);
+  }),
 };
 const AURA_MATERIAL = new THREE.MeshBasicMaterial({ color: '#ffffff' });
 /**
@@ -667,6 +898,9 @@ const AURAS = {
   sparks: { motion: 'orbit', colors: ['#bfe8ff', '#ffffff', '#7fd8ff'], size: [0.5, 2.2, 0.5], speed: 2.6, twinkle: true, spin: 9 },
   confetti: { motion: 'fall', colors: ['#ff5a7a', '#ffd23f', '#5fb8ff', '#7ed957', '#c58aff', '#ff9a3a'], size: [1.4, 0.2, 0.9], spin: 6, speed: 8, wobble: 4 },
   rainbow: { motion: 'orbit', colors: ['#ff4a4a', '#ff9a3a', '#ffe14a', '#5fd85a', '#4ab8ff', '#9a6aff'], size: [1.2, 1.2, 1.2], speed: 0.9, ring: true, rainbow: true },
+  bees: { motion: 'orbit', shape: 'bee', colors: ['#ffd23f', '#ffb000', '#ffe14a'], size: [2.3, 2.3, 2.3], speed: 1.6, buzz: true },
+  goldleaf: { motion: 'fall', shape: 'leaf', colors: ['#ffd36b', '#ffcf3a', '#fff2a0', '#e8a820'], size: [1.8, 1.8, 1.8], spin: 2, speed: 6 },
+  butterflies: { motion: 'orbit', shape: 'butterfly', colors: ['#ff9ec7', '#7fd8ff', '#ffd23f', '#c58aff'], size: [3.4, 3.4, 3.4], speed: 0.55, flap: true },
 };
 
 function aura(rig, look) {
@@ -697,6 +931,7 @@ function aura(rig, look) {
           const angle = bit.angle + time * look.speed * (look.rainbow || i % 2 ? 1 : -0.8); // (the rainbow keeps its order)
           const radius = look.ring ? 22 + Math.sin(time + bit.phase * 6) * 2 : bit.radius;
           position.set(Math.cos(angle) * radius, 4 + bit.height * (look.ring ? 6 : 30) + Math.sin(time * 1.5 + bit.phase * 6) * 2, Math.sin(angle) * radius);
+          if (look.buzz) position.y += Math.sin(time * 9 + bit.phase * 30) * 1.5; // (bees zig-zag)
         } else {
           // Falling or rising through a column, over and over.
           const t = (time * look.speed / 40 + bit.phase) % 1;
@@ -706,10 +941,15 @@ function aura(rig, look) {
           k = Math.min(1, t * 6, (1 - t) * 6); // fade in and out at the ends
         }
         if (look.twinkle) k *= 0.35 + 0.65 * Math.max(0, Math.sin(time * 5 + bit.phase * 20));
-        if (look.face) euler.set(0, Math.atan2(position.x, position.z) + Math.sin(time * 2 + bit.phase * 6) * 0.3, 0); // upright, facing out
+        if (look.buzz || look.flap) {
+          // Flying along their circle, nose first.
+          const way = look.rainbow || i % 2 ? 1 : -1;
+          euler.set(0, Math.atan2(position.x, position.z) - (way * Math.PI) / 2, 0);
+        } else if (look.face) euler.set(0, Math.atan2(position.x, position.z) + Math.sin(time * 2 + bit.phase * 6) * 0.3, 0); // upright, facing out
         else euler.set(bit.tilt + time * (look.spin ?? 0), time * (look.spin ?? 0) * 0.7, 0);
         rotation.setFromEuler(euler);
         scale.set(look.size[0] * k * 1.7, look.size[1] * k * 1.7, look.size[2] * k * 1.7); // (bigger: they read at garden distance)
+        if (look.flap) scale.x *= 0.25 + 0.75 * Math.abs(Math.sin(time * 7 + bit.phase * 20)); // wings opening and closing
         mesh.setMatrixAt(i, matrix.compose(position, rotation, scale));
       });
       mesh.instanceMatrix.needsUpdate = true;

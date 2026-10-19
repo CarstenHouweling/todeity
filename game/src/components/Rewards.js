@@ -56,6 +56,22 @@ export const TRINKETS = [
   { id: 'ball', name: 'Tea Ball', icon: '⚪', source: 'milestone', how: 'Play 2 runs', unlock: (p) => p.runs >= 2, play: 'Hop into it to kick it' },
   { id: 'launcher', name: 'Teapot Cannon', icon: '💨', source: 'milestone', how: 'Defeat a boss', unlock: (p) => p.bossKills >= 1, play: 'Hop in: it fires you across the garden' },
   { id: 'stage', name: 'Little Stage', icon: '🎤', source: 'milestone', how: 'Earn 5 achievements', unlock: (p) => (p.achievements?.length ?? 0) >= 5, play: 'Stand on it and emote' },
+  // More to collect (v0.32): long-term milestones (only from progress that never goes down, or a placed trinket
+  // would vanish again), two more gifts and four more kettle brews.
+  { id: 'windmill', name: 'Tea Windmill', icon: '🌬️', source: 'milestone', how: 'Play 50 runs', unlock: (p) => p.runs >= 50 },
+  { id: 'totem', name: 'Bee Totem', icon: '🪵', source: 'milestone', how: 'Defeat 200 elite bees (over all your runs)', unlock: (p) => (p.eliteKills ?? 0) >= 200 },
+  { id: 'gong', name: 'Victory Gong', icon: '🥁', source: 'milestone', how: 'Banish Bee-zebub 5 times', unlock: (p) => (p.victories ?? 0) >= 5 },
+  { id: 'orrery', name: 'Star Orrery', icon: '🪐', source: 'milestone', how: 'Become Omnitode', unlock: (p) => p.maxTier >= 5 },
+  { id: 'torii', name: 'Endless Gate', icon: '⛩️', source: 'milestone', how: 'Reach wave 30', unlock: (p) => p.bestWave >= 30 },
+  { id: 'bell', name: 'Temple Bell', icon: '🔔', source: 'milestone', how: 'Earn 35 achievements', unlock: (p) => (p.achievements?.length ?? 0) >= 35 },
+  { id: 'pagoda', name: 'Tea Pagoda', icon: '🏯', source: 'milestone', how: 'Reach account level 20', unlock: (p) => accountLevel(p).level >= 20 },
+  { id: 'sundial', name: 'Sundial', icon: '🕰️', source: 'milestone', how: 'Pour the tea kettle 20 times', unlock: (p) => (p.kettles ?? 0) >= 20 },
+  { id: 'birdhouse', name: 'Birdhouse', icon: '🐦', source: 'gift', how: 'A daily gift (day 3 or 7)' },
+  { id: 'birdbath', name: 'Bird Bath', icon: '🕊️', source: 'gift', how: 'A daily gift (day 3 or 7)' },
+  { id: 'owl', name: 'Night Owl', icon: '🦉', source: 'kettle', how: 'Brewed by the tea kettle' },
+  { id: 'koi', name: 'Koi Bowl', icon: '🐟', source: 'kettle', how: 'Brewed by the tea kettle' },
+  { id: 'sprout', name: 'Tea Bush', icon: '🌱', source: 'kettle', how: 'Brewed by the tea kettle' },
+  { id: 'barrow', name: 'Leaf Barrow', icon: '🍂', source: 'kettle', how: 'Brewed by the tea kettle' },
 ];
 export const trinketById = (id) => TRINKETS.find((t) => t.id === id);
 const KETTLE_TRINKET_CHANCE = 0.3;
@@ -63,7 +79,7 @@ const KETTLE_TRINKET_CHANCE = 0.3;
 // `unlock: { champion }`, kept in `progress.wearables`). With all of them collected it gives any trinket still missing.
 export const MEDAL = { leaves: [60, 100], trinket: 0.5, wearable: 0.4, extra: 25, days: 7 };
 export const CHAMPION_WEARABLES = ['laurel', 'sash', 'confetti'];
-export const MAX_DECOR = 40;
+export const MAX_DECOR = 60; // every trinket, and then some (43 in v0.32)
 export const DECOR_RADIUS = 240; // how far from Tode trinkets may stand
 
 const has = (progress, achievement) => progress.achievements?.includes(achievement);
@@ -253,6 +269,10 @@ export const SETS = [
   { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', effect: 'beam' },
   { id: 'playground', name: 'Playground', icon: '🎪', parts: ['trampoline', 'ball', 'launcher', 'stage'], beauty: 90, color: '#ff9ec7', effect: 'confetti' },
   { id: 'champions', name: "Champion's Corner", icon: '🏅', parts: ['podium', 'fireworks', 'trophy'], beauty: 100, color: '#ffd36b', effect: 'confetti' },
+  { id: 'temple', name: 'Temple Grounds', icon: '⛩️', parts: ['torii', 'bell', 'pagoda', 'gong'], beauty: 140, color: '#ff8a6b', effect: 'mist' },
+  { id: 'stargazing', name: 'Stargazing', icon: '🔭', parts: ['orrery', 'owl', 'sundial'], beauty: 90, color: '#9fb8ff', effect: 'stars' },
+  { id: 'birdsong', name: 'Birdsong Corner', icon: '🐦', parts: ['birdhouse', 'birdbath', 'koi'], beauty: 70, color: '#bfe8ff', effect: 'feathers' },
+  { id: 'harvest', name: 'Harvest Fields', icon: '🌾', parts: ['windmill', 'barrow', 'sprout', 'totem'], beauty: 100, color: '#ffd36b', effect: 'leaves' },
 ];
 const BEAUTY = { milestone: 15, gift: 20, kettle: 12, champion: 30 };
 

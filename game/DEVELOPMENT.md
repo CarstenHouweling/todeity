@@ -375,8 +375,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
-  29): milestones unlock by themselves from the progress (`unlock`), gift, kettle and champion ones are stored in
-  `progress.trinkets`.
+  43): milestones unlock by themselves from the progress (`unlock`), gift, kettle and champion ones are stored in
+  `progress.trinkets`. A milestone must only use progress that never goes down (runs, kills, the best wave, the
+  kettle count; not the gift streak), or a placed trinket would vanish again. **v0.32 added 14** (Tea Windmill 50
+  runs, Bee Totem 200 elites, Victory Gong 5 victories, Star Orrery Omnitode, Endless Gate wave 30, Temple Bell 35
+  achievements, Tea Pagoda level 20, Sundial 20 kettles; Birdhouse and Bird Bath as gifts; Night Owl, Koi Bowl, Tea
+  Bush and Leaf Barrow from the kettle), four sets (Temple Grounds, Stargazing, Birdsong Corner, Harvest Fields; new
+  `SET_EFFECTS` mist, stars, feathers), their boops (`POKES`, with new `gong`, `tweet` and `hoot` sounds in Sound.js)
+  and night glows. `MAX_DECOR` went from 40 to 60 so every trinket fits.
   **The champion's medal** (v0.31.0, 🏅): whoever tops a day's Daily Brew board gets a medal the next day,
   claimable for `MEDAL.days` (7) days (`claimMedal` in Rewards.js, `kind: 'medal'`): 60–100 leaves, a 50% chance at
   a champion trinket (Champion's Podium, Firework Crate; with both owned, any gift or kettle trinket still missing)
@@ -461,7 +467,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   touches are merged into one mesh per material family (everything but the colour, which goes into vertex colours
   on a shared `vertexColors` twin), within the closest moving group (a swaying crown, a bending stem) or the
   trinket. What moves is found by running `userData.anim` at five moments, day and night, and comparing transforms,
-  visibility and material values. All 27 trinkets: about 220 meshes → 119, a full garden 424 draw calls → 306 (with
+  visibility and material values. All 27 trinkets (then): about 220 meshes → 119, a full garden 424 draw calls → 306 (with
   the shadow pass). A part that only moves on an event (the trampoline's pad after a bounce) isn't seen moving, so
   its builder lists it in `userData.moving`. Check a trinket still animates after changing it. **Since v0.29.1** the
   probing puts every part back as it was: until then the parts stayed at the last probe (13.1 s), and trinket height
@@ -513,9 +519,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   boops** (`MouseRight` in Input.js; `TitleGarden.down` ignores it while walking, so it doesn't turn the camera),
   and the walking camera starts at `WALK_VIEW` (410 away; it was 300, too close when joining).
 - **Wardrobe** (v0.29.0, `components/Wearables.js` for the items and rules, shared with the server;
-  `components/WearableModels.js` for the models): 57 wearables in five slots (15 hats, 9 face, 10 body, 10 back, 13
-  auras; 21 added in v0.29.1), one per slot. Four are free (Leaf Cap, Round Specs, Rosy Cheeks, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
-  the server can work out itself (`unlock`: an achievement, an account level or the best form), so nothing new is
+  `components/WearableModels.js` for the models): 72 wearables in five slots (18 hats, 12 face, 13 body, 13 back, 16
+  auras; 21 added in v0.29.1, 15 in v0.32), one per slot. Four are free (Leaf Cap, Round Specs, Rosy Cheeks, Cozy Scarf); the rest unlock like emotes and garden songs, from progress
+  the server can work out itself (`unlock`: an achievement, an account level, the best form, or since v0.32 how many trinkets are
+  owned, `{ trinkets }`, which ties the wardrobe to the garden), so nothing new is
   stored per item, except the champion's three from the Daily Brew medal (`unlock: { champion }`, in
   `progress.wearables`; see Coming back). The outfit lives with the player tag (`meta.profile.outfit`; `POST /api/save/:code/outfit`,
   `saveOutfit` in CloudSave.js, sent 1.5 s after the last click; the server keeps only unlocked items with
@@ -1129,7 +1136,7 @@ server proxies `/ws` and `/api`).
 | `components/Classes.js` | The frog classes: stats, starting kits, the chosen class and the class of the day. |
 | `components/DailyTwists.js` | The Daily Brew's trials and boons per day (no three.js: the server imports it). |
 | `components/Rewards.js` | Daily gift, kettle, trinket list and unlocks, decor cleaning, account level (shared with the server). |
-| `components/TrinketModels.js` | Procedural models of the 27 trinkets. |
+| `components/TrinketModels.js` | Procedural models of the 43 trinkets. |
 | `components/GardenAuras.js` | A garden frog's level aura (ring, leaves, fireflies, steam, halo, crown, pillar) and its landing puffs; `GardenFx.levelAura` builds it. |
 | `components/Wearables.js` | The wardrobe's slots and items, how each unlocks (`wearableUnlocked`, `wearableHint`) and `cleanOutfit` (no three.js: the server imports it). |
 | `components/WearableModels.js` | The wearables' voxel models and auras; `dressFrog(rig, outfit)` puts them on a frog's rig and covers the class's own gear. |
