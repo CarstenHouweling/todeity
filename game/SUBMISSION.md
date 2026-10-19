@@ -153,7 +153,7 @@ for the Wardrobe, `todeity-garden.gif` when inviting people to your garden.
   public rooms and Quick play, and **gardens**: decorate yours with 43 trinkets in 13 sets, pick one of 7 garden songs
   and day or night, visit other players' gardens, hop on each other's heads, play **Leaf Rush** (30 s, grab the most
   leaves), swim in the pond and skip stones, kick the Tea Ball, fire the Teapot Cannon, boop frogs and trinkets, use
-  26 emotes (Power Up shows your highest divine form with a sonic boom), and form a party that sets off on a co-op run
+  32 emotes (Power Up shows your highest divine form with a sonic boom), and form a party that sets off on a co-op run
   together.
 - **Juice:** slow-motion finishers, hit-stop, kill-streak callouts, a procedural orchestral soundtrack, synthesized
   voices for spirits and bosses.

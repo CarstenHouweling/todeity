@@ -12,6 +12,7 @@ export const EMOTES = [
   { id: 'wave', icon: '👋', name: 'Wave', move: 'victory' },
   { id: 'sip', icon: '🍵', name: 'Sip tea', move: 'sip' },
   { id: 'hops', icon: '🐸', name: 'Happy hops', move: 'hop', hops: 3 },
+  { id: 'read', icon: '📖', name: 'Read a Book', move: 'read', loop: true, fx: 'read' },
   { id: 'heart', icon: '❤️', name: 'Love', move: 'love', time: 2.8, fx: 'love', unlock: 'duo' },
   { id: 'laugh', icon: '😂', name: 'Laugh', move: 'laugh', time: 3.4, bubble: '😂', fx: 'laugh', unlock: 'combo50' },
   { id: 'spin', icon: '🌀', name: 'Spin', spin: 2, unlock: 'skills3' },
@@ -36,6 +37,12 @@ export const EMOTES = [
   { id: 'tornado', icon: '🌪️', name: 'Leaf Tornado', spin: 4, time: 2.4, fx: 'tornado', unlock: 'combo150' },
   { id: 'thunder', icon: '🌩️', name: 'Thunder Clap', move: 'slam', time: 2.2, fx: 'thunder', unlock: 'skills6' },
   { id: 'cackle', icon: '😈', name: 'Wicked Laugh', move: 'cackle', time: 3, fx: 'cackle', unlock: 'beezebub' },
+  // Loops (v0.34): they go on until you move.
+  { id: 'fishing', icon: '🎣', name: 'Fishing', move: 'fish', loop: true, fx: 'fishing', unlock: 'daily' },
+  { id: 'serenade', icon: '🪕', name: 'Serenade', move: 'strum', loop: true, fx: 'serenade', unlock: 'openhouse' },
+  { id: 'pushups', icon: '🏋️', name: 'Push-ups', move: 'pushup', loop: true, fx: 'pushups', unlock: 'elites' },
+  { id: 'hula', icon: '⭕', name: 'Hula Hoop', move: 'hula', loop: true, fx: 'hula', unlock: 'coop4' },
+  { id: 'stargaze', icon: '🔭', name: 'Stargazing', move: 'stargaze', loop: true, fx: 'stargaze', unlock: 'seraph' },
   // Played by the garden: sitting on the bench with a cup of tea, until you hop off.
   { id: 'rest', icon: '🪑', name: 'Rest', move: 'sip', loop: true, fx: 'rest', hidden: true },
 ];

@@ -3,6 +3,18 @@
 
 export const CHANGELOG = [
   {
+    version: '0.34.0',
+    date: '2026-10-19',
+    title: 'Emotes that keep going',
+    changes: [
+      '🔁 6 new looping emotes (32 in all) that go on until you move, like Dance and Nap',
+      '📖 Read a Book (free): an open book in your hands, a page turning every few seconds',
+      '🎣 Fishing: cast a line and wait for a bite… a fish, a boot or a frog? 🪕 Serenade: strum a little lute and play a calm tune for the garden',
+      '🏋️ Push-ups with a counter, ⭕ a striped Hula Hoop, and 🔭 Stargazing on your back while shooting stars fly over',
+      '🏆 They unlock with Daily Brewer, Open House, Elite Hunter, Full Pond and Fallen Halo',
+    ],
+  },
+  {
     version: '0.33.0',
     date: '2026-10-19',
     title: 'More emotes',

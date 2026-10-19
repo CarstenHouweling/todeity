@@ -504,6 +504,15 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   `clap`, `croak`, `meditate`, `juggle`, `cackle` and a `croak` sound. Juggle's balls are `fx.add` meshes that
   follow the frog; the rainbow is short-lived glowing particles laid along an arc across my view (`awayFromCamera`).
   Keep additive layers thin (the Thunder Clap's first version washed the lawn out white, like the Power Up's).
+  **v0.34 added 6 loops** (32 in the panel; loops last until the frog moves, like Dance and Nap): Read a Book
+  (free), Fishing, Serenade, Push-ups, Hula Hoop and Stargazing (moves `read`, `fish`, `strum`, `pushup`, `hula`,
+  `stargaze`). Their props are `emoteProp(state, build)` in GardenHub.js: a group built in the frog's own frame (+X
+  where he faces, +Z up, sized for a frog 34 tall), following him and scaled to `topOf`, with an endless `fx.add`
+  life that the script's `end` closes (`fx.end`); `build` may return { update(age), … } for moving parts (the page
+  turning, the bobber, the hoop). Timed moments (a bite every `FISH_BITE`, a page every `PAGE_TURN`) are worked out
+  from `state.t`, so every screen shows them alike. Serenade plays `serenade(step)` from Sound.js like Dance's
+  `groove`. To look at a prop up close, render `game.scene` with a camera next to `game.hub.player` into a render
+  target (the garden camera is too far to judge them).
 - **Garden games** (v0.28, `components/GardenGames.js`, wired into `GardenHub`): **the pond** (`GardenPond`,
   `POND` in Environment.js, `inPond`): a frog on the lawn's level inside the water swims (`SWIM`: 55% speed, sunk
   in, paddling, ripples). Since v0.29.1 the paddle is calmer (`SWIM.paddle`: the run pose at 0.28 ± 0.17 and 5.5 rad/s,

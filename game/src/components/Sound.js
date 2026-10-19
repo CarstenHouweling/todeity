@@ -367,6 +367,20 @@ export function groove(step) {
   if (GROOVE_HOOK[i]) tone({ type: 'square', frequency: GROOVE_HOOK[i], duration: 0.12, volume: 0.025 });
 }
 
+// The Serenade emote's tune: a lazy pentatonic melody on a plucked lute over a soft root (16 steps of 0.3 s).
+const SERENADE_TUNE = [784, 0, 659, 587, 523, 0, 587, 659, 784, 880, 784, 0, 659, 587, 659, 0];
+const SERENADE_ROOT = [262, 0, 0, 0, 196, 0, 0, 0, 220, 0, 0, 0, 196, 0, 0, 0];
+export function serenade(step) {
+  if (!context || !settings.sfx || context.state !== 'running') return;
+  duckMusicFor(0.6); // the lute is the music while someone plays
+  const i = step % 16;
+  if (SERENADE_TUNE[i]) {
+    tone({ type: 'triangle', frequency: SERENADE_TUNE[i], duration: 0.45, volume: 0.09, attack: 0.004 });
+    tone({ type: 'sine', frequency: SERENADE_TUNE[i] * 2, duration: 0.2, volume: 0.02, attack: 0.004 });
+  }
+  if (SERENADE_ROOT[i]) tone({ type: 'triangle', frequency: SERENADE_ROOT[i], duration: 1, volume: 0.08, attack: 0.01 });
+}
+
 // Minimum seconds between two plays of the same sound, so big fights don't get too loud.
 const THROTTLE = { hit: 0.03, pop: 0.04, sting: 0.05, spit: 0.04, zap: 0.04, burn: 0.08, thunder: 0.3, boom: 0.1 };
 

@@ -1014,6 +1014,120 @@ export function buildFrog(id, { ownMaterials = false } = {}) {
     },
   });
 
+  // Looping garden emotes (v0.34): they play until the frog moves. The props (a book, a rod, a lute, a hoop) are
+  // GardenHub's (EMOTE_FX), placed next to the frog.
+  Object.assign(MOVES, {
+    read: {
+      length: 6,
+      pose: (t) => {
+        // Sitting up with a book in both hands, head bent over it, eyes following the lines.
+        frame.position.y += 3;
+        body.rotation.x += -0.65;
+        head.rotation.x += 0.95 + Math.sin(time * 0.7) * 0.04;
+        head.rotation.y += Math.sin(t * Math.PI * 2) * 0.12;
+        handSign(0.5);
+        moveArms(0.35);
+        for (const eye of eyes) eye.scale.y *= 0.6 - bump(t, 0.5, 0.53) * 0.5;
+      },
+    },
+    fish: {
+      length: 4,
+      pose: (t) => {
+        // Sitting patiently, both hands out on the rod, nodding off a little.
+        const nod = bump(t, 0.55, 0.85);
+        frame.position.y += 2;
+        body.rotation.x += -0.45;
+        head.rotation.x += 0.45 + nod * 0.25;
+        moveArms(0.85, 0.05);
+        for (const { side, forearm } of arms) forearm.rotation.z += -side * 0.25;
+        for (const eye of eyes) eye.scale.y *= 1 - nod * 0.7;
+        throat.scale.setScalar(1 + (Math.sin(t * Math.PI * 2) * 0.5 + 0.5) * 0.25);
+      },
+    },
+    strum: {
+      length: 1,
+      pose: (t) => {
+        // Sitting up with a lute: one hand strumming, the other up on the neck, swaying to the tune.
+        frame.position.y += 3;
+        body.rotation.x += -0.6;
+        head.rotation.x += 0.45;
+        const sway = Math.sin(time * 2.2);
+        body.rotation.z += sway * 0.08;
+        head.rotation.z += sway * 0.16;
+        for (const { side, arm, forearm, hand } of arms) {
+          if (side > 0) {
+            arm.rotation.x += -0.75 + Math.sin(t * Math.PI * 2) * 0.22;
+            arm.rotation.z += -0.35;
+            forearm.rotation.z += 0.6;
+            hand.rotation.x += Math.sin(t * Math.PI * 2) * 0.4;
+          } else {
+            arm.rotation.x += -1.25;
+            arm.rotation.z += 0.45;
+            forearm.rotation.x += -0.4;
+          }
+        }
+        for (const eye of eyes) eye.scale.y *= 0.45;
+        jaw.rotation.x += 0.1 + Math.abs(Math.sin(time * 4)) * 0.12; // humming along
+      },
+    },
+    pushup: {
+      length: 1.2,
+      pose: (t) => {
+        // Push-ups: down on the arms with the body straight, and up again.
+        const down = Math.sin(t * Math.PI) ** 2;
+        body.rotation.x += 0.12;
+        frame.position.y += 1 - down * 4;
+        frame.rotation.x += down * 0.08;
+        head.rotation.x += -0.1 - down * 0.15;
+        for (const { side, arm, forearm } of arms) {
+          arm.rotation.x += 0.2 + down * 0.5;
+          arm.rotation.z += side * down * 0.5;
+          forearm.rotation.x += -down * 0.7;
+        }
+        stretchLegs(0.75);
+        jaw.rotation.x += bump(t, 0.45, 0.75) * 0.25; // puffing
+      },
+    },
+    hula: {
+      length: 0.8,
+      pose: (t) => {
+        // Up on the hind legs keeping a hoop going: hips circling, arms up and out.
+        const a = t * Math.PI * 2;
+        frame.position.y += 4;
+        frame.position.x += Math.cos(a) * 1.4;
+        frame.position.z += Math.sin(a) * 1.4;
+        body.rotation.x += -0.8;
+        head.rotation.x += 0.45;
+        body.rotation.z += Math.cos(a) * 0.14;
+        head.rotation.z += -Math.cos(a) * 0.14;
+        moveArms(0, 0.85 + Math.sin(time * 3) * 0.08);
+        stretchLegs(0.2, 0.25);
+        jaw.rotation.x += 0.2;
+      },
+    },
+    stargaze: {
+      length: 5,
+      centered: true,
+      pose: (t) => {
+        // Lying on his back, hands behind his head, one leg over the other, gazing up.
+        const breath = Math.sin(t * Math.PI * 2);
+        frame.rotation.x += -1.3;
+        frame.position.y += 8;
+        frame.position.z += 7;
+        head.rotation.x += -0.2;
+        head.rotation.y += Math.sin(time * 0.4) * 0.2;
+        body.scale.y *= 1 + breath * 0.04;
+        moveArms(-0.3, 1.15);
+        for (const { side, thigh, shin } of hindLegs) {
+          thigh.rotation.x += side > 0 ? 1.1 : 0.7;
+          thigh.rotation.z += side * 0.15;
+          shin.rotation.x += side > 0 ? -0.5 + Math.sin(time * 2) * 0.15 : -0.2;
+        }
+        for (const eye of eyes) eye.scale.y *= 1 - bump(t, 0.4, 0.44) * 0.9;
+      },
+    },
+  });
+
   // More garden emotes (v0.33).
   Object.assign(MOVES, {
     cheer: {

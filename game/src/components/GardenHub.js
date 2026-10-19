@@ -4,7 +4,7 @@ import { Ascension } from './Ascension.js';
 import { emoteById } from './Emotes.js';
 import { cleanOutfit, shownOutfit } from './Wearables.js';
 import { GardenFx } from './GardenFx.js';
-import { duckMusicFor, groove } from './Sound.js';
+import { duckMusicFor, groove, serenade } from './Sound.js';
 import { GardenPond, LeafRush } from './GardenGames.js';
 
 /**
@@ -1407,6 +1407,203 @@ const EMOTE_FX = {
     },
   },
 
+  // Loops with a prop (v0.34): the prop follows the frog until he moves (`emoteProp`).
+  read: {
+    start(state) {
+      state.parts.book = this.emoteProp(state, (g) => {
+        // An open book in front of him, leaning back toward his face; a page turns every few seconds.
+        const book = new THREE.Group();
+        book.position.set(15, 0, 19);
+        book.rotation.y = 0.65;
+        g.add(book);
+        for (const side of [-1, 1]) {
+          const half = new THREE.Group();
+          half.rotation.z = side * 0.35;
+          block(half, [0.8, 7, 9.6], [0.3, side * 3.5, 0], '#b8322a');
+          block(half, [0.6, 6.6, 9], [-0.4, side * 3.3, 0], '#f8f4ec');
+          book.add(half);
+        }
+        const page = new THREE.Group();
+        block(page, [0.3, 6.4, 8.8], [-0.8, 3.2, 0], '#ffffff');
+        book.add(page);
+        return {
+          update(age) {
+            const k = (age % PAGE_TURN) / PAGE_TURN;
+            const flip = k > 0.85 ? (k - 0.85) / 0.15 : 0;
+            page.rotation.z = 0.35 + flip * (Math.PI - 0.7);
+            page.position.x = -Math.sin(flip * Math.PI) * 0.5;
+          },
+        };
+      });
+    },
+    update(state, delta) {
+      const turn = PAGE_TURN * 0.85;
+      if (state.t > turn && Math.floor((state.t - turn) / PAGE_TURN) !== Math.floor((state.t - delta - turn) / PAGE_TURN)) this.sound(state.actor, 'graze');
+      if (state.t > 2 && every(state, 'thought', 5.5, delta)) {
+        const word = ['Hmm…', 'Oh!', '📖', 'Ha!', '🤔'][Math.floor(Math.random() * 5)];
+        this.fx.float(word, this.headOf(state.actor), { size: 5, rise: 18, drift: 8, life: 1.6, color: '#fff3c4' });
+      }
+    },
+    end(state) {
+      this.fx.end(state.parts.book);
+    },
+  },
+
+  fishing: {
+    start(state) {
+      // A rod over the lawn and a bobber that bobs… until something bites (every FISH_BITE seconds).
+      state.parts.rig = this.emoteProp(state, (g) => {
+        const rod = new THREE.Group();
+        rod.position.set(4, -2, 11);
+        g.add(rod);
+        const pitch = Math.atan2(19, 28);
+        const length = Math.hypot(19, 28);
+        block(rod, [length, 0.8, 0.8], [Math.cos(pitch) * length / 2, 0, Math.sin(pitch) * length / 2], '#8a5a2a', [0, -pitch, 0]);
+        block(rod, [2.4, 2.4, 2.4], [2, 0, 1.6], '#3a3a3a');
+        const tip = new THREE.Vector3(Math.cos(pitch) * length, 0, Math.sin(pitch) * length);
+        const line = block(g, [0.25, 0.25, 1], [0, 0, 0], '#f4f1ea');
+        const bobber = new THREE.Group();
+        block(bobber, [2.6, 2.6, 1.6], [0, 0, 0.8], '#ffffff');
+        block(bobber, [2.6, 2.6, 1.6], [0, 0, 2.4], '#e0523b');
+        block(bobber, [0.6, 0.6, 1.6], [0, 0, 4], '#e0523b');
+        g.add(bobber);
+        const at = new THREE.Vector3();
+        return {
+          bobber,
+          update(age) {
+            const k = age % FISH_BITE;
+            const bite = k > FISH_BITE - 1.8 && k < FISH_BITE - 0.9;
+            const jerk = k > FISH_BITE - 0.9 && k < FISH_BITE - 0.4 ? Math.sin(((k - FISH_BITE + 0.9) / 0.5) * Math.PI) : 0;
+            rod.rotation.y = -jerk * 0.3 + (bite ? Math.sin(age * 40) * 0.02 : 0);
+            at.copy(tip).applyEuler(rod.rotation).add(rod.position);
+            const z = bite ? -1.6 + Math.sin(age * 30) * 0.6 : Math.sin(age * 2.2) * 0.4;
+            bobber.position.set(at.x, at.y, z);
+            bobber.visible = jerk === 0;
+            line.position.set(at.x, at.y, (at.z + z + 4) / 2);
+            line.scale.z = Math.max(0.1, at.z - z - 4);
+          },
+        };
+      });
+    },
+    update(state, delta) {
+      const bobber = state.parts.rig?.prop.bobber;
+      const where = () => (bobber ? bobber.getWorldPosition(new THREE.Vector3()).setZ(state.actor.z) : state.actor.position.clone().setZ(state.actor.z));
+      if (every(state, 'ripple', 2.2, delta)) this.fx.ring(where().setZ(state.actor.z + 0.5), { radius: 9, color: '#bfefff', life: 1.2, opacity: 0.45 });
+      const k = state.t % FISH_BITE;
+      const cycle = Math.floor(state.t / FISH_BITE);
+      if (k > FISH_BITE - 1.8 && state.parts.bit !== cycle) {
+        state.parts.bit = cycle;
+        this.fx.float('!', this.headOf(state.actor), { size: 8, rise: 10, life: 0.8, color: '#ff5a3a' });
+        this.sound(state.actor, 'tick');
+      }
+      if (k > FISH_BITE - 0.9 && state.parts.caught !== cycle) {
+        state.parts.caught = cycle;
+        const at = where();
+        this.particles?.burst(at, { count: 18, colors: ['#bfefff', '#ffffff', '#7fd8ff'], speed: 50, up: 110, size: 1.6, height: 2, life: 0.8 });
+        const catches = ['🐟', '🐠', '🐡', '🐟', '👢', '🐸'];
+        this.fx.float(catches[Math.floor(Math.random() * catches.length)], at.clone().setZ(at.z + 12), { size: 9, rise: 26, life: 1.8 });
+        this.sound(state.actor, 'splash');
+      }
+    },
+    end(state) {
+      this.fx.end(state.parts.rig);
+    },
+  },
+
+  serenade: {
+    start(state) {
+      // A little lute held across his chest.
+      state.parts.lute = this.emoteProp(state, (g) => {
+        const lute = new THREE.Group();
+        lute.position.set(12, 1, 15);
+        lute.rotation.set(0.9, -0.25, 0);
+        g.add(lute);
+        const body = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 1), material('#c98a4a'));
+        body.scale.set(0.45, 1, 1.15);
+        body.castShadow = true;
+        lute.add(body);
+        block(lute, [0.3, 3.4, 3.4], [1.9, 0, 0], '#e0b070');
+        block(lute, [0.4, 1.4, 1.4], [2.05, 0, 0.6], '#3a2410');
+        block(lute, [0.8, 1.4, 11], [1.2, 0, 9], '#6a4020');
+        block(lute, [1.2, 2, 2.4], [1, 0, 15.4], '#6a4020', [0.5, 0, 0]);
+        for (const y of [-0.4, 0, 0.4]) block(lute, [0.1, 0.1, 15], [1.75, y, 6], '#f4f1ea');
+        return {};
+      });
+      this.sound(state.actor, 'chime');
+    },
+    update(state, delta) {
+      // The tune: heard from my own frog, and from players close by.
+      if (every(state, 'beat', 0.3, delta) && (state.actor.own || this.distanceTo(state.actor) < HEAR)) serenade((state.parts.step = (state.parts.step ?? -1) + 1));
+      if (every(state, 'note', 0.9, delta)) {
+        const at = this.headOf(state.actor).add(new THREE.Vector3((Math.random() - 0.5) * 18, (Math.random() - 0.5) * 18, -4));
+        this.fx.float(Math.random() < 0.5 ? '♪' : '♫', at, { size: 6, rise: 24, drift: 12, life: 1.8, color: ['#ff9ec7', '#ffe066', '#bfe8ff'][Math.floor(Math.random() * 3)] });
+      }
+    },
+    end(state) {
+      this.fx.end(state.parts.lute);
+    },
+  },
+
+  pushups: {
+    update(state, delta) {
+      // Count them: one at the bottom of every push-up (the move takes 1.2 s), sweat now and then.
+      const reps = Math.floor((state.t + 0.6) / 1.2);
+      if (reps === (state.parts.reps ?? 0)) return;
+      state.parts.reps = reps;
+      const head = this.headOf(state.actor);
+      this.fx.float(reps % 10 === 0 ? `${reps}! 💪` : String(reps), head, { size: reps % 10 === 0 ? 7 : 5, rise: 16, drift: 6, life: 1, color: '#ffffff' });
+      this.sound(state.actor, reps % 10 === 0 ? 'pick' : 'tick');
+      if (reps % 4 === 0) this.particles?.burst(head.setZ(head.z - 6), { count: 5, colors: ['#bfe8ff', '#7fd8ff'], speed: 40, up: 60, size: 1.4, height: 0, life: 0.7 });
+    },
+  },
+
+  hula: {
+    start(state) {
+      // A striped hoop circling round his middle, in step with his hips (the move takes 0.8 s a turn).
+      state.parts.hoop = this.emoteProp(state, (g) => {
+        const hoop = new THREE.Group();
+        g.add(hoop);
+        ['#ff5a7a', '#ffd23f', '#5fb8ff', '#7ed957'].forEach((color, i) => {
+          const arc = new THREE.Mesh(new THREE.TorusGeometry(13, 1, 6, 12, Math.PI / 2), material(color));
+          arc.rotation.z = (i * Math.PI) / 2;
+          arc.castShadow = true;
+          hoop.add(arc);
+        });
+        return {
+          update(age) {
+            const a = (age / 0.8) * Math.PI * 2;
+            hoop.position.set(Math.cos(a) * 3.5, Math.sin(a) * 3.5, 15 + Math.sin(a * 2) * 0.6);
+            hoop.rotation.set(Math.sin(a) * 0.16, -Math.cos(a) * 0.16, a);
+          },
+        };
+      });
+      this.sound(state.actor, 'boing');
+    },
+    update(state, delta) {
+      if (state.t > 3 && every(state, 'whee', 6, delta)) this.fx.float(['Wheee!', '⭕', 'Look!'][Math.floor(Math.random() * 3)], this.headOf(state.actor), { size: 5, rise: 18, drift: 8, life: 1.4, color: '#ffe066' });
+    },
+    end(state) {
+      this.fx.end(state.parts.hoop);
+    },
+  },
+
+  stargaze: {
+    update(state, delta) {
+      // Stars twinkle into view above him, and now and then one shoots past.
+      const at = state.actor.position;
+      if (every(state, 'twinkle', 0.2, delta)) {
+        const star = around(at, 110, state.actor.z + 70 + Math.random() * 50);
+        this.particles?.burst(star, { count: 1, colors: ['#ffffff', '#fff2a0', '#cfe0ff'], speed: 1, up: 0, gravity: 0, size: 1.8, height: 0, glow: true, life: 1.4 });
+      }
+      if (state.t > 1.5 && every(state, 'shoot', 4.5, delta)) {
+        const to = around(at, 160, 0);
+        if (Math.hypot(to.x - at.x, to.y - at.y) < 30) to.x += 40;
+        this.fx.shootingStar(to, { color: '#fff2a0', onLand: () => this.sound(state.actor, 'graze') });
+      }
+      if (state.t > 3 && every(state, 'wow', 9, delta)) this.fx.float(['✨', 'Wow…', '🌠'][Math.floor(Math.random() * 3)], this.headOf(state.actor), { size: 5, rise: 18, drift: 6, life: 1.8, color: '#e8f0ff' });
+    },
+  },
+
   rest: {
     update(state, delta) {
       // Steam from the cup.
@@ -1416,6 +1613,41 @@ const EMOTE_FX = {
       }
     },
   },
+};
+
+const PAGE_TURN = 4; // Read a Book: seconds between page turns
+const FISH_BITE = 9; // Fishing: seconds between bites
+
+/** A material for an emote prop (GardenFx disposes it with the prop). */
+const material = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, flatShading: true });
+/** A box for an emote prop: `size` and `at` in the prop's frame (+X forward, +Y to his left, +Z up). */
+function block(parent, size, at, color, rotation = null) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material(color));
+  mesh.position.set(...at);
+  if (rotation) mesh.rotation.set(...rotation);
+  mesh.castShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+/**
+ * A prop for a looping emote (a book, a fishing rod, a lute, a hoop): `build(group)` fills a group in the frog's own
+ * frame (+X where he faces, +Z up, sized for a frog about 34 tall) and may return { update(age), …parts } (kept as
+ * the entry's `prop`). It follows him, scaled to his size, until `fx.end` (the emote's `end`).
+ */
+GardenHub.prototype.emoteProp = function emoteProp(state, build) {
+  const { actor } = state;
+  const group = new THREE.Group();
+  const prop = build(group) ?? {};
+  const top = (actor.top ??= this.topOf(actor));
+  const entry = this.fx.add(group, Infinity, (k, age) => {
+    group.position.set(actor.position.x, actor.position.y, actor.z);
+    group.rotation.z = facingAngle(actor);
+    group.scale.setScalar(top / 34);
+    prop.update?.(age);
+  });
+  entry.prop = prop;
+  return entry;
 };
 
 /** The Power Up ends: back to plain Tode in a puff of sparkles. */
