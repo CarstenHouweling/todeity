@@ -3,6 +3,12 @@
 
 export const CHANGELOG = [
   {
+    version: '0.36.4',
+    date: '2026-10-20',
+    title: 'The music plays on',
+    changes: ['🎵 The battle music keeps going while you pick a skill, a brew or your ultimate, instead of dropping to the calm garden tune'],
+  },
+  {
     version: '0.36.3',
     date: '2026-10-20',
     title: 'A steadier ultimate',

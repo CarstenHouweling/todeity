@@ -5054,8 +5054,14 @@ function stormStrike() {
 }
 
 // --- Music ---
+/**
+ * The fight's music plays on through the picks in a run (skills, brews, the ultimate, the chest): until v0.36.4 they
+ * switched to the calm garden theme, which broke the late waves' epic tracks every level-up. Pause stays calm.
+ */
+const FIGHT_MUSIC_PHASES = new Set(['ascending', 'bossIntro', 'travel', 'clash', 'skill', 'choosing', 'ultimate', 'chest']);
+
 function updateMusic() {
-  if (!PLAYING.has(phase) && !['ascending', 'bossIntro', 'travel', 'clash'].includes(phase)) {
+  if (!PLAYING.has(phase) && !FIGHT_MUSIC_PHASES.has(phase)) {
     music.play('garden', 0);
     return;
   }

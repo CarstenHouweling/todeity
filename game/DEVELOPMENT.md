@@ -230,6 +230,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   after a win). Measured: the peel adds 1–3% white pixels to the cut-scene's burst (the pillar of light is most of
   it). To look at a form up close, move `game.camera` (a child of the player group) next to him, `renderer.render`
   and `toDataURL`.
+- **Music in a run** (`updateMusic` in main.js): the fight's song (battle by wave and form, boss, divine) plays on
+  through the picks (`FIGHT_MUSIC_PHASES`: skills, brews, the ultimate, the chest, and the cut-scenes); only pause,
+  the title and the menus outside a run play the calm garden theme. Until v0.36.4 every pick dropped to it, which
+  cut the late waves' epic tracks at each level-up.
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked with the class chip above Start run (`hud.showClasses`,
