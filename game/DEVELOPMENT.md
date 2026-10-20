@@ -346,8 +346,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Starfall or Legion aims at the bees I see (only their screen deals damage); `ctx.cancelBullets` clears bullets
   (a teammate's doesn't). The pick (`showUltimatePick`, `hud.showUltimates({ choices, locked, fresh, daily })`) shows
   every unlocked one, keys 1–9, the locked ones greyed with their level, and "New" until one is chosen
-  (`meta.ultimatesUsed`); the title and game-over screens toast newly unlocked ones once (`noticeUltimates`,
-  `meta.ultimatesTold`). The Daily Brew offers only `STARTING_ULTIMATES` (its random-ultimate boon too), so it stays
+  (`meta.ultimatesUsed`). (v0.36.0 also toasted newly unlocked ones on the title screen; the owner found the
+  big toast ugly on PC and phones, and v0.36.1 took it out: the pick's New tags tell it.) The Daily Brew offers only `STARTING_ULTIMATES` (its random-ultimate boon too), so it stays
   the same run for everyone. The server doesn't check ultimates.
   **Since v0.30.2 the ultimate waits out menus and cut-scenes:** `tryUltimate` marks the effect `waitsForPlay`, and
   `effects.update(delta, { hold, hide })` skips it during `ULTIMATE_HOLD_PHASES` (the brew/skill/ultimate picks, the

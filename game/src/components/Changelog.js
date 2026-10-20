@@ -3,6 +3,12 @@
 
 export const CHANGELOG = [
   {
+    version: '0.36.1',
+    date: '2026-10-20',
+    title: 'A quieter title screen',
+    changes: ['🧹 No more big "new ultimates unlocked" note on the title screen: the new ones are tagged New in the ultimate pick'],
+  },
+  {
     version: '0.36.0',
     date: '2026-10-20',
     title: 'Ultimates to unlock',

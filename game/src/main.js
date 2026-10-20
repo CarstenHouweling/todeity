@@ -6289,22 +6289,6 @@ function showUltimatePick() {
   hud.showUltimates({ choices, locked, fresh, daily: isDaily() });
 }
 
-let ultimateNoticeIn = 0;
-/** On the title and game-over screens: a toast when the account level has unlocked new ultimates. */
-function noticeUltimates(delta) {
-  if ((ultimateNoticeIn -= delta) > 0) return;
-  ultimateNoticeIn = 1;
-  const level = accountLevelNow();
-  const told = meta.ultimatesTold ?? [];
-  const fresh = Object.values(ULTIMATES).filter((ultimate) => ultimate.unlock && ultimateUnlocked(ultimate, level) && !told.includes(ultimate.id));
-  if (!fresh.length) return;
-  meta.ultimatesTold = [...told, ...fresh.map((ultimate) => ultimate.id)];
-  saveMeta();
-  const names = fresh.map((ultimate) => `${ultimate.icon} <b>${ultimate.name}</b>`).join(', ');
-  hud.toast(`✨ New ultimate${fresh.length > 1 ? 's' : ''} unlocked: ${names}<br><small>Pick it after the first boss</small>`, 'ultimate-toast', 6);
-  play('legendary');
-}
-
 function chooseUltimate(index) {
   if (phase !== 'ultimate') return;
   const ultimate = ultimateChoices()[index];
@@ -8797,7 +8781,6 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   player.setOutfit(shownOutfit(outfit, { run: phase !== 'title' && phase !== 'loading' }));
   ascension.hat = Boolean(outfit.head);
   ascension.glow.lite = quality.features.lite; // (one rim layer from the "lite" quality step on)
-  if (phase === 'title' || phase === 'gameover') noticeUltimates(realDelta);
   if (render) {
     followShadows();
     drawProjectiles();
