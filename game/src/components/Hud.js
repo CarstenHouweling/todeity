@@ -1792,13 +1792,32 @@ export class Hud {
     this.typeDialogue();
   }
 
-  showUltimates() {
-    const cards = Object.values(ULTIMATES)
-      .map((ultimate, index) => this.card({ action: 'ultimate', index, brew: ultimate, text: ultimate.text }))
+  /**
+   * The ultimate pick: every unlocked one (`choices`, `fresh` ones tagged New), then the locked ones greyed out with
+   * the account level they need (none in the Daily Brew, which offers the first three to everyone).
+   */
+  showUltimates({ choices, locked = [], fresh = [], daily = false }) {
+    const cards = choices
+      .map((ultimate, index) =>
+        this.card({ action: 'ultimate', index, brew: ultimate, text: ultimate.text, hint: fresh.includes(ultimate.id) ? '✨ New: unlocked by your level' : '' })
+      )
       .join('');
+    const sealed = locked
+      .map(
+        (ultimate) => `
+      <div class="card kind-ultimate locked" aria-disabled="true">
+        <span class="card-blend">🔒 Level ${ultimate.unlock.level}</span>
+        <span class="card-icon">${ultimate.icon}</span>
+        <span class="card-name">${ultimate.name}</span>
+        <span class="card-description">${ultimate.text}</span>
+        <span class="card-hint">Reach account level ${ultimate.unlock.level} to unlock</span>
+      </div>`
+      )
+      .join('');
+    const note = daily ? '<p class="sub">The Daily Brew: the same three for everyone</p>' : '';
     this.showMenu(
-      'powerups ultimates',
-      `<h2>Awaken your ultimate</h2>${this.dialogue(kettleDialogue('ultimate'))}<p class="sub">Charged by battle · unleash it with <b>E</b></p><div class="cards">${cards}</div>`
+      `powerups ultimates${choices.length + locked.length > 3 ? ' many' : ''}`,
+      `<h2>Awaken your ultimate</h2>${this.dialogue(kettleDialogue('ultimate'))}<p class="sub">Charged by battle · unleash it with <b>E</b></p>${note}<div class="cards">${cards}${sealed}</div>`
     );
     this.typeDialogue();
   }

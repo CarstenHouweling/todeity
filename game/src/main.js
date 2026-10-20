@@ -20,7 +20,7 @@ import { babble, hush, meter, muffleMusic, play, setMusicScene, setSound, soundS
 import { music } from './components/Music.js';
 import { PostFX } from './components/PostFX.js';
 import { Effects, markEffect } from './components/Effects.js';
-import { additive, disposeTree, startUltimate, ULTIMATES } from './components/Ultimates.js';
+import { additive, disposeTree, startUltimate, STARTING_ULTIMATES, ULTIMATES, ultimateUnlocked } from './components/Ultimates.js';
 import { Ascension, STAGE_COLORS, TIERS } from './components/Ascension.js';
 import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { boss as bossMemory, buy, harvestBonus, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
@@ -582,6 +582,12 @@ const ctx = {
   aimGround: new THREE.Vector3(),
   shake: (amount) => (shake = Math.max(shake, amount)),
   aliveEnemies: () => targetable(), // skills, ultimates and effects never waste themselves on a shielded boss
+  seeEnemies: () => targetable(), // what an ultimate aims at (a teammate's on my screen too: see remoteCtx)
+  cancelBullets: (center, radius) => {
+    for (const bullet of bullets.cancel(center, radius)) {
+      particles.burst(next.set(bullet.x, bullet.y, 0), { count: 2, colors: ['#fff3c4', '#ffd36b'], speed: 40, up: 30, size: 1.2, glow: true });
+    }
+  },
   damageEnemy: (...args) => damageEnemy(...args),
   waveScale: () => config?.hpScale ?? 1, // how much tougher this wave's bees are (ultimates keep pace with it)
   hurtPlayer: (amount) => hurtPlayer(amount),
@@ -1030,13 +1036,15 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
 // `slow` it eases off again (never below the wave's normal health). Measured with the bot: a weak build's bees live
 // 2–5 s, a maxed build without charms 1–3 s, that charm-heavy one 0.4–0.6 s. Only bees that chase (not stingers,
 // bosses, hives, wards, guardians or nurses), not in boss waves (summons die fast anyway), from wave HIVE.from on.
-const HIVE = { from: 3, window: 30, every: 3, min: 15, fast: 1.2, slow: 2.5, up: 1.2, down: 0.93, max: 15, callouts: [1.5, 2, 3, 5, 8, 12] };
-const hive = { adapt: 1, lifetimes: [], timer: HIVE.every, announced: 1 };
+// It steps up at most every `upEvery` seconds of fighting and calls out at most every `calloutGap` (v0.34.1): it used
+// to step every 3 s, so ×1.5 and ×2 were called out seconds apart early in a run.
+const HIVE = { from: 3, window: 30, every: 3, upEvery: 9, min: 15, fast: 1.2, slow: 2.5, up: 1.2, down: 0.93, max: 15, calloutGap: 30, callouts: [1.5, 2, 3, 5, 8, 12] };
+const hive = { adapt: 1, lifetimes: [], timer: HIVE.every, rest: 0, hush: 0, announced: 1 };
 /** Bees per spawn: tougher bees alone still died one by one as they came (a strong build out-killed the spawn rate). */
 const hivePack = () => Math.min(4, Math.round(Math.sqrt(hive.adapt)));
 
 function resetHive() {
-  Object.assign(hive, { adapt: 1, lifetimes: [], timer: HIVE.every, announced: 1 });
+  Object.assign(hive, { adapt: 1, lifetimes: [], timer: HIVE.every, rest: 0, hush: 0, announced: 1 });
 }
 
 const hiveTracks = (enemy) => !enemy.type.boss && !enemy.type.structure && !enemy.type.ranged && !enemy.type.label;
@@ -1049,18 +1057,28 @@ function hiveDeath(enemy) {
 
 /** Host: every few seconds of fighting, the hive weighs how its bees are doing. */
 function updateHive(delta) {
-  if (isGuest() || wave < HIVE.from || config?.isBoss || phase !== 'fighting' || (hive.timer -= delta) > 0) return;
+  if (isGuest() || wave < HIVE.from || config?.isBoss || phase !== 'fighting') return;
+  hive.rest -= delta;
+  hive.hush -= delta;
+  if ((hive.timer -= delta) > 0) return;
   hive.timer = HIVE.every;
-  if (hive.lifetimes.length < HIVE.min) return;
-  const sorted = [...hive.lifetimes].sort((a, b) => a - b);
-  const median = sorted[sorted.length >> 1];
-  if (median < HIVE.fast) hive.adapt = Math.min(HIVE.max, hive.adapt * HIVE.up);
-  else if (median > HIVE.slow) hive.adapt = Math.max(1, hive.adapt * HIVE.down);
-  else return;
-  hive.lifetimes.splice(0, hive.lifetimes.length >> 1); // judge the next bees mostly on their own
+  if (hive.lifetimes.length >= HIVE.min) {
+    const sorted = [...hive.lifetimes].sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    const changed = median < HIVE.fast ? hive.rest <= 0 : median > HIVE.slow;
+    if (changed) {
+      if (median < HIVE.fast) {
+        hive.adapt = Math.min(HIVE.max, hive.adapt * HIVE.up);
+        hive.rest = HIVE.upEvery;
+      } else hive.adapt = Math.max(1, hive.adapt * HIVE.down);
+      hive.lifetimes.splice(0, hive.lifetimes.length >> 1); // judge the next bees mostly on their own
+    }
+  }
+  // A callout held back by the gap comes when the gap is over (the highest step reached by then).
   const next = HIVE.callouts.filter((at) => at > hive.announced && hive.adapt >= at).pop();
-  if (next) {
+  if (next && hive.hush <= 0) {
     hive.announced = next;
+    hive.hush = HIVE.calloutGap;
     hud.showCallout(`🐝 The hive adapts: bees ×${next} tougher`);
     share({ k: 'say', t: '🐝 The hive adapts', s: `Bees ×${next} tougher` });
   }
@@ -1595,6 +1613,7 @@ function updateClash(delta) {
     return;
   }
   clash.time += delta;
+  ascension.overdrive(0.3); // pushing back with everything he has
   const mashes = ['Space', 'MouseLeft', 'MouseRight', 'KeyE', 'ShiftLeft', 'ShiftRight'].filter((code) => input.wasPressed(code)).length;
   clash.progress += mashes * CLASH.push - delta * (CLASH.bossPush + 0.05 * (boss.ai.phase ?? 0));
   clash.progress = THREE.MathUtils.clamp(clash.progress, 0, 1);
@@ -1664,6 +1683,8 @@ function endClash(won) {
     shake = 30;
     play('boom');
     hud.showCallout('OVERPOWERED!');
+    ascension.overdrive(OVERDRIVE.clash);
+    ascension.peel(120, { speed: 300 });
   } else {
     player.invulnerableLeft = 0;
     hurtPlayer(1);
@@ -3836,6 +3857,7 @@ function tryUltimate() {
   player.gauge = 0;
   ultimateEffect = startUltimate(player.ultimate, ctx);
   ultimateEffect.waitsForPlay = true; // (see ULTIMATE_HOLD_PHASES; a teammate's is only a picture of theirs)
+  ascension.overdrive(OVERDRIVE.ultimate); // a crimson flame over the form (FormGlow.js)
   share({ k: 'ult', id: player.ultimate, a: [ctx.aimGround.x, ctx.aimGround.y] });
 }
 
@@ -6196,7 +6218,7 @@ function offerRewards() {
   if (openChest()) return; // collectChest comes back here
   if (wave >= ULTIMATE_WAVE && !player.ultimate) {
     setPhase('ultimate');
-    hud.showUltimates();
+    showUltimatePick();
     return;
   }
   offerNextReward();
@@ -6251,10 +6273,46 @@ function chooseBrew(index) {
   afterReward();
 }
 
+// --- Ultimates to unlock (Ultimates.js, v0.36) ---
+// Three from the start; the account level unlocks more (`unlock.level`). The pick shows every unlocked one and the
+// locked ones with the level they need. The Daily Brew offers the first three only: the same run for everyone.
+const accountLevelNow = () => accountLevel(meta).level;
+/** The ultimates this run may pick, in order. */
+const ultimateChoices = () =>
+  Object.values(ULTIMATES).filter((ultimate) => (isDaily() ? STARTING_ULTIMATES.includes(ultimate.id) : ultimateUnlocked(ultimate, accountLevelNow())));
+
+function showUltimatePick() {
+  const level = accountLevelNow();
+  const choices = ultimateChoices();
+  const locked = isDaily() ? [] : Object.values(ULTIMATES).filter((ultimate) => !ultimateUnlocked(ultimate, level));
+  const fresh = choices.filter((ultimate) => ultimate.unlock && !(meta.ultimatesUsed ?? []).includes(ultimate.id)).map((ultimate) => ultimate.id);
+  hud.showUltimates({ choices, locked, fresh, daily: isDaily() });
+}
+
+let ultimateNoticeIn = 0;
+/** On the title and game-over screens: a toast when the account level has unlocked new ultimates. */
+function noticeUltimates(delta) {
+  if ((ultimateNoticeIn -= delta) > 0) return;
+  ultimateNoticeIn = 1;
+  const level = accountLevelNow();
+  const told = meta.ultimatesTold ?? [];
+  const fresh = Object.values(ULTIMATES).filter((ultimate) => ultimate.unlock && ultimateUnlocked(ultimate, level) && !told.includes(ultimate.id));
+  if (!fresh.length) return;
+  meta.ultimatesTold = [...told, ...fresh.map((ultimate) => ultimate.id)];
+  saveMeta();
+  const names = fresh.map((ultimate) => `${ultimate.icon} <b>${ultimate.name}</b>`).join(', ');
+  hud.toast(`✨ New ultimate${fresh.length > 1 ? 's' : ''} unlocked: ${names}<br><small>Pick it after the first boss</small>`, 'ultimate-toast', 6);
+  play('legendary');
+}
+
 function chooseUltimate(index) {
   if (phase !== 'ultimate') return;
-  const ultimate = Object.values(ULTIMATES)[index];
+  const ultimate = ultimateChoices()[index];
   if (!ultimate) return;
+  if (!(meta.ultimatesUsed ?? []).includes(ultimate.id)) {
+    meta.ultimatesUsed = [...(meta.ultimatesUsed ?? []), ultimate.id];
+    saveMeta();
+  }
   player.ultimate = ultimate.id;
   player.gauge = fullGaugeStart ? 100 : 30; // a taste of power right away (the Tiny Crown: all of it)
   play('legendary');
@@ -6459,6 +6517,8 @@ function startEnding() {
   setArena(ARENAS[0]); // home again
   endingTier = Math.max(endingTier, ascension.tier);
   ascension.setTier(0); // and just Tode again: a frog with a cup of tea
+  // Only player.update hides the petal shield's bubble, and it doesn't run in the ending: tea in a pink bubble.
+  player.shieldBubble.visible = false;
   hud.setForm('', 0);
   hud.showStory();
   hud.menu.hidden = true;
@@ -6573,6 +6633,8 @@ function updateBossIntro(delta) {
 
 // --- Ascension cut-scene ---
 const TRANSFORM_AT = 2.1; // seconds into the cut-scene: the moment of transformation
+/** Seconds of overdrive (a crimson flame over the form, FormGlow.js): firing the ultimate, winning a beam clash. */
+const OVERDRIVE = { ultimate: 3.5, clash: 2.5 };
 
 let ascendResume = null;
 
@@ -6632,6 +6694,7 @@ function updateAscending(delta) {
   } else if (ascension.tier !== ascendingTo) {
     updateAscending.roared = false;
     ascension.setTier(ascendingTo);
+    ascension.peel(150 + ascendingTo * 30, { speed: 280 }); // the old power peels off in voxel flakes
     achieve(['', 'awakened', 'golden', 'radiant', 'god', 'infinite'][ascendingTo]);
     divinity.setTier(ascendingTo);
     const { banner, sub, name } = TIERS[ascendingTo];
@@ -6719,6 +6782,8 @@ function remoteCtx(remote, aim) {
     effects: visualEffects,
     shake: (amount) => ctx.shake(amount * 0.3),
     aliveEnemies: () => [],
+    seeEnemies: () => targetable(), // (their Starfall and Legion aim at the bees I see; only their screen deals damage)
+    cancelBullets: () => {},
     damageEnemy: () => {},
     hurtPlayer: () => {},
     lightningHit: () => {},
@@ -6957,6 +7022,7 @@ function handleNet(from, message) {
       if (remote) {
         remote.puppet.facing.copy(new THREE.Vector3(message.a[0], message.a[1], 0).sub(remote.position).setZ(0).normalize());
         startUltimate(message.id, remoteCtx(remote, vec(message.a)));
+        remote.ascension?.overdrive(OVERDRIVE.ultimate);
       }
       break;
     case 'skill':
@@ -7690,7 +7756,7 @@ function applyTwists(stats, awaken) {
       for (let i = 0; i < 2 && pool.length; i++) skills.learn(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].id);
     }
     if (twist('ultimate') && !player.ultimate) {
-      const ids = Object.keys(ULTIMATES);
+      const ids = STARTING_ULTIMATES; // (the Daily Brew: the same for everyone, whatever their level)
       player.ultimate = ids[Math.floor(Math.random() * ids.length)];
       fullGaugeStart = true;
     }
@@ -8647,7 +8713,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseBrew(i));
     if (input.wasPressed('KeyR')) reroll();
   } else if (phase === 'ultimate') {
-    ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
+    ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'].forEach((key, i) => input.wasPressed(key) && chooseUltimate(i));
   } else if (phase === 'skill') {
     ['Digit1', 'Digit2', 'Digit3'].forEach((key, i) => input.wasPressed(key) && chooseSkill(i));
   } else if (phase === 'chest') {
@@ -8726,8 +8792,12 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
   lap('hud widgets, camera');
-  // The wardrobe's outfit, everywhere: no hat under a form's crest, and no aura in runs (see shownOutfit).
-  player.setOutfit(shownOutfit(myOutfit(), { tier: ascension.tier, run: phase !== 'title' && phase !== 'loading' }));
+  // The wardrobe's outfit, everywhere: no aura in runs, and a worn hat hides the form's crest (see shownOutfit).
+  const outfit = myOutfit();
+  player.setOutfit(shownOutfit(outfit, { run: phase !== 'title' && phase !== 'loading' }));
+  ascension.hat = Boolean(outfit.head);
+  ascension.glow.lite = quality.features.lite; // (one rim layer from the "lite" quality step on)
+  if (phase === 'title' || phase === 'gameover') noticeUltimates(realDelta);
   if (render) {
     followShadows();
     drawProjectiles();
@@ -9076,6 +9146,7 @@ if (import.meta.env.DEV) {
       holdLevelUps = value;
     },
     offerBrews: () => offerBrews(),
+    ultimatePick: () => (setPhase('ultimate'), showUltimatePick()), // the ultimate pick, as after the first boss
     ascend: (tier) => startAscension(tier),
     // Advances the game without relying on requestAnimationFrame (paused in hidden tabs).
     /** Runs `frames` frames (each rendered) and returns ms per frame by section, slowest first. */

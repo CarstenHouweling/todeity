@@ -3621,6 +3621,28 @@ body.touch .steep-badge {
   font-weight: 700;
 }
 
+/* Ultimates to unlock (v0.36): with more than three, the cards are narrower so four fit a row; locked ones wait greyed. */
+.ultimates.many .card {
+  width: 180px;
+  padding: 26px 12px 16px;
+}
+
+.ultimates.many .card-description {
+  font-size: 13px;
+}
+
+.card.locked {
+  filter: grayscale(0.9);
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+  animation: none;
+}
+
+.card.locked .card-hint {
+  color: #3b2a14;
+}
+
 /* Skill fusions (v0.19) and card hints */
 .card-hint {
   display: block;

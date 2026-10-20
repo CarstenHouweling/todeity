@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FormGlow } from './FormGlow.js';
 
 /**
  * Tode's transformations, like a martial-arts hero powering up: from a plain frog to an all-powerful god.
@@ -86,6 +87,7 @@ const LOOKS = [
 ];
 
 const GOLD = new THREE.Color('#ffc93c');
+const OVERDRIVE_RED = new THREE.Color('#ff2a3a'); // the overdrive's flame (FormGlow.js)
 const DIVINE = new THREE.Color('#ffc4b4'); // the god form's rose-gold glow
 const CELESTIAL = new THREE.Color('#d8e4ff'); // the infinite form's silver glow
 const bodyGlow = (tier) => (tier === 5 ? CELESTIAL : tier === 4 ? DIVINE : GOLD);
@@ -420,6 +422,8 @@ export class Ascension {
     this.effects = effects;
     this.tier = 0;
     this.intensity = 1;
+    this.hat = false; // a wardrobe hat is worn: it shows instead of the crest (see shownOutfit)
+    this.crestShown = true; // (setTier's `withCrest`)
     this.time = 0;
     this.emitBudget = 0;
     this.arcTimer = 0;
@@ -438,6 +442,43 @@ export class Ascension {
     this.inflowStars = [];
     this.inflowBudget = 0;
     player.group.add(this.inflow);
+
+    // The form on the frog himself: rim of energy, the outfit's glow, voxel flakes, the overdrive (FormGlow.js).
+    this.glow = new FormGlow(player, particles);
+    // The overdrive's crimson flame over the form (built once, shown while it flares).
+    this.overdriveShells = new THREE.Group();
+    this.overdriveShells.add(
+      auraShell('#ff2a3a', 0.95, { height: 100, width: 36, speed: 2.8, spiky: 1.4 }),
+      auraShell('#ff7a5a', 0.4, { height: 74, width: 24, speed: 3.6, spiky: 1 })
+    );
+    this.overdriveShells.visible = false;
+    player.adornments.add(this.overdriveShells);
+  }
+
+  /** A crimson flare over the form for at least `seconds` (an ultimate, a beam clash; call it every frame to hold). */
+  overdrive(seconds) {
+    if (this.glow.over < 0.2 && this.glow.overLeft <= 0 && this.player.group.visible) {
+      // It flares up: a red shockwave and a burst of sparks.
+      this.effects?.ring?.(this.player.position, { radius: 190, color: '#ff3030', duration: 0.5, thickness: 0.25 });
+      this.particles.burst(this.player.position, { count: 40 * this.intensity, colors: ['#ff2a2a', '#ff6a3a', '#ffd0b0'], speed: 260, up: 160, size: 2.2, height: 14, life: 0.7, glow: true });
+    }
+    this.glow.overdrive(seconds);
+  }
+
+  /** A shell of voxel flakes blasting off him (`count`, `speed`). */
+  peel(count, options) {
+    this.glow.peel(count, options);
+  }
+
+  /** For a frog that leaves (a teammate, a garden visitor): its flakes live in the world. */
+  dispose() {
+    this.clearParts();
+    this.glow.dispose();
+    this.overdriveShells.removeFromParent();
+    this.overdriveShells.traverse((child) => {
+      child.geometry?.dispose();
+      child.material?.dispose();
+    });
   }
 
   tierFor(power) {
@@ -452,15 +493,19 @@ export class Ascension {
 
   /**
    * Builds the visuals for `tier` (instantly; the transformation cut-scene lives in main.js). `intensity` thins the
-   * glowing layers (a garden's Power Up: the camera is close and the lawn is bright, so they'd wash out).
+   * glowing layers (a garden's Power Up: the camera is close and the lawn is bright, so they'd wash out); `grow:
+   * false` keeps the frog his own size and `withCrest: false` leaves the crest off (the Power Up again: the player found
+   * the grown frog with a crest too big among the trinkets).
    */
-  setTier(tier, { intensity = 1 } = {}) {
+  setTier(tier, { intensity = 1, grow = true, withCrest = true } = {}) {
     this.tier = tier;
     this.intensity = intensity;
+    this.crestShown = withCrest;
+    this.glow.setTier(tier, intensity);
     this.clearParts();
     const { player } = this;
     const look = LOOKS[tier];
-    player.setVisualScale(look.scale);
+    player.setVisualScale(grow ? look.scale : 1);
 
     for (const { material, base } of player.frogMaterials) {
       material.color.copy(base.color).lerp(bodyGlow(tier), look.gold);
@@ -491,6 +536,7 @@ export class Ascension {
     if (stage.crest) {
       this.crest = crest(stage.crest);
       this.crest.position.set(0, 1, 11.5);
+      this.crest.visible = !this.hat && this.crestShown;
       this.parts.add(this.crest);
     }
     if (stage.orbit) {
@@ -608,6 +654,7 @@ export class Ascension {
   charge(delta, tier, k) {
     const colors = STAGES[tier]?.inflow?.colors ?? ['#ffffff'];
     this.pullStars(delta, 60 + k * 260 + tier * 40, colors, 1.4 + tier * 0.15);
+    this.glow.charge(k, tier);
   }
 
   /** Spawns `rate` stars per second, flying in from `reach` × their normal distance. */
@@ -654,19 +701,52 @@ export class Ascension {
     if (this.inflow.instanceColor) this.inflow.instanceColor.needsUpdate = true;
   }
 
+  /** The overdrive's flame: sized over the form's own aura, with red sparks rising. */
+  updateOverdrive(delta) {
+    const over = this.glow.over;
+    const shells = this.overdriveShells;
+    shells.visible = over > 0 && this.player.group.visible;
+    if (!shells.visible) return;
+    const aura = STAGES[this.tier]?.aura;
+    shells.scale.setScalar(aura ? (aura.height * 1.25) / 100 : 0.8); // over the form's own flame
+    shells.children.forEach((shell, i) => {
+      const { uniforms } = shell.material;
+      uniforms.time.value = this.time * (i ? 1.5 : 1.2);
+      uniforms.opacity.value = (i ? 0.4 : 0.95) * over * this.intensity;
+      const flicker = 1 + 0.08 * Math.sin(this.time * (21 + i * 7));
+      shell.scale.set(flicker, flicker, 1 + 0.12 * Math.sin(this.time * (13 + i * 5)));
+      shell.rotation.z = this.time * (i ? 1.6 : -1.1);
+    });
+    this.overBudget = (this.overBudget ?? 0) + 70 * over * delta * this.intensity;
+    const count = Math.floor(this.overBudget);
+    this.overBudget -= count;
+    if (count > 0) {
+      this.particles.burst(this.player.position, { count, colors: ['#ff2a2a', '#ff6a3a', '#ffb08a'], speed: 30, up: 160, gravity: -90, size: 1.8, height: 4, ring: 20, life: 0.6, glow: true });
+    }
+  }
+
   update(delta) {
     this.time += delta;
     const { tier, player, time } = this;
     this.updateInflow(delta);
+    // Pulsing inner light.
+    const glow = this.look.glow * (1 + 0.25 * Math.sin(time * 6));
+    if (tier !== 0 && player.group.visible) {
+      for (const { material } of player.frogMaterials) material.emissive.copy(bodyGlow(tier)).multiplyScalar(glow);
+    }
+    this.glow.update(delta, time, { bodyGlow: bodyGlow(tier), gold: this.look.gold, glow });
+    this.updateOverdrive(delta);
     if (tier === 0 || !player.group.visible) return;
     const stage = STAGES[tier];
 
-    // Pulsing inner light.
-    const glow = this.look.glow * (1 + 0.25 * Math.sin(time * 6));
-    for (const { material } of player.frogMaterials) material.emissive.copy(bodyGlow(tier)).multiplyScalar(glow);
-
     this.shells?.forEach((shell, i) => {
       shell.material.uniforms.time.value = time * (i ? 1.3 : 1);
+      // In overdrive the form's own flame steps back and turns red under the crimson one (its inner flame less so).
+      const { uniforms } = shell.material;
+      shell.userData.opacity ??= uniforms.opacity.value;
+      shell.userData.color ??= uniforms.color.value.clone();
+      uniforms.opacity.value = shell.userData.opacity * (1 - 0.4 * this.glow.over);
+      uniforms.color.value.copy(shell.userData.color).lerp(OVERDRIVE_RED, (i ? 0.3 : 0.75) * this.glow.over);
       const flicker = 1 + 0.06 * Math.sin(time * (17 + i * 6)) + 0.04 * Math.sin(time * 31 + i);
       shell.scale.set(flicker, flicker, 1 + 0.1 * Math.sin(time * (11 + i * 4)));
       shell.rotation.z = time * (i ? -1.2 : 0.8);
@@ -675,9 +755,16 @@ export class Ascension {
       ribbon.material.uniforms.time.value = time * ribbon.userData.speed * 0.6;
       ribbon.rotation.z = time * ribbon.userData.speed * (i % 2 ? 1 : 1.15);
     });
-    if (this.crest) this.crest.scale.setScalar(1 + 0.05 * Math.sin(time * 9));
+    if (this.crest) {
+      this.crest.visible = !this.hat && this.crestShown;
+      this.crest.scale.setScalar(1 + 0.05 * Math.sin(time * 9));
+    }
     if (this.halo) this.halo.rotation.z = time * 0.8;
-    if (this.groundGlow) this.groundGlow.material.opacity = (0.12 + 0.06 * Math.sin(time * 5)) * this.intensity;
+    if (this.groundGlow) {
+      this.groundGlow.material.opacity = (0.12 + 0.06 * Math.sin(time * 5)) * this.intensity;
+      this.groundGlow.userData.color ??= this.groundGlow.material.color.clone();
+      this.groundGlow.material.color.copy(this.groundGlow.userData.color).lerp(OVERDRIVE_RED, 0.8 * this.glow.over);
+    }
     if (this.runes) {
       this.runes.children.forEach((child, i) => {
         child.rotation.z = time * (child === this.galaxy ? 0.25 : i ? -0.7 : 0.4);

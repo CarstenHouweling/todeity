@@ -16,6 +16,8 @@ const SHINY = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: 
 const CLOTH = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, side: THREE.DoubleSide });
 const GLOW = new THREE.MeshBasicMaterial({ vertexColors: true });
 const MATERIALS = { wear: WEAR, shiny: SHINY, cloth: CLOTH, glow: GLOW };
+/** The lit wardrobe materials, shared by every frog: a form (FormGlow.js) gives its frog its own copies to tint. */
+export const isWearMaterial = (material) => material === WEAR || material === SHINY || material === CLOTH;
 
 /**
  * A worn piece: a pivot group on `parent` with one merged mesh per material. `draw(add)` calls

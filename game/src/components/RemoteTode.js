@@ -63,7 +63,8 @@ export class RemoteTode {
     if (state.tier !== this.tier) this.setTier(state.tier);
     // Their outfit comes with a state now and then; the run rules for what shows apply here too.
     if (state.o) this.outfit = cleanOutfit(state.o);
-    this.puppet.setOutfit(shownOutfit(this.outfit ?? {}, { tier: this.tier, run: true }));
+    this.puppet.setOutfit(shownOutfit(this.outfit ?? {}, { run: true }));
+    if (this.ascension) this.ascension.hat = Boolean(this.outfit?.head);
   }
 
   setTier(tier) {
@@ -97,7 +98,7 @@ export class RemoteTode {
   }
 
   dispose() {
-    this.ascension?.clearParts();
+    this.ascension?.dispose();
     this.beacon?.dispose();
     this.puppet.group.removeFromParent();
     this.hud.removeNameTag(this.tag);

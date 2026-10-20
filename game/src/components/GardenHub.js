@@ -186,7 +186,8 @@ class GardenFrog {
       this.waveIn = 4 + Math.random() * 2;
       this.puppet.rig.play('victory', { once: true });
     }
-    this.puppet.setOutfit(shownOutfit(this.outfit, { tier: this.ascension?.tier ?? 0 })); // (a Power Up's crest)
+    this.puppet.setOutfit(shownOutfit(this.outfit));
+    if (this.ascension) this.ascension.hat = Boolean(this.outfit?.head); // (a Power Up's crest)
     this.puppet.animate(delta);
     this.ascension?.update(delta); // only while a Power Up shows off a form
     this.aura?.update(delta, group.position, { moving: this.position.distanceToSquared(this.last) > (8 * delta) ** 2, hop: this.hop, visible: this.seen });
@@ -197,7 +198,7 @@ class GardenFrog {
   }
 
   dispose() {
-    this.ascension?.clearParts();
+    this.ascension?.dispose();
     this.aura?.dispose();
     this.puppet.group.removeFromParent();
     this.circle.removeFromParent();
@@ -1219,7 +1220,8 @@ const EMOTE_FX = {
       }
       if (once(state, 'burst', POWER.charge)) {
         // The burst: the form comes, with a sonic boom that knocks the dust (and nearby frogs) away.
-        ascension?.setTier(parts.tier, { intensity: 0.4 });
+        ascension?.setTier(parts.tier, { intensity: 0.4, grow: false, withCrest: false }); // the form's glow, his own size
+        ascension?.peel(50, { speed: 220 });
         const color = parts.colors[0];
         // (Additive layers on a sunny lawn wash out to white quickly: keep them thin.)
         this.fx.shockwave(at, { radius: 170 + parts.tier * 25, color, life: 0.9, opacity: 0.22 });

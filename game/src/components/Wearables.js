@@ -140,16 +140,14 @@ export function cleanOutfit(outfit, progress = null) {
   return clean;
 }
 
-/** From this form on the ascension's crest sits on the head (Ascension.js): a hat would poke through it. */
-export const CREST_TIER = 2;
-
 /**
- * What shows of an outfit right now: no hat under the crest (`tier` ≥ CREST_TIER), and in a `run` no aura (the
- * forms bring their own, and the screen is busy enough).
+ * What shows of an outfit right now: in a `run` no aura (the forms bring their own, and the screen is busy enough).
+ * A worn hat stays on in every form: the form's crest (Ascension.js, from the Golden form) hides instead
+ * (`ascension.hat`). Until v0.34.1 the hat came off under the crest, and the class's own hat (the Mage's, the Ninja's
+ * hood) came back in its place: players saw their crown turn into the Mage hat mid-run.
  */
-export function shownOutfit(outfit, { tier = 0, run = false } = {}) {
+export function shownOutfit(outfit, { run = false } = {}) {
   const shown = { ...outfit };
-  if (tier >= CREST_TIER) delete shown.head;
   if (run) delete shown.aura;
   return shown;
 }

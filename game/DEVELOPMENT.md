@@ -213,6 +213,23 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   vortex of fire, halo, runes), Omnitode (silver-violet, galaxy underfoot, a constant star stream). Additive layers
   stack, so colours stay under the bloom threshold (0.93) or the screen washes out white. In the garden **the world
   transforms with him** (blossoms → lanterns and petals → crystals and floating islands → a marble heaven).
+  **The form on Tode himself** (v0.35, `components/FormGlow.js`, `ascension.glow`; the owner wanted the powering-up
+  feel of martial-arts anime without hair, since a worn hat hides the crest): a **rim** of energy around his
+  silhouette in the form's colour (two back-face hulls per frog, gear and wearable mesh, pushed out along the normals
+  by `inner`/`outer` world units in `LOOKS`; they test depth, so only what sticks out past him shows, with bands of
+  light running up; tagged `userData.formRim`, which `withoutSilhouette` also strips from copies; 31 meshes on a Mage
+  with a crown = 62 draw calls, hidden at tier 0 via `material.visible`, and only the thin one from the "lite"
+  quality step, `glow.lite`), **the outfit joins the form** (worn items get the frog's own copies of the shared
+  wardrobe materials, `isWearMaterial` in WearableModels.js, tinted at 45% of the body's gold and glowing),
+  **voxel flakes** (an instanced mesh in the world, so they trail: a few a second per form, many while the
+  cut-scene charges via `charge`, and `ascension.peel(n)` blasts a shell of them off at the moment of
+  transformation, a won beam clash and a garden Power Up) and **overdrive** (`ascension.overdrive(seconds)`, call it
+  every frame to hold it: a crimson flame shell over the form's own, which steps back and turns red, a red ground
+  glow, red rim, flakes and sparks, a red tint on the body; plain Tode too). Overdrive comes with firing the ultimate
+  (`OVERDRIVE.ultimate`, also a teammate's `ult` on their puppet) and while a beam clash lasts (`OVERDRIVE.clash`
+  after a win). Measured: the peel adds 1–3% white pixels to the cut-scene's burst (the pillar of light is most of
+  it). To look at a form up close, move `game.camera` (a child of the player group) next to him, `renderer.render`
+  and `toDataURL`.
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked with the class chip above Start run (`hud.showClasses`,
@@ -313,6 +330,25 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   its mouth, `mouthForward`/`mouthHeight`, rebuilt every frame). The giant is a copy of the caster's frog made with
   `rig.cloneAtRest()`: a plain `model.clone()` froze the pose of the moment, often a spit with the tongue flicked out
   (a second, static tongue).
+  **Ultimates to unlock** (v0.36, `unlock: { level }` in `ULTIMATES`, `ultimateUnlocked`; the owner wanted powerful
+  new ones to come with progress): **Tea Nova** (3: a charge, then a dome of light, a rim shader on a hemisphere, swells
+  to 1.6 × the arena's half size, hitting each bee once as its front passes and cancelling bullets; on bright floors
+  added light barely shows, so the inside is tinted gold and the front is a solid gold band with a dark edge),
+  **Starfall** (6: 60 instanced orbs rise into a sunflower spiral over Tode, hover, then each homes in on a bee, a boss
+  drawing four shares), **Tempest Star** (9: spun above his head, thrown at the thickest crowd near the aim, since
+  the spit aims itself and on phones the aim is wherever the stick last pointed; it bursts into a storm that ticks and
+  pulls bees in) and **Frog Legion** (12: ten copies of the frog as he looks now, baked by `bakeFrog` into one geometry
+  per material and drawn as instanced meshes, a few draw calls instead of ten frogs of ~30 meshes; they hop to the
+  nearest bee and spit homing shots; gold rings under them, since a pale frog on pale stones got lost). Damage:
+  bees by the wave's toughness like the beam (`ultimateHit`, `bee` × `waveScale`), bosses a share of their health
+  (`boss`), about a third of a lone boss each at base power (Nova 25%, Starfall 33%, Tempest ~31%, Legion up to ~35%;
+  measured 30% and 39% for Nova and Tempest with skills running). Targeting uses `ctx.seeEnemies`, so a teammate's
+  Starfall or Legion aims at the bees I see (only their screen deals damage); `ctx.cancelBullets` clears bullets
+  (a teammate's doesn't). The pick (`showUltimatePick`, `hud.showUltimates({ choices, locked, fresh, daily })`) shows
+  every unlocked one, keys 1–9, the locked ones greyed with their level, and "New" until one is chosen
+  (`meta.ultimatesUsed`); the title and game-over screens toast newly unlocked ones once (`noticeUltimates`,
+  `meta.ultimatesTold`). The Daily Brew offers only `STARTING_ULTIMATES` (its random-ultimate boon too), so it stays
+  the same run for everyone. The server doesn't check ultimates.
   **Since v0.30.2 the ultimate waits out menus and cut-scenes:** `tryUltimate` marks the effect `waitsForPlay`, and
   `effects.update(delta, { hold, hide })` skips it during `ULTIMATE_HOLD_PHASES` (the brew/skill/ultimate picks, the
   chest, the victory menu and the cut-scenes of `TOAST_HOLD_PHASES`, clash included) and hides it (`show()` on the
@@ -336,7 +372,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   the last 30 chasing bees (not stingers, bosses, hives, wards, guardians or nurses; not in boss waves; from wave 3);
   while the median is under 1.2 s the next bees spawn ×1.2 tougher (`hive.adapt`, up to ×15, in `spawnEnemy`) and
   come in packs (`hivePack`: up to 4 a spawn, since health alone didn't help: that build out-killed the spawn rate);
-  above 2.5 s it eases off, never below ×1. Callouts at ×1.5, 2, 3, 5, 8, 12. Measured with the bot: a weak build's
+  above 2.5 s it eases off, never below ×1. Callouts at ×1.5, 2, 3, 5, 8, 12. **Since v0.34.1** it steps up at most
+  every `HIVE.upEvery` (9 s) of fighting (it was every 3 s: ~45 s from ×1 to ×15, now ~2 min) and calls out at most
+  every `HIVE.calloutGap` (30 s, a held-back callout comes after the gap): a player saw ×1.5 and ×2 seconds apart. Measured with the bot: a weak build's
   bees live 2–6 s and the hive stays at ×1; the charm-heavy build settles at ×6–7, bees living ~2 s, 17–30 alive at
   once (was ~10). `game.hive` shows it.
   **Endless** (waves past 21, retuned in v0.27: a level-46 Steep 18 build couldn't die by wave 31 and 160 bees
@@ -371,7 +409,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **The run's form** (`runTier()` in main.js): the ending cut-scene turns Tode plain again (`ascension.setTier(0)`)
   before `endRun`, so `startEnding` keeps the form in `endingTier`. Scores (`tier`), the share card, `rememberRun`
   and the run report's `maxTier` use `runTier()`. Until v0.26 every won run said "Tode" and reported `maxTier: 0`,
-  so form achievements first reached in a won run were refused by the server.
+  so form achievements first reached in a won run were refused by the server. `startEnding` also hides the Petal Shield's
+  bubble (`player.shieldBubble`): only `player.update` hides it, and that doesn't run in the ending (v0.34.1).
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
@@ -496,7 +535,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   **Power Up** (`minTier: 1`, unlocked by the best form ever reached: `bestTier(meta)` = `maxTier` or the form
   achievements) charges for `POWER.charge` s (stars via `ascension.pullStars`), then bursts into the frog's best
   form (sent as `tier` in the event; puppets get their own `Ascension`) with a sonic boom that shoves frogs within
-  `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4 })`
+  `POWER.push`, and powers down at `POWER.end`. In gardens the form is built with `setTier(tier, { intensity: 0.4, grow:
+  false, withCrest: false })` (since v0.35 the frog keeps his own size and gets no crest: grown with a crest he looked too
+  big among the trinkets)
   and main.js damps the form's screen warp (`soft`): at garden camera distance on a sunny lawn the full form washed
   the screen out white.
   **v0.33 added 9** (26 in the panel): Cheer, Applause, Big Croak, Meditate (a loop), Juggle, Rainbow, Leaf
@@ -544,11 +585,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   latest pick, `noteOutfit` keeps it over any server reply (`outfitWanted` in CloudSave.js `apply`): before v0.29.6 the
   reply to the previous save arrived after the next click and put the old item back on. `myOutfit()` in main.js cleans it again
   with the loaded save. **Where it shows:** everywhere. The frame loop dresses Tode (`player.setOutfit`, a no-op
-  while unchanged) through `shownOutfit(outfit, { tier, run })`: no hat from `CREST_TIER` (2, the form's crest sits on
-  the head; also a garden Power Up) and no aura in runs (the forms bring their own). Co-op teammates get the outfit
-  with every 40th state (`o` in `sendState`, every 2 s) and `RemoteTode` applies the same rule with their tier; the
-  Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. Checked in a
-  2-tab co-op run: each side sees the other's outfit, and a teammate reaching tier 2 loses the hat on both screens. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
+  while unchanged) through `shownOutfit(outfit, { run })`: no aura in runs (the forms bring their own). A worn hat
+  stays on in every form; the form's flame crest (from tier 2, also a garden Power Up) hides instead
+  (`ascension.hat`, set next to every `setOutfit`: main.js, `RemoteTode`, `GardenHub`). Until v0.34.1 the hat came off
+  from tier 2, and since a filled slot is what covers the class's own gear, the Mage's hat or the Ninja's hood came
+  back in its place. Co-op teammates get the outfit
+  with every 40th state (`o` in `sendState`, every 2 s) and `RemoteTode` applies the same rule; the
+  Great Tode ultimate copies the worn outfit too. Achievement toasts name the wearable they unlock. In gardens the outfit goes in `genter` (`o`, with the level and best form; looks only, so the server takes
   any known items, `cleanOutfit(o)`), a change is an `outfit` event (`hub.setOutfit`; the server remembers it for frogs
   who join later). No twirl on a change, neither for Tode nor for puppets (v0.29.3): trying things on is a burst of
   clicks. **Models:** voxel boxes like the frogs, hung on the rig's
@@ -1134,7 +1177,8 @@ server proxies `/ws` and `/api`).
 | `components/GardenFx.js` | The garden's effects: emote visuals (sprites, confetti, fireworks, shockwaves, carpet, crown, disco floor) and the level aura. |
 | `components/PlayerTag.js` | The player tag rules: name cleaning and filtering, colours, random names, #tags (shared with the server). |
 | `components/Quality.js` | The Auto / High / Low setting: quality steps, `looksWeak()` device guess. |
-| `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle) and post-processing targets per tier. |
+| `components/Ascension.js` | Transformation tiers and visuals (aura shader, crest, shards, halo, rune circle, the overdrive's flame) and post-processing targets per tier. |
+| `components/FormGlow.js` | The form on the frog himself: rim hulls, the outfit's tint, voxel flakes, overdrive (see Ascension). |
 | `components/Effects.js` | Short-lived effects: lightning bolts (camera-facing ribbons), strikes with warning rings, rings, burning pools, blasts, chain lightning. |
 | `components/Weather.js` | Time of day per wave, weather (clear, Tea Rain, Gale, Thunderstorm) with gameplay modifiers, rain/leaves/fireflies. |
 | `components/Waves.js` | Wave composition and difficulty scaling (`waveConfig`, `FINAL_WAVE` = the Empress, `HELL_WAVE` = Bee-zebub). |
@@ -1259,6 +1303,7 @@ game.persist = false      // don't save progress or the best score this session 
 game.meta.trinkets.push('duck'); game.syncGarden()  // test trinkets and rewards with changed progress
 const bot = game.makeBot(); bot.run(300)  // autoplay 300 s and get a log of waves, picks and death
 game.levelUp(), game.offerBrews()  // open a skill pick or a brew offer now
+game.ultimatePick()       // the ultimate pick (what game.meta's account level unlocks); game.ultimate('nova') owns one
 game.ascend(4)            // play the ascension cut-scene to a tier (game.setTier skips it)
 game.holdLevelUps = true  // level-ups wait for the wave's end, as in co-op (footage without pick screens)
 game.action('garden')     // press a menu button (hud.onAction); game.action('emote', { id: 'power' }) in a garden

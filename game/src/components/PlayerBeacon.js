@@ -101,10 +101,13 @@ export class PlayerBeacon {
   }
 }
 
-/** Takes the silhouettes out of a copy of a frog (the Great Tode, Mirror Tode): they belong to the player only. */
+/**
+ * Takes the silhouettes (and the form's rim hulls, FormGlow.js) out of a copy of a frog (the Great Tode, Mirror
+ * Tode): they belong to the player only.
+ */
 export function withoutSilhouette(object) {
   const marks = [];
-  object.traverse((child) => child.userData.silhouette && marks.push(child));
+  object.traverse((child) => (child.userData.silhouette || child.userData.formRim) && marks.push(child));
   for (const mark of marks) mark.removeFromParent();
   return object;
 }

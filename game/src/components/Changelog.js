@@ -3,6 +3,41 @@
 
 export const CHANGELOG = [
   {
+    version: '0.36.0',
+    date: '2026-10-20',
+    title: 'Ultimates to unlock',
+    changes: [
+      '✨ Four new ultimates unlock as your account levels up: pick any you have after the first boss',
+      '💥 Tea Nova (level 3): gather everything, then a dome of golden light swells across the whole arena',
+      '🌠 Starfall (level 6): sixty orbs of light fill the sky, then rain down on every bee in sight',
+      '🌀 Tempest Star (level 9): a howling, bladed sphere of wind, hurled at the thickest swarm, bursts into a cutting storm',
+      '👥 Frog Legion (level 12): POOF! Ten copies of you hop into the fight, spitting everything they have',
+      '🔒 The ones still to unlock show in the pick with the level they need; the Daily Brew keeps the first three for everyone',
+    ],
+  },
+  {
+    version: '0.35.0',
+    date: '2026-10-20',
+    title: 'Power that shows',
+    changes: [
+      '✨ Every form now outlines Tode in crackling energy: gold, crimson, silver, with light running up the edge',
+      '👑 Your outfit transforms with you: hats, capes and the rest take on the form\'s colour and glow',
+      '🧊 Glowing voxel flakes peel off Tode in his forms, and his old power bursts off in a shell of them when he transforms',
+      '🌱 The garden\'s Power Up emote keeps your frog his own size, without the crest: all of the form\'s glow, none of the bulk',
+      '🔥 Overdrive: firing your ultimate or holding a beam clash wraps Tode in a crimson flame over whatever form he\'s in, even plain Tode',
+    ],
+  },
+  {
+    version: '0.34.1',
+    date: '2026-10-20',
+    title: 'Fixes: hats, bubbles and the hive',
+    changes: [
+      '👑 Your hat stays on in every form: from the Golden form on it used to come off (and the Mage got his old hat back); now the hat hides the flame crest instead',
+      '🫧 No more pink Petal Shield bubble around Tode while he has his tea in the ending',
+      '🐝 The hive adapts more gradually: it grows tougher at most every 9 s of fighting, and calls it out at most every 30 s',
+    ],
+  },
+  {
     version: '0.34.0',
     date: '2026-10-19',
     title: 'Emotes that keep going',
