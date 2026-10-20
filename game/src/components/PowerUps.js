@@ -210,7 +210,7 @@ const BREWS = [
     id: 'static', blend: 'storm', name: 'Static Charge', icon: '🔋', maxLevel: 3,
     values: [0.3, 0.45, 0.6],
     text: (v) => `Your ultimate charges ${percent(v)} faster.`,
-    apply: ({ stats }, v) => (stats.gaugeRate *= 1 + v),
+    apply: ({ stats }, v) => (stats.gaugeRate += v), // (adds up, with diminishing returns: gaugeRate() in main.js)
   },
   {
     id: 'orbit', blend: 'storm', name: 'Sparkling Leaves', icon: '🍂', maxLevel: 3,

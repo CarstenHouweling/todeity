@@ -8,31 +8,35 @@ import { MAP_HALF_SIZE } from './Map.js';
  * Ultimates: chosen once per run, charged by fighting (like the God Gauge in Hades)
  * and fired with E / middle mouse. The first three are there from the start; the others unlock with the account
  * level (`unlock.level`, see `ultimateUnlocked`; v0.36). The Daily Brew only offers the first three, so it stays the
- * same run for everyone.
+ * same run for everyone. `short`: the one line the pick shows on a phone held upright.
  */
 export const ULTIMATES = {
   beam: {
     id: 'beam',
     name: 'Steeping Beam',
     icon: '☄️',
+    short: 'A colossal beam of boiling tea: sweep the swarm or melt a boss.',
     text: 'Gather your power, then unleash a colossal beam of boiling tea. Sweep it across the swarm, or hold it on a boss and watch it melt.',
   },
   storm: {
     id: 'storm',
     name: 'Thunder Tea Storm',
     icon: '🌩️',
+    short: 'The sky turns black and lightning rains down on the bees.',
     text: 'Turn the sky black and call 24 lightning strikes down on the bees.',
   },
   summon: {
     id: 'summon',
     name: 'Summoning: Great Tode',
     icon: '🐸',
+    short: 'A giant battle toad stomps, tongue-lashes and body-slams the swarm.',
     text: 'Slam a summoning seal: a colossal battle toad bursts from the smoke, stomps, tongue-lashes the swarm and body-slams it.',
   },
   nova: {
     id: 'nova',
     name: 'Tea Nova',
     icon: '💥',
+    short: 'A dome of golden light swells across the whole arena.',
     unlock: { level: 3 },
     text: 'Draw every last drop of power into one breath, then explode: a dome of golden light swells across the whole arena and blasts every bee it touches.',
   },
@@ -40,6 +44,7 @@ export const ULTIMATES = {
     id: 'starfall',
     name: 'Starfall',
     icon: '🌠',
+    short: 'Sixty orbs fill the sky, then rain down on every bee.',
     unlock: { level: 6 },
     text: 'Fling sixty orbs of light into the sky. They hang there like a field of stars… then rain down on every bee in sight.',
   },
@@ -47,6 +52,7 @@ export const ULTIMATES = {
     id: 'tempest',
     name: 'Tempest Star',
     icon: '🌀',
+    short: 'A bladed sphere of wind bursts into a shredding storm.',
     unlock: { level: 9 },
     text: 'Spin a howling sphere of wind with four blades in your palm and hurl it. Where it lands it bursts into a storm that shreds everything inside.',
   },
@@ -54,6 +60,7 @@ export const ULTIMATES = {
     id: 'legion',
     name: 'Frog Legion',
     icon: '👥',
+    short: 'Ten copies of you hop into the swarm, spitting away.',
     unlock: { level: 12 },
     text: 'POOF! Ten copies of you burst from the smoke and hop into the swarm, spitting everything they have.',
   },

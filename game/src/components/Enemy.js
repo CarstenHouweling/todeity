@@ -8,6 +8,7 @@ import { buildDevil } from './DevilModel.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
+const ELITE_GAUGE = 1.25; // an elite's worth for the ultimate gauge, in bees of its kind (see gaugeHp)
 const BASE_SPEED = 55; // units per second
 
 /**
@@ -313,7 +314,10 @@ export class Enemy {
       : (radiusByType[kind] ??= computeFootprintRadius(this.group) / size) * size;
 
     const eliteHp = elite === 'giant' ? 4 : elite ? 2.5 : 1;
-    this.baseHp = BASE_HP * type.hp * eliteHp; // its health in wave 1 (a bee's worth for the ultimate gauge)
+    this.baseHp = BASE_HP * type.hp * eliteHp; // its health in wave 1
+    // A bee's worth for the ultimate gauge: an elite counts a little more than its kind, not its 2.5–4× health (late
+    // waves at a high Steep are mostly elites, and they filled the gauge twice as fast; v0.36.3).
+    this.gaugeHp = BASE_HP * type.hp * (elite ? ELITE_GAUGE : 1);
     this.hp = this.maxHp = Math.max(1, Math.round(this.baseHp * hpScale));
     this.speed = BASE_SPEED * type.speed * speedScale * (elite === 'swift' ? 1.6 : 1);
     this.score = type.score * (elite ? 3 : 1);

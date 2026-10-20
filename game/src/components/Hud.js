@@ -1714,7 +1714,7 @@ export class Hud {
     );
   }
 
-  card({ action, index, brew, rarity, level, text, kind: kindOverride, hint }) {
+  card({ action, index, brew, rarity, level, text, short, kind: kindOverride, hint }) {
     const blends = brew.blends ?? (brew.blend ? [brew.blend] : []);
     const colors = blends.map((id) => BLENDS[id].color);
     const first = colors[0] ?? '#ffc93c';
@@ -1741,7 +1741,7 @@ export class Hud {
         <span class="card-tags"><span class="tag tag-rarity">${tag}</span>${
           level && kind !== 'fusion' ? `<span class="tag">${level === 1 ? 'New' : `Level ${level}`}</span>` : ''
         }</span>
-        <span class="card-description">${text}</span>${hint ? `<span class="card-hint">${hint}</span>` : ''}
+        <span class="card-description">${text}</span>${short ? `<span class="card-short">${short}</span>` : ''}${hint ? `<span class="card-hint">${hint}</span>` : ''}
       </button>`;
   }
 
@@ -1799,7 +1799,7 @@ export class Hud {
   showUltimates({ choices, locked = [], fresh = [], daily = false }) {
     const cards = choices
       .map((ultimate, index) =>
-        this.card({ action: 'ultimate', index, brew: ultimate, text: ultimate.text, hint: fresh.includes(ultimate.id) ? '✨ New: unlocked by your level' : '' })
+        this.card({ action: 'ultimate', index, brew: ultimate, text: ultimate.text, short: ultimate.short, hint: fresh.includes(ultimate.id) ? '✨ New' : '' })
       )
       .join('');
     const sealed = locked
@@ -1810,7 +1810,8 @@ export class Hud {
         <span class="card-icon">${ultimate.icon}</span>
         <span class="card-name">${ultimate.name}</span>
         <span class="card-description">${ultimate.text}</span>
-        <span class="card-hint">Reach account level ${ultimate.unlock.level} to unlock</span>
+        <span class="card-short">${ultimate.short}</span>
+        <span class="card-hint">🔒 Unlocks at level ${ultimate.unlock.level}</span>
       </div>`
       )
       .join('');

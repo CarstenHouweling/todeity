@@ -113,7 +113,7 @@ export const CLASSES = [
     apply: ({ stats, grant }) => {
       stats.companions = 2;
       stats.spitCooldown *= 1.4;
-      stats.gaugeRate *= 1.3;
+      stats.gaugeRate += 0.3;
       grant.ultimate('summon', 50);
     },
   },

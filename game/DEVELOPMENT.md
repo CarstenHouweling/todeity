@@ -346,7 +346,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Starfall or Legion aims at the bees I see (only their screen deals damage); `ctx.cancelBullets` clears bullets
   (a teammate's doesn't). The pick (`showUltimatePick`, `hud.showUltimates({ choices, locked, fresh, daily })`) shows
   every unlocked one, keys 1–9, the locked ones greyed with their level, and "New" until one is chosen
-  (`meta.ultimatesUsed`). (v0.36.0 also toasted newly unlocked ones on the title screen; the owner found the
+  (`meta.ultimatesUsed`). **Fitting seven cards** (v0.36.2, "Ultimates to unlock" in style.css; on a phone held
+  sideways they ran off the bottom): up to 820px tall or 900px wide the cards turn compact (icon left, name and text
+  beside it, in a grid); phones (up to 520px wide, or short screens) show each ultimate's one-line `short` instead
+  of its `text` and drop the spirit's line; upright phones get two columns and a one-line heading. Measured with
+  `resize_window` (last card's bottom inside the window): 640×320, 667×375, 780×350, 932×430, 360×640, 375×667,
+  414×896, 768×1024, 1024×768, 1280×720, 1440×900 and 1920×1080 all fit; only 320×568 scrolls (as every menu can).
+  (v0.36.0 also toasted newly unlocked ones on the title screen; the owner found the
   big toast ugly on PC and phones, and v0.36.1 took it out: the pick's New tags tell it.) The Daily Brew offers only `STARTING_ULTIMATES` (its random-ultimate boon too), so it stays
   the same run for everyone. The server doesn't check ultimates.
   **Since v0.30.2 the ultimate waits out menus and cut-scenes:** `tryUltimate` marks the effect `waitsForPlay`, and
@@ -409,8 +415,11 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
 - **The run's form** (`runTier()` in main.js): the ending cut-scene turns Tode plain again (`ascension.setTier(0)`)
   before `endRun`, so `startEnding` keeps the form in `endingTier`. Scores (`tier`), the share card, `rememberRun`
   and the run report's `maxTier` use `runTier()`. Until v0.26 every won run said "Tode" and reported `maxTier: 0`,
-  so form achievements first reached in a won run were refused by the server. `startEnding` also hides the Petal Shield's
-  bubble (`player.shieldBubble`): only `player.update` hides it, and that doesn't run in the ending (v0.34.1).
+  so form achievements first reached in a won run were refused by the server. The Petal Shield's bubble
+  (`player.shieldBubble`) is shown by `player.update`, which only runs in play: the frame loop hides it every frame
+  in `SHIELD_HIDDEN` phases (ending, victory, game over, title, story). v0.34.1 hid it once in `startEnding`, but the
+  ending starts in the middle of an update (the last wave's rewards) and the rest of that update showed it again;
+  fixed in v0.36.3, checked with the shield up when Bee-zebub falls.
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
   trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
@@ -808,7 +817,16 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   so tougher bees don't charge it faster. Until v0.30.2 it divided by the wave's `hpScale` only, which left out an
   adapted hive (up to ×15) and a boss's co-op/vow health. Bees (not bosses), grazes and the Leaf Battery are also
   divided by `swarmGauge()` (`swarmSize(wave)` from Waves.js over wave 6's 24 bees: ×2.7 at wave 16, ×5 in endless),
-  so each wave fills about as much as wave 6 did; getting hit (`GAUGE_PER_HIT`) is not scaled.
+  so each wave fills about as much as wave 6 did; getting hit (`GAUGE_PER_HIT`) is not scaled. **v0.36.3** (the owner
+  felt it came back too fast late in a run, more so with more bees): measured with 3× damage and no boosts, a full
+  gauge took 16–21 s at waves 6–19 (so the swarm scaling held), but three things grew over a run. Elites counted their
+  2.5–4× health (`baseHp`); they now count `ELITE_GAUGE` (1.25) bees of their kind (`gaugeHp` in Enemy.js). Charging
+  boosts multiplied each other (a brew applies on every pick: three Epic Static Charges were 1.6³ ≈ 4×, ~8× with the
+  Hot Kettle and the Tiny Crown); `stats.gaugeRate` now adds them up and `gaugeRate()` gives diminishing returns toward
+  ×3 (`GAUGE_SOFT`). And the gauge filled while the ultimate fired; `addGauge` now waits until `ultimateEffect` is over.
+  Later waves also charge 2% slower per wave after wave 6 (`lateGauge`). Now: waves 12 and 19 ~21 s, wave 19 with three
+  Static Charges 12 s (was ~4–5 s). Ultimate damage boosts (Inner Fire, `ultimatePower`) still multiply; every
+  ultimate applies them, the new ones in `ultimateHit`.
 - **Co-op carries everything:** Pantry upgrades and the keepsake apply in co-op (`startRun` is the same; only the
   Daily Brew leaves them out), and since
   v0.24 so does Steeping: the host's vows go out with the `start` message (`runVows({ coop, shared })`), the room

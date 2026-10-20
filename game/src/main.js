@@ -377,6 +377,8 @@ scene.add(player.group);
 const beacon = new PlayerBeacon(player);
 // Phases with the run's field on screen: play, its menus and the beam clash (not the cut-scenes).
 const TOAST_HOLD_PHASES = new Set(['bossIntro', 'ascending', 'travel', 'story', 'ending', 'clash']);
+/** Screens where the petal shield's bubble never shows, whatever Tode still has (see the frame loop). */
+const SHIELD_HIDDEN = new Set(['ending', 'victory', 'gameover', 'title', 'story', 'loading']);
 const BEACON_PHASES = new Set([...PLAYING, 'paused', 'choosing', 'skill', 'ultimate', 'chest', 'clash']);
 // Tode's ultimate stands still through the reward menus and cut-scenes (and is out of sight in the cut-scenes): a
 // Steeping Beam used to melt a boss behind the brew cards, during his entrance or in a clash. It carries on after.
@@ -1019,7 +1021,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   // the bee's own health counts: dividing by the wave's hpScale left out an adapted hive's toughness (up to ×15, so
   // the gauge filled up to 15× faster for strong builds) and a boss's co-op and vow health.
   if (source !== 'ultimate' && !fromTeammate && enemy.maxHp > 0) {
-    addGauge(((landed / enemy.maxHp) * enemy.baseHp * GAUGE_PER_DAMAGE) / (enemy.type.boss ? 1 : swarmGauge()));
+    addGauge(((landed / enemy.maxHp) * (enemy.gaugeHp ?? enemy.baseHp) * GAUGE_PER_DAMAGE) / (enemy.type.boss ? 1 : swarmGauge()));
   }
   if (procs) charmHit(enemy, amount, crit);
   if (killed) {
@@ -1292,9 +1294,22 @@ function healPlayer(amount) {
  */
 const swarmGauge = () => Math.max(1, swarmSize(wave) / swarmSize(ULTIMATE_WAVE + 1));
 
+/**
+ * Faster charging (Static Charge, the Hot Kettle, the Tiny Crown, the Summoner) adds up, with diminishing returns
+ * toward at most 1 + GAUGE_SOFT times the normal rate: +36% stays +33%, +80% gives +66%, +180% gives +119%. Until
+ * v0.36.3 each multiplied: three Epic Static Charges alone were 1.6³ ≈ 4×, ~8× with the rest, so late in a run the
+ * ultimate was back every few seconds.
+ */
+const GAUGE_SOFT = 2;
+const gaugeRate = () => 1 + GAUGE_SOFT * (1 - Math.exp(-Math.max(0, player.stats.gaugeRate - 1) / GAUGE_SOFT));
+/** Later waves charge it a little slower (2% a wave after the first boss): wave 21 at ~77%. */
+const LATE_GAUGE = 0.02;
+const lateGauge = () => 1 / (1 + LATE_GAUGE * Math.max(0, wave - ULTIMATE_WAVE - 1));
+
 function addGauge(amount) {
   if (!player.ultimate || player.gauge >= 100) return;
-  player.gauge = Math.min(100, player.gauge + amount * player.stats.gaugeRate);
+  if (ultimateEffect) return; // it charges again once the ultimate is over (Frog Legion fights for 6.5 s)
+  player.gauge = Math.min(100, player.gauge + amount * gaugeRate() * lateGauge());
   if (player.gauge >= 100) {
     tip('ultimate');
     play('ultimateReady');
@@ -6501,8 +6516,6 @@ function startEnding() {
   setArena(ARENAS[0]); // home again
   endingTier = Math.max(endingTier, ascension.tier);
   ascension.setTier(0); // and just Tode again: a frog with a cup of tea
-  // Only player.update hides the petal shield's bubble, and it doesn't run in the ending: tea in a pink bubble.
-  player.shieldBubble.visible = false;
   hud.setForm('', 0);
   hud.showStory();
   hud.menu.hidden = true;
@@ -7599,7 +7612,7 @@ function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = nul
   const pantry = (id) => (daily || vow('pantry') ? 0 : pantryLevel(id));
   stats.maxHp += pantry('heart') - vow('shell');
   stats.damageMultiplier = 1 + 0.08 * pantry('damage');
-  stats.gaugeRate *= 1 + 0.12 * pantry('gauge');
+  stats.gaugeRate += 0.12 * pantry('gauge'); // (charging bonuses add up, see gaugeRate)
   stats.magnet *= 1 + 0.25 * pantry('magnet');
   stats.dashCooldown *= 1 - 0.1 * pantry('spring');
   stats.revives += pantry('revive');
@@ -8781,6 +8794,10 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   player.setOutfit(shownOutfit(outfit, { run: phase !== 'title' && phase !== 'loading' }));
   ascension.hat = Boolean(outfit.head);
   ascension.glow.lite = quality.features.lite; // (one rim layer from the "lite" quality step on)
+  // The petal shield's bubble is drawn by player.update, which only runs in play. The ending starts in the middle of
+  // an update (the last wave's rewards), and the rest of that update showed the bubble again, so hiding it in
+  // startEnding didn't hold: Tode sipped his tea in a pink bubble. Hide it here, after every update, every frame.
+  if (SHIELD_HIDDEN.has(phase)) player.shieldBubble.visible = false;
   if (render) {
     followShadows();
     drawProjectiles();

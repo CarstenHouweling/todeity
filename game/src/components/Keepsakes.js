@@ -55,7 +55,7 @@ export const KEEPSAKES = [
   {
     id: 'crown', icon: '👑', name: 'Tiny Crown', unlock: 'empress', text: 'Your ultimate charges 40% faster and starts full.',
     apply: ({ stats, grant }) => {
-      stats.gaugeRate *= 1.4;
+      stats.gaugeRate += 0.4;
       grant.fullGauge();
     },
   },

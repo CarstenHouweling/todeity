@@ -3,6 +3,24 @@
 
 export const CHANGELOG = [
   {
+    version: '0.36.3',
+    date: '2026-10-20',
+    title: 'A steadier ultimate',
+    changes: [
+      '⏳ Late in a run the ultimate came back every few seconds: now it takes about 20 s with a strong build, 12 s with every charging boost',
+      '🔋 Static Charge, the Hot Kettle, the Tiny Crown and the Summoner\'s bonus now add up (with diminishing returns) instead of multiplying',
+      '⭐ Elite bees charge it a little more than normal bees, not two and a half times as much',
+      '✋ The gauge starts filling again once your ultimate is over, not while it fires',
+      '🫧 The Petal Shield bubble really stays away while Tode has his tea after Bee-zebub',
+    ],
+  },
+  {
+    version: '0.36.2',
+    date: '2026-10-20',
+    title: 'Every ultimate on screen',
+    changes: ['📱 The ultimate pick fits phones, tablets and laptops: compact cards in a grid, with a one-line summary on phones'],
+  },
+  {
     version: '0.36.1',
     date: '2026-10-20',
     title: 'A quieter title screen',

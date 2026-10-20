@@ -3631,6 +3631,150 @@ body.touch .steep-badge {
   font-size: 13px;
 }
 
+/* Where seven tall cards don't fit (laptops, tablets, phones), the pick turns compact: icon on the left, name and
+   text beside it, in a grid that fits the screen. Short screens zoom the menu by 0.68, so widths there are in the
+   zoomed units (see the end of this file). */
+@media (max-height: 820px), (max-width: 900px) {
+  .ultimates.many .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+    width: min(1100px, 96vw);
+    margin-top: 12px;
+  }
+
+  .ultimates.many .card {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    grid-template-areas: 'icon name' 'icon text' 'icon hint';
+    align-content: start;
+    justify-items: start;
+    gap: 2px 10px;
+    width: auto;
+    padding: 10px 26px 10px 10px;
+    text-align: left;
+    box-shadow: 0 4px 0 #b38b3a, 0 6px 14px rgba(0, 0, 0, 0.3);
+  }
+
+  .ultimates.many .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 0 #b38b3a, 0 10px 18px rgba(0, 0, 0, 0.3);
+  }
+
+  .ultimates.many .card-blend,
+  .ultimates.many .card-tags {
+    display: none;
+  }
+
+  .ultimates.many .card-icon {
+    grid-area: icon;
+    align-self: center;
+    font-size: 34px;
+  }
+
+  .ultimates.many .card-name {
+    grid-area: name;
+    font-size: 16px;
+  }
+
+  .ultimates.many .card-description {
+    grid-area: text;
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+
+  .ultimates.many .card-hint {
+    grid-area: hint;
+    margin-top: 3px;
+    font-size: 11px;
+  }
+
+  .ultimates.many .card-key {
+    top: 8px;
+    right: 10px;
+    bottom: auto;
+    left: auto;
+  }
+}
+
+/* Phones held upright: two columns, the icon beside the name and the one-line text under both (with the full
+   text a card was ~200px tall; one column of seven rows was still too tall for a 640px screen). */
+@media (max-width: 520px) {
+  .ultimates.many .cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .ultimates.many .card {
+    grid-template-columns: 26px 1fr;
+    grid-template-areas: 'icon name' 'text text' 'hint hint';
+    gap: 4px 6px;
+    padding: 8px 8px 9px;
+  }
+
+  .ultimates.many .card-icon {
+    font-size: 22px;
+  }
+
+  .ultimates.many .card-key {
+    display: none;
+  }
+
+  /* One line for the heading: on two it took the room of a row of cards. */
+  .ultimates.many h2 {
+    margin: 0;
+    font-size: 24px;
+  }
+
+  .ultimates.many h2 + .sub {
+    margin: 2px 0 0;
+    font-size: 13px;
+  }
+
+  .ultimates.many .card-name {
+    font-size: 15px;
+  }
+
+  .ultimates.many .dialogue {
+    display: none;
+  }
+}
+
+/* Phones (upright or sideways): the one-line text instead of the full one. */
+@media (max-width: 520px), (max-height: 500px) {
+  .ultimates.many .card-description {
+    display: none;
+  }
+
+  .ultimates.many .card-short {
+    display: block;
+    grid-area: text;
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+}
+
+/* Short screens zoom the menu (0.68): the grid may use the whole width in zoomed units. */
+@media (max-height: 500px) {
+  .ultimates.many .cards {
+    width: min(1100px, calc(96vw / 0.68));
+    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  }
+
+  /* No room for the spirit's line here: seven cards need the height. */
+  .ultimates.many .dialogue {
+    display: none;
+  }
+
+  .ultimates.many h2 + .sub {
+    margin: 2px 0 0;
+  }
+}
+
+.card-short {
+  display: none;
+}
+
 .card.locked {
   filter: grayscale(0.9);
   opacity: 0.55;
