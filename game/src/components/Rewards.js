@@ -258,21 +258,22 @@ export function accountLevel(progress) {
 }
 
 // --- Sets and beauty: trinkets placed close together form a display (looks only, no gameplay) ---------------------
+// A finished set puts on its own show (`show` says what; SetShows.js draws it, by the set's id).
 export const SET_RADIUS = 120; // every part of a set within this distance of the set's middle
 export const SETS = [
-  { id: 'teaparty', name: 'Tea Party', icon: '🍵', parts: ['teapot', 'cups', 'bench'], beauty: 60, color: '#fff2e0', effect: 'steam' },
-  { id: 'victory', name: 'Hall of Victory', icon: '🏆', parts: ['hive', 'helm', 'feather', 'crown', 'horns'], beauty: 150, color: '#ffd36b', effect: 'sparkle' },
-  { id: 'glade', name: 'Fairy Glade', icon: '✨', parts: ['mushrooms', 'crystal', 'jar'], beauty: 70, color: '#c58aff', effect: 'fireflies' },
-  { id: 'pond', name: 'Pond Friends', icon: '🦆', parts: ['duck', 'snail', 'fountain'], beauty: 60, color: '#7fd8ff', effect: 'ripples' },
-  { id: 'zen', name: 'Zen Corner', icon: '🎐', parts: ['bonsai', 'lantern', 'chimes'], beauty: 60, color: '#ff9ec7', effect: 'petals' },
-  { id: 'guardians', name: 'Garden Guardians', icon: '🐸', parts: ['gnome', 'scarebee', 'tulips'], beauty: 50, color: '#7ed957', effect: 'leaves' },
-  { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', effect: 'beam' },
-  { id: 'playground', name: 'Playground', icon: '🎪', parts: ['trampoline', 'ball', 'launcher', 'stage'], beauty: 90, color: '#ff9ec7', effect: 'confetti' },
-  { id: 'champions', name: "Champion's Corner", icon: '🏅', parts: ['podium', 'fireworks', 'trophy'], beauty: 100, color: '#ffd36b', effect: 'confetti' },
-  { id: 'temple', name: 'Temple Grounds', icon: '⛩️', parts: ['torii', 'bell', 'pagoda', 'gong'], beauty: 140, color: '#ff8a6b', effect: 'mist' },
-  { id: 'stargazing', name: 'Stargazing', icon: '🔭', parts: ['orrery', 'owl', 'sundial'], beauty: 90, color: '#9fb8ff', effect: 'stars' },
-  { id: 'birdsong', name: 'Birdsong Corner', icon: '🐦', parts: ['birdhouse', 'birdbath', 'koi'], beauty: 70, color: '#bfe8ff', effect: 'feathers' },
-  { id: 'harvest', name: 'Harvest Fields', icon: '🌾', parts: ['windmill', 'barrow', 'sprout', 'totem'], beauty: 100, color: '#ffd36b', effect: 'leaves' },
+  { id: 'teaparty', name: 'Tea Party', icon: '🍵', parts: ['teapot', 'cups', 'bench'], beauty: 60, color: '#fff2e0', show: 'a spiral of tea steam' },
+  { id: 'victory', name: 'Hall of Victory', icon: '🏆', parts: ['hive', 'helm', 'feather', 'crown', 'horns'], beauty: 150, color: '#ffd36b', show: 'a golden laurel wreath' },
+  { id: 'glade', name: 'Fairy Glade', icon: '✨', parts: ['mushrooms', 'crystal', 'jar'], beauty: 70, color: '#c58aff', show: 'fairies and a fairy ring' },
+  { id: 'pond', name: 'Pond Friends', icon: '🦆', parts: ['duck', 'snail', 'fountain'], beauty: 60, color: '#7fd8ff', show: 'a little rainbow' },
+  { id: 'zen', name: 'Zen Corner', icon: '🎐', parts: ['bonsai', 'lantern', 'chimes'], beauty: 60, color: '#ff9ec7', show: 'a whirl of blossom petals' },
+  { id: 'guardians', name: 'Garden Guardians', icon: '🐸', parts: ['gnome', 'scarebee', 'tulips'], beauty: 50, color: '#7ed957', show: 'guardian wisps' },
+  { id: 'glory', name: 'Hall of Glory', icon: '🗿', parts: ['idol', 'banner', 'trophy'], beauty: 80, color: '#fff2a0', show: 'a pillar of light' },
+  { id: 'playground', name: 'Playground', icon: '🎪', parts: ['trampoline', 'ball', 'launcher', 'stage'], beauty: 90, color: '#ff9ec7', show: 'soap bubbles' },
+  { id: 'champions', name: "Champion's Corner", icon: '🏅', parts: ['podium', 'fireworks', 'trophy'], beauty: 100, color: '#ffd36b', show: 'fireworks' },
+  { id: 'temple', name: 'Temple Grounds', icon: '⛩️', parts: ['torii', 'bell', 'pagoda', 'gong'], beauty: 140, color: '#ff8a6b', show: 'sky lanterns' },
+  { id: 'stargazing', name: 'Stargazing', icon: '🔭', parts: ['orrery', 'owl', 'sundial'], beauty: 90, color: '#9fb8ff', show: 'a constellation overhead' },
+  { id: 'birdsong', name: 'Birdsong Corner', icon: '🐦', parts: ['birdhouse', 'birdbath', 'koi'], beauty: 70, color: '#bfe8ff', show: 'songbirds' },
+  { id: 'harvest', name: 'Harvest Fields', icon: '🌾', parts: ['windmill', 'barrow', 'sprout', 'totem'], beauty: 100, color: '#ffd36b', show: 'butterflies' },
 ];
 const BEAUTY = { milestone: 15, gift: 20, kettle: 12, champion: 30 };
 

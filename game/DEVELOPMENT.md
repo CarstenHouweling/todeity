@@ -260,7 +260,7 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   keep them blocky. `/classes.html` (dev only) previews them all (`preview.sheet([{ move: 'dance', at: 0.3, camera: 'face' }])`).
 - **First impressions:** the title camera orbits plain Tode (his forms are a surprise; the ending shows him plain
   again too); the first run starts with a skippable story
-  cut-scene (`meta.seenStory`). C saves a watermarked screenshot (in a garden without the editor's rings; there is no screenshot button anywhere since v0.29.9). The Say Cheese achievement (`photo`) comes from C or from 📤 Share run (`openShare`), so tablets can earn it too.
+  cut-scene (`meta.seenStory`). C saves a watermarked screenshot (in a garden without the editor's rings, which only show while editing anyway; there is no screenshot button anywhere since v0.29.9). The Say Cheese achievement (`photo`) comes from C or from 📤 Share run (`openShare`), so tablets can earn it too.
 - **Finale:** the Empress (wave 20) has a Royal Spiral attack. Bee-zebub (wave 21, a winged devil with a fire aura:
   `components/DevilModel.js`, v0.26.2, built at every graphics level since the old bee model with horns read as
   "very simple") adds
@@ -464,8 +464,19 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   events (`visitLook`, `gardenLook()`); their 🌙 says the owner decides. 🎵 opens the song list
   (`hud.showGardenSongs`). In a garden the music plays at `GARDEN_MUSIC` (45%, `setMusicScene` in Sound.js) and
   dips under emote, boop and dance sounds (`duckMusicFor`), which it used to drown out. The phone BOOP button is 🥊.
-  **Sets** (`SETS`, `gardenSets`, `gardenBeauty` in Rewards.js): all parts within `SET_RADIUS` of their middle show
-  a ring and particles (`SET_EFFECTS`) and add beauty (shown on the profile).
+  **Sets** (`SETS`, `gardenSets`, `gardenBeauty` in Rewards.js): all parts within `SET_RADIUS` of their middle add
+  beauty (shown on the profile) and put on the set's own **show** (v0.37, `components/SetShows.js`, `SHOWS` keyed by
+  set id; `show` in `SETS` says what it is, in the editor's hint line and the set chip's title): a tea-steam spiral,
+  a golden laurel wreath, fairies and a fairy ring, a rainbow and ripples, whirling blossom petals, guardian wisps
+  with a ward pulse, a pillar of light, soap bubbles (an instanced rim shader), fireworks, sky lanterns over mist, a
+  constellation on a patch of night sky (so it shows by day), circling songbirds, butterflies and pollen.
+  `TitleGarden.updateSets` keeps a show while its set stays (shows don't restart on every edit), grows new ones in
+  (`SHOW_GROW`) and frees removed ones. The ring round a set shows **only while editing**: walking around it meant
+  nothing (the owner found the rings weird in the garden). Shows are a few instanced meshes and `Dots` (one
+  `THREE.Points` per kind; `size` in world units via `POINT_SCALE`, since point sizes assume a 90° field of view and
+  the camera's is 30°); all 13 sets together add 43 draw calls. Things above ~110 units leave the top of the walking
+  view (it looks down at ~39°), so overhead shows hang lower; additive dots wash out on the sunny lawn, so what must
+  read by day uses normal blending (steam, mist, the constellation's stars).
 - **Gardens as a meeting place** (v0.22, `GardenHub.js`): 🏡 My garden puts Tode in his garden as a hopping frog
   (`hub.update`: `WALK_SPEED`, Space/Shift/🦘 jumps with `JUMP_SPEED`/`GRAVITY`; the camera follows him, see
   `TitleGarden.walk`, and is a child of his group, so `updateCamera` gets his position as `origin`). Frogs bump on
@@ -1221,6 +1232,7 @@ server proxies `/ws` and `/api`).
 | `components/Wearables.js` | The wardrobe's slots and items, how each unlocks (`wearableUnlocked`, `wearableHint`) and `cleanOutfit` (no three.js: the server imports it). |
 | `components/WearableModels.js` | The wearables' voxel models and auras; `dressFrog(rig, outfit)` puts them on a frog's rig and covers the class's own gear. |
 | `components/TitleGarden.js` | The trinkets on the title screen, the garden camera and the editor (raycasts onto the lawn). |
+| `components/SetShows.js` | The show each finished garden set puts on (fireworks, fairies, rainbow, lanterns, birds…). |
 | `components/GardenHub.js` | Gardens as a meeting place: hopping, jumping and stacking, garden rooms, invite circles and parties. |
 | `components/GardenGames.js` | Garden games: the pond (swimming, cannonballs, skipping stones, the koi) and Leaf Rush; `gardenWarmup()` (one of each of their meshes, compiled in the background by `warmGarden` in main.js on the way into a garden). |
 | `components/ClassPortraits.js` | Renders each class's frog once into a portrait for the menus (a small throwaway WebGL renderer). |

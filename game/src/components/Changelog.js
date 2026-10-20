@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.37.0',
+    date: '2026-10-20',
+    title: 'Sets that put on a show',
+    changes: [
+      '🎆 Every finished garden set now has its own show: fireworks over the Champion\'s Corner, fairies in the Fairy Glade, a rainbow over the Pond Friends, sky lanterns from the Temple Grounds, songbirds, butterflies, soap bubbles, a laurel wreath, a constellation and more',
+      '⭕ The rings around sets only show while you edit your garden',
+    ],
+  },
+  {
     version: '0.36.4',
     date: '2026-10-20',
     title: 'The music plays on',

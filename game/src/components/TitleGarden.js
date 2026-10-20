@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildTrinket, disposeTrinket } from './TrinketModels.js';
 import { DECOR_RADIUS, MAX_DECOR, gardenSets, trinketById } from './Rewards.js';
+import { buildSetShow, disposeSetShow } from './SetShows.js';
 
 /**
  * Tode's garden on the title screen: the trinkets placed around him, and the "My garden" editor.
@@ -10,7 +11,8 @@ import { DECOR_RADIUS, MAX_DECOR, gardenSets, trinketById } from './Rewards.js';
  * - **Editing:** drag a trinket from the tray onto the lawn, or a placed one to move it (tap the tray, then the lawn,
  *   works too). A tapped trinket is selected: turn it (R, ↻, scroll while held), put it away (Delete). `snap`
  *   lines them up on a grid; `undo()` steps back (Ctrl+Z).
- * - **Sets** (Rewards.js): trinkets of a set close together light up a little display.
+ * - **Sets** (Rewards.js): trinkets of a set close together put on their own show (SetShows.js); while editing, a
+ *   ring shows where the set is.
  * - **Visiting:** `visit(decor)` shows someone else's garden, look only.
  *
  * Placements live in `meta.decor` ([{ id, x, y, r }]); `onChange(decor)` saves them.
@@ -24,19 +26,7 @@ const DISTANCE = [140, 720];
 const WALK_VIEW = { pitch: 0.68, distance: 410 }; // hopping around: closer than the editor, far enough to see who's near
 const DRESSING_DISTANCE = 230; // the wardrobe is open: close enough to see what he wears
 
-const SET_EFFECTS = {
-  steam: { colors: ['#ffffff', '#f4ead8'], up: 60, gravity: -30, size: 3.2, height: 18, count: 2, every: 0.12, spread: 12 },
-  sparkle: { colors: ['#fff2a0', '#ffd36b', '#ffffff'], up: 40, gravity: -10, size: 1.8, height: 10, count: 2, every: 0.1, spread: 70, glow: true },
-  fireflies: { colors: ['#fff27a', '#c58aff', '#d4ff8a'], up: 14, gravity: -6, size: 1.6, height: 16, count: 1, every: 0.08, spread: 80, glow: true, life: 1.6 },
-  ripples: { colors: ['#bfefff', '#ffffff'], up: 4, gravity: 0, size: 1.4, height: 1, count: 10, every: 0.9, spread: 0, ring: 40 },
-  petals: { colors: ['#ff9ec7', '#ffd1e3', '#ffffff'], up: -10, gravity: 20, size: 1.8, height: 70, count: 1, every: 0.15, spread: 90, life: 2.4 },
-  leaves: { colors: ['#7ed957', '#c8f77a', '#ffd36b'], up: 30, gravity: 30, size: 1.8, height: 8, count: 2, every: 0.2, spread: 70 },
-  beam: { colors: ['#fff2a0', '#ffffff'], up: 160, gravity: -40, size: 2, height: 4, count: 2, every: 0.08, spread: 8, glow: true },
-  confetti: { colors: ['#ff9ec7', '#7ed957', '#5fb8ff', '#ffd23f', '#c58aff'], up: 120, gravity: 160, size: 1.8, height: 40, count: 3, every: 0.25, spread: 80, life: 1.4 },
-  mist: { colors: ['#ffffff', '#ffe9f0', '#ffd1c8'], up: 6, gravity: -2, size: 3.6, height: 4, count: 2, every: 0.18, spread: 90, life: 2.4 },
-  stars: { colors: ['#cfe0ff', '#ffffff', '#fff2a0'], up: 30, gravity: -6, size: 1.5, height: 50, count: 1, every: 0.1, spread: 80, glow: true, life: 1.6 },
-  feathers: { colors: ['#ffffff', '#bfe8ff', '#ffd1e3'], up: -6, gravity: 14, size: 2, height: 60, count: 1, every: 0.25, spread: 70, life: 2.6 },
-};
+const SHOW_GROW = 1.4; // seconds a new set's show takes to grow in
 
 export class TitleGarden {
   constructor({ scene, camera, canvas, particles, play }) {
@@ -57,7 +47,7 @@ export class TitleGarden {
     this.gesture = null;
     this.pointers = new Map();
     this.sets = [];
-    this.setFx = []; // { set, x, y, ring, timer, beam }
+    this.setFx = new Map(); // set id → { ring (editing only), show, age }
     this.onChange = null;
     this.onSelect = null; // the tray redraws (held or selected trinket changed)
     this.onPlaced = null; // a trinket was set down (Tode looks at it)
@@ -566,25 +556,35 @@ export class TitleGarden {
 
   // --- Sets --------------------------------------------------------------------------------------
 
-  /** Finds the sets on the lawn; new ones light up (with `celebrate`). */
+  /** Finds the sets on the lawn; new ones start their show (with `celebrate`, a burst too). Shows that stay keep going. */
   updateSets(celebrate) {
     const found = gardenSets(this.decor());
     const had = new Set(this.sets.map(({ set }) => set.id));
     this.sets = found;
-    for (const fx of this.setFx) {
+    const ids = new Set(found.map(({ set }) => set.id));
+    for (const [id, fx] of this.setFx) {
+      if (ids.has(id)) continue;
       fx.ring.removeFromParent();
       fx.ring.geometry.dispose();
       fx.ring.material.dispose();
+      disposeSetShow(fx.show);
+      this.setFx.delete(id);
     }
-    this.setFx = found.map(({ set, x, y }) => {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(108, 114, 72),
-        new THREE.MeshBasicMaterial({ color: set.color, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })
-      );
-      ring.position.set(x, y, 0.8);
-      this.root.add(ring);
-      return { set, x, y, ring, timer: 0 };
-    });
+    for (const { set, x, y } of found) {
+      let fx = this.setFx.get(set.id);
+      if (!fx) {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(108, 114, 72),
+          new THREE.MeshBasicMaterial({ color: set.color, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false })
+        );
+        const show = buildSetShow(set, { particles: this.particles, camera: this.camera });
+        this.root.add(ring, show.group);
+        fx = { set, ring, show, age: celebrate ? 0 : SHOW_GROW };
+        this.setFx.set(set.id, fx);
+      }
+      fx.ring.position.set(x, y, 0.8);
+      fx.show.group.position.set(x, y, 0);
+    }
     if (!celebrate) return;
     for (const { set, x, y } of found) {
       if (had.has(set.id)) continue;
@@ -633,17 +633,18 @@ export class TitleGarden {
       this.selection.scale.setScalar(1 + 0.06 * Math.sin(this.time * 5));
     }
     this.boundary.material.opacity = 0.25 + 0.1 * Math.sin(this.time * 2);
-    // Sets: a glowing ring and their own little show.
-    for (const fx of this.setFx) {
-      fx.ring.material.opacity = 0.16 + 0.08 * Math.sin(this.time * 2 + fx.x);
-      const look = SET_EFFECTS[fx.set.effect];
-      if (!look || !this.particles || (fx.timer -= delta) > 0) continue;
-      fx.timer = look.every;
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * look.spread;
-      this.particles.burst(new THREE.Vector3(fx.x + Math.cos(angle) * r, fx.y + Math.sin(angle) * r, 0), {
-        count: look.count, colors: look.colors, speed: 12, up: look.up, gravity: look.gravity, size: look.size, height: look.height, glow: look.glow, life: look.life ?? 1, ring: look.ring ?? 0,
-      });
+    // Sets: their show, and while editing a ring that shows where the set is (walking around, it means nothing).
+    for (const fx of this.setFx.values()) {
+      fx.ring.visible = this.editing;
+      fx.ring.material.opacity = 0.16 + 0.08 * Math.sin(this.time * 2 + fx.ring.position.x);
+      const grow = Math.min(1, (fx.age += delta) / SHOW_GROW);
+      fx.show.group.scale.setScalar(Math.max(0.001, 1 + 2.2 * (grow - 1) ** 3 + 1.2 * (grow - 1) ** 2)); // overshoots a little
+      try {
+        fx.show.update(this.time, delta, this.night);
+      } catch (error) {
+        console.error(error);
+        fx.show.update = () => {};
+      }
     }
   }
 }

@@ -39,7 +39,7 @@ function labelTexture(text, color = '#ffffff') {
 
 let glowMap = null;
 /** A soft round glow (motes, stars, rockets). */
-function glow() {
+export function glow() {
   if (glowMap) return glowMap;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
@@ -56,7 +56,7 @@ function glow() {
 
 let fadeMap = null;
 /** Bright at the bottom, gone at the top (pillars of light). */
-function fadeUp() {
+export function fadeUp() {
   if (fadeMap) return fadeMap;
   const canvas = document.createElement('canvas');
   canvas.width = 4;
