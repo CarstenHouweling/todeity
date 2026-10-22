@@ -18,7 +18,7 @@ import { todayKey } from './Random.js';
 import { GRAPHICS, GRAPHICS_LABELS } from './Quality.js';
 import { NAME_MAX, TAG_COLORS } from './PlayerTag.js';
 import { BOONS, TRIALS, dailyTwists } from './DailyTwists.js';
-import { KETTLE_HOURS, SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
+import { KETTLE_HOURS, SETS, STREAK_GIFTS, TRINKETS, accountLevel, gardenBeauty, gardenSets, giftLeaves, giftStatus, kettleStatus, ownedTrinkets, trinketById } from './Rewards.js';
 import { WEARABLES, unlockedWearables, wearableById } from './Wearables.js';
 import { trinketPicture } from './TrinketPortraits.js';
 import { viewHeight, viewWidth } from './Viewport.js';
@@ -1052,7 +1052,7 @@ export class Hud {
   /** The daily gift or the kettle in the dock: a ring fills while it counts down, and it glows when it's ready. */
   rewardTile(kind, state) {
     const gift = kind === 'gift';
-    const label = state.ready ? (gift ? `Day ${state.day} gift` : 'Tea ready') : `<time>${clock(state.nextIn)}</time>`;
+    const label = state.ready ? (gift ? `Day ${state.streak} gift` : 'Tea ready') : `<time>${clock(state.nextIn)}</time>`;
     const title = state.ready ? (gift ? 'Claim your daily gift' : 'The kettle is ready') : gift ? 'Next daily gift' : 'The kettle is brewing';
     return `<button type="button" class="dock-tile reward-tile${state.ready ? ' ready' : ''}" data-action="claim-${kind}" data-reward="${kind}" title="${title}" style="--p:${rewardProgress(kind, state)}"><span class="dock-icon">${gift ? '🎁' : '🫖'}</span><span class="dock-label">${label}</span></button>`;
   }
@@ -1080,15 +1080,19 @@ export class Hud {
     }
     const trinket = reward.trinket && trinketById(reward.trinket);
     if (kind === 'medal') return this.showMedal(reward, trinket);
+    // This week of the streak: day 8 starts a new row of gifts at Day 8, the streak never starts over.
+    const week = reward.streak - reward.slot;
     const calendar =
       kind === 'gift'
         ? `<div class="streak">${STREAK_GIFTS.map(
-            (gift, i) => `<span class="streak-day ${i + 1 < reward.day ? 'past' : i + 1 === reward.day ? 'today' : ''}"><small>Day ${i + 1}</small>${gift.trinket ? '🎀' : '🍃'}<b>${gift.leaves}</b></span>`
-          ).join('')}</div><p class="sub">🔥 ${reward.streak}-day streak. Come back tomorrow to keep it going!</p>`
+            (gift, i) => `<span class="streak-day ${i + 1 < reward.slot ? 'past' : i + 1 === reward.slot ? 'today' : ''}"><small>Day ${week + i + 1}</small>${gift.trinket ? '🎀' : '🍃'}<b>${giftLeaves(gift.leaves, reward.bonus)}</b></span>`
+          ).join('')}</div><p class="sub">🔥 ${reward.streak}-day streak${
+            reward.bonus ? `: this week's gifts are <b>+${Math.round(reward.bonus * 100)}%</b>` : ''
+          }. Come back tomorrow to keep it going!</p>`
         : '<p class="sub">The kettle brews again in a few hours.</p>';
     this.showModal(
       'reward',
-      `<h2>${kind === 'gift' ? `🎁 Day ${reward.day} gift!` : '🫖 The kettle whistles!'}</h2>
+      `<h2>${kind === 'gift' ? `🎁 Day ${reward.streak} gift!` : '🫖 The kettle whistles!'}</h2>
       <div class="reward-prize"><span class="reward-leaves">+${reward.leaves} 🍃</span>${
         trinket ? `<span class="reward-trinket"><em>${trinket.icon}</em><b>New trinket: ${trinket.name}</b><small>It's waiting in your garden</small></span>` : ''
       }</div>

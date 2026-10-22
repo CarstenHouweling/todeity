@@ -427,7 +427,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   ending starts in the middle of an update (the last wave's rewards) and the rest of that update showed it again;
   fixed in v0.36.3, checked with the shield up when Bee-zebub falls.
 - **Coming back** (`components/Rewards.js`, shared with the server): a 🎁 daily gift (`STREAK_GIFTS`, a 7-day cycle,
-  trinkets on days 3 and 7) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
+  trinkets on days 3 and 7; the streak itself never resets: `giftStatus` gives the real `streak` day, shown on the
+  tile and the popup, and the `slot` in the cycle it pays, so day 8 is the "Day 8 gift" and pays like day 1; every finished week adds `STREAK_BONUS.perWeek` (25%) to the
+  leaves, up to +100% from week 5, see `giftLeaves`) and the 🫖 kettle (`KETTLE_HOURS`, leaves and a 30% trinket chance), claimed through
   `POST /api/save/:code/claim` (`claimReward` in CloudSave.js; locally when offline). **Trinkets** (`TRINKETS`,
   43): milestones unlock by themselves from the progress (`unlock`), gift, kettle and champion ones are stored in
   `progress.trinkets`. A milestone must only use progress that never goes down (runs, kills, the best wave, the

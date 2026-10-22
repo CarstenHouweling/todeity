@@ -1,6 +1,6 @@
 /**
- * Reasons to come back: a **daily gift** (once per UTC day; a streak of days pays more and gives trinkets on days 3
- * and 7), the **tea kettle** (it brews a reward every few hours), the **champion's medal** (the day after topping the
+ * Reasons to come back: a **daily gift** (once per UTC day; a streak of days pays more, every week a bit more again,
+ * and gives trinkets on days 3 and 7 of each week), the **tea kettle** (it brews a reward every few hours), the **champion's medal** (the day after topping the
  * Daily Brew board: leaves and a chance at a champion's trinket or wearable) and **trinkets**: little ornaments Tode collects and
  * places in his garden on the title screen. Some trinkets come from milestones (runs, bosses, achievements), some from
  * gifts and the kettle. The account level sums up how much someone has played.
@@ -12,16 +12,18 @@
 export const KETTLE_HOURS = 4;
 const HOUR = 3_600_000;
 
-// Day 1…7 of a streak, then it starts over at day 1 (still counting the streak).
+// The gifts of each week of a streak: day 8 pays like day 1, and so on. The streak itself keeps counting forever.
 export const STREAK_GIFTS = [
-  { leaves: 15 },
   { leaves: 20 },
-  { leaves: 25, trinket: true },
-  { leaves: 35 },
-  { leaves: 45 },
-  { leaves: 60 },
-  { leaves: 100, trinket: true },
+  { leaves: 30 },
+  { leaves: 40, trinket: true },
+  { leaves: 50 },
+  { leaves: 65 },
+  { leaves: 80 },
+  { leaves: 150, trinket: true },
 ];
+// Every finished week of a streak makes the next week's gifts 25% bigger, up to double (from week 5 on).
+export const STREAK_BONUS = { perWeek: 0.25, max: 1 };
 
 // `source`: 'milestone' (unlocked by `unlock(progress)`), 'gift' (daily streak) or 'kettle' (a chance per brew).
 export const TRINKETS = [
@@ -107,14 +109,19 @@ export function ownedTrinkets(progress) {
   return [...owned];
 }
 
-/** The daily gift: { ready, day (1–7 of the cycle it would pay), streak (days in a row it would make) }. */
+/**
+ * The daily gift: { ready, streak (days in a row it would make), slot (1–7: which of `STREAK_GIFTS` it pays),
+ * bonus (the week's extra share of leaves, 0–`STREAK_BONUS.max`) }.
+ */
 export function giftStatus(progress, now) {
   const today = dayKey(now);
   const { day, count } = progress.streak ?? { day: null, count: 0 };
   const ready = day !== today;
   const streak = ready ? (day === previous(today) ? count + 1 : 1) : count;
   const nextIn = Date.parse(`${today}T00:00:00Z`) + 86_400_000 - now;
-  return { ready, streak, day: ((streak - 1) % STREAK_GIFTS.length) + 1, nextIn };
+  const week = Math.floor((streak - 1) / STREAK_GIFTS.length);
+  const bonus = Math.min(STREAK_BONUS.max, week * STREAK_BONUS.perWeek);
+  return { ready, streak, slot: ((streak - 1) % STREAK_GIFTS.length) + 1, bonus, nextIn };
 }
 
 export function kettleStatus(progress, now) {
@@ -132,18 +139,22 @@ function giveTrinket(progress, source, random) {
   return trinket.id;
 }
 
-/** Claims today's gift. Returns { leaves, trinket, streak, day } or an error string. */
+/** The leaves a streak gift pays with a week's bonus. */
+export const giftLeaves = (leaves, bonus) => Math.round(leaves * (1 + bonus));
+
+/** Claims today's gift. Returns { leaves, trinket, streak, slot, bonus } or an error string. */
 export function claimGift(progress, now, random = Math.random) {
   withRewards(progress);
   const status = giftStatus(progress, now);
   if (!status.ready) return 'Come back tomorrow for the next gift.';
-  const gift = STREAK_GIFTS[status.day - 1];
+  const gift = STREAK_GIFTS[status.slot - 1];
   progress.streak = { day: dayKey(now), count: status.streak };
   let leaves = gift.leaves;
   const trinket = gift.trinket ? giveTrinket(progress, 'gift', random) : null;
   if (gift.trinket && !trinket) leaves += 30; // every gift trinket collected already
+  leaves = giftLeaves(leaves, status.bonus);
   progress.leaves += leaves;
-  return { leaves, trinket, streak: status.streak, day: status.day };
+  return { leaves, trinket, streak: status.streak, slot: status.slot, bonus: status.bonus };
 }
 
 /** Pours the kettle. Returns { leaves, trinket } or an error string. */

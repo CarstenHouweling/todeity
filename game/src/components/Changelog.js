@@ -3,6 +3,16 @@
 
 export const CHANGELOG = [
   {
+    version: '0.37.3',
+    date: '2026-10-22',
+    title: 'A streak that never cools',
+    changes: [
+      '🎁 The daily gift streak keeps counting after day 7: day 8 is the Day 8 gift (it used to show Day 1 again), and the gift calendar shows the week you are in. The gifts still come in weeks, with trinkets on the 3rd and 7th day of each',
+      '🍃 Bigger daily gifts: a week of them now pays 435 Golden Leaves (it was 300), up to 150 on day 7',
+      '🔥 Every week you keep the streak going makes the next week\'s gifts 25% bigger, up to double from week 5 on',
+    ],
+  },
+  {
     version: '0.37.2',
     date: '2026-10-22',
     title: 'The host pours the next cup',
