@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.37.2',
+    date: '2026-10-22',
+    title: 'The host pours the next cup',
+    changes: [
+      "👥 In co-op only the host sees ↻ Play again on the game-over screen (it did nothing for the others); teammates see that the host starts the next run",
+      "🍃 The Pantry on the game-over screen opens as a popup: Back returns to your results instead of the title, so co-op frogs stay in the room",
+    ],
+  },
+  {
     version: '0.37.1',
     date: '2026-10-22',
     title: 'Another cup of the day',

@@ -962,7 +962,11 @@ export class Hud {
     );
   }
 
-  showPantry() {
+  /**
+   * Tode's Pantry: the title's menu, or (`popup`, from the game-over screen) a popup over it whose Back returns there,
+   * so a co-op frog stays in the room and keeps the run's results.
+   */
+  showPantry({ popup = false } = {}) {
     const rows = PANTRY.map((upgrade) => {
       const level = pantryLevel(upgrade.id);
       const cost = nextCost(upgrade);
@@ -978,10 +982,7 @@ export class Hud {
           ${button}
         </div>`;
     }).join('');
-    this.showMenu(
-      'pantry',
-      `
-      <div class="panel">
+    const html = `
         <h2>Tode's Pantry</h2>
         <p class="sub">Golden Leaves earned in every run buy upgrades that last forever.</p>
         <p class="leaves">🍃 ${meta.leaves} Golden Leaves</p>
@@ -990,9 +991,9 @@ export class Hud {
         <div class="achievements">${ACHIEVEMENTS.map(
           (a) => `<span class="achievement ${isUnlocked(a.id) ? 'unlocked' : ''}" title="${a.name}: ${a.text} (+${a.reward} 🍃)">${a.icon}</span>`
         ).join('')}</div>
-        <div class="menu-buttons">${this.saveChip()}<button class="menu-button" data-action="title">Back</button></div>
-      </div>`
-    );
+        <div class="menu-buttons">${this.saveChip()}<button class="menu-button" data-action="${popup ? 'close-modal' : 'title'}">Back</button></div>`;
+    if (popup) this.showModal('pantry', html);
+    else this.showMenu('pantry', `<div class="panel">${html}</div>`);
   }
 
   /** Top left of the title (after the first run): level, name and rank, the bar to the next level. Opens the profile. */
@@ -1993,6 +1994,7 @@ export class Hud {
   }
 
   showGameOver({ score, isRecord, kills, wave, level, time, clear, leaves, line, victory, daily, name, build, steep, gentle, offerGentle, grazes = 0, coop = 0, host = true, team = null, autoSubmit = false }) {
+    const guest = coop >= 2 && !host; // only the host can play again: the whole room goes along
     const items = [build.keepsake, build.ultimate, ...build.skills, ...build.brews, ...(build.charms ?? [])].filter(Boolean);
     const gathered = items.length
       ? `<div class="run-build">${items
@@ -2018,7 +2020,7 @@ export class Hud {
           : ''
       }
       ${
-        coop >= 2 && !host
+        guest
           ? `<p class="sub submit-score">👥 Your host submits the team's score to the ${coop}-frog co-op board.</p>`
           : autoSubmit
             ? `<form class="submit-score"><p class="sub">🏆 Submitting ${coop >= 2 ? "the team's score" : 'your score'} as <b>${escapeHtml(name)}</b>…</p></form>`
@@ -2026,12 +2028,12 @@ export class Hud {
       }
       <div class="board-slot"></div>
       <div class="menu-buttons">
-        <button class="menu-button primary" data-action="start">↻ Play again</button>
+        ${guest ? '' : '<button class="menu-button primary" data-action="start">↻ Play again</button>'}
         <button class="menu-button" data-action="share">📤 Share run</button>
         <button class="menu-button" data-action="pantry">🍃 Pantry</button>
         <button class="menu-button" data-action="title">⌂ Title</button>
       </div>
-      <p class="prompt">or press Space</p>`
+      ${guest ? '<p class="prompt">⏳ Your host starts the next run</p>' : '<p class="prompt">or press Space</p>'}`
     );
   }
 

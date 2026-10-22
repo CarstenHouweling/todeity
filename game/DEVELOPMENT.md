@@ -867,7 +867,8 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Esc closes it and no other key reaches the game.
 - **Meta progression:** each run earns Golden Leaves (`leavesForRun`: mostly waves, bosses and victory; a wave-10
   run pays ~35, a wave-20 run ~85, the whole Pantry of 13 upgrades costs ~10,350) for permanent upgrades in Tode's
-  Pantry (title screen),
+  Pantry (title screen; from the game-over screen `showPantry({ popup: true })` opens it as a popup, so Back returns
+  to the results and a co-op frog stays in the room, since v0.37.2),
   and Tode says a story line after each run. **Cloud saves** (`components/CloudSave.js`, `server/saves.js`): the
   server owns leaves, Pantry levels, achievements and run stats. Every browser gets a save code (`MINT-FROG-42`,
   two words and a number) on its first visit. The profile popup (the title's level card) shows the code with 📋 Copy;
@@ -887,7 +888,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   **Daily Brew** (since v0.30.1 the server puts a `daily` run on today's Daily board only, never on `all`, `depth`
   or `speed`, whatever client sends it; before, Daily runs reached all of them). **Auto-submit** (v0.29.3): `endRun`
   submits every run by itself when the frog has a name
-  (`playerName()`: the player tag, else the name last typed) and isn't a co-op guest (the host submits the team);
+  (`playerName()`: the player tag, else the name last typed) and isn't a co-op guest (the host submits the team;
+  since v0.37.2 a guest's game-over screen has no ↻ Play again either, and Space does nothing there: only the host
+  restarts the room, `hostStartCoop`);
   the game-over screen says "Submitting… as Name" and then the result. Frogs without a name get the name field and
   🏆 Submit as before, and a failed submit brings the field back to retry. `submitRun` waits out the server's 10 s per
   IP (`POST_INTERVAL`) itself, so quick runs don't get "Slow down"; a submit still pending when Play again is pressed

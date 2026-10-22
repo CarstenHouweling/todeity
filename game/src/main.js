@@ -7554,6 +7554,7 @@ function clearWorld() {
 function startRun({ daily = false, coop: coopRun = false, vows: sharedVows = null } = {}) {
   if (coopRun && settingOff) achieve('party'); // set off from a garden party
   leaveGardenView(); // a party setting off from a garden
+  hud.hideModal(); // a guest's popup (Pantry, share card) when the host starts the next run
   if (!coopRun && coop) leaveCoop();
   if (!coopRun && worldTiles !== SOLO_TILES) buildWorld(SOLO_TILES);
   // The Daily Brew rolls waves, weather and offers from today's seed, the same for everyone.
@@ -8330,7 +8331,7 @@ const MENU_ACTIONS = {
   },
   leaderboard: ({ board }) => showLeaderboard(board ?? 'all'),
   submit: ({ name }) => submitRun(name ?? ''),
-  pantry: () => hud.showPantry(),
+  pantry: () => hud.showPantry({ popup: phase === 'gameover' }), // after a run: over the results, keeps the co-op room
   keepsakes: () => hud.showKeepsakes(),
   classes: () => hud.showClasses(),
   class: ({ id }) => {
@@ -8394,7 +8395,7 @@ const MENU_ACTIONS = {
       play('pick');
       reportBuy(id);
     }
-    hud.showPantry();
+    hud.showPantry({ popup: hud.modalIs('pantry') });
   },
   save: () => hud.showSave(),
   'load-save': async () => {
@@ -8548,6 +8549,7 @@ cloud.onChange = () => {
   }
   if (hud.menuName === 'title-screen') hud.showTitle(bestScore);
   else if (hud.menuName === 'pantry') hud.showPantry();
+  if (hud.modalIs('pantry')) hud.showPantry({ popup: true });
   if (hud.modal.classList.contains('save') && !hud.modal.hidden && !hud.modal.querySelector('.save-ok, .lobby-error')) hud.showSave();
   else if (hud.modalIs('player')) hud.showPlayer(bestScore);
 };
@@ -8735,7 +8737,9 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     gardenKeys(realDelta, elapsed);
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
     if (phase === 'title' && !meta.seenStory) startStory();
-    else runAgain();
+    else if (coop && net.inRoom) {
+      if (net.isHost) hostStartCoop(); // like the Play again button: only the host restarts, for everyone
+    } else runAgain();
   }
   if (input.wasPressed('KeyM')) toggleMute();
   if (input.wasPressed('KeyC')) (decorating ? gardenPhoto() : takePhoto());
