@@ -3,6 +3,14 @@
 
 export const CHANGELOG = [
   {
+    version: '0.37.1',
+    date: '2026-10-22',
+    title: 'Another cup of the day',
+    changes: [
+      '📅 Play again after a Daily Brew starts another Daily Brew (it used to start a normal run), and so does Restart run in the pause menu',
+    ],
+  },
+  {
     version: '0.37.0',
     date: '2026-10-20',
     title: 'Sets that put on a show',

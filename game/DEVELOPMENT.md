@@ -407,7 +407,9 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   Saturdays two boons. The 📅 button opens `hud.showDaily`; main.js reads them with `twist(id)` (stats in
   `applyTwists`, waves in `startWave`/`beginWave`, plus `rollElite`, `healPlayer`, cursed tiles and boss health).
   The run report sends `dailyKey`; the server only pays the bonus for today's or yesterday's key. A Daily Brew
-  ends with Bee-zebub: its victory screen has no endless button (and the `endless` action refuses).
+  ends with Bee-zebub: its victory screen has no endless button (and the `endless` action refuses). Play again,
+  Space on the game-over screen and the pause menu's Restart run go through `runAgain()`, which keeps the Daily
+  Brew (`isDaily()` lasts until the title's `stopDaily`); before v0.37.1 they started a normal run.
   **The same run for everyone** (v0.30.1): `startRun({ daily })` plays the frog of the day with no Pantry
   (`pantry()` gives 0, so no Morning Brew either, which also used to shift the day's seeded rolls), no keepsake
   (`keepsake` is null; the server ignores `goldLeaf` for Daily reports), no vows and no Gentle Brew (`runVows`,

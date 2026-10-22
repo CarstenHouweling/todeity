@@ -7990,6 +7990,11 @@ async function showLeaderboard(board) {
   if (phase === 'title' || phase === 'gameover') hud.showLeaderboard(board, scores);
 }
 
+/** Play again (or restart) the same kind of run: a Daily Brew stays a Daily Brew (the title clears it). */
+function runAgain() {
+  startRun({ daily: isDaily() });
+}
+
 function canRestart() {
   return phase === 'gameover' && clock.elapsedTime - gameOverTime >= RESTART_DELAY;
 }
@@ -8144,7 +8149,7 @@ const MENU_ACTIONS = {
       if (net.isHost) hostStartCoop(); // everyone plays again
       return;
     }
-    landscapeFirst(() => (meta.seenStory ? startRun() : startStory()));
+    landscapeFirst(() => (meta.seenStory ? runAgain() : startStory()));
   },
   'portrait-anyway': () => {
     portraitChosen = true;
@@ -8419,7 +8424,7 @@ const MENU_ACTIONS = {
   reroll,
   pause,
   resume,
-  restart: () => landscapeFirst(() => startRun()),
+  restart: () => landscapeFirst(runAgain),
   mute: toggleMute,
   'toggle-music': () => {
     setSound('music', !soundSettings().music);
@@ -8730,7 +8735,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     gardenKeys(realDelta, elapsed);
   } else if (input.wasPressed('Space') && (phase === 'title' || canRestart())) {
     if (phase === 'title' && !meta.seenStory) startStory();
-    else startRun();
+    else runAgain();
   }
   if (input.wasPressed('KeyM')) toggleMute();
   if (input.wasPressed('KeyC')) (decorating ? gardenPhoto() : takePhoto());
