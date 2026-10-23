@@ -27,7 +27,7 @@ import { boss as bossMemory, buy, harvestBonus, leavesForRun, meta, pantryLevel,
 import { FUSION_MAX, MAX_SKILL_LEVEL, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
 import { SeasonDecor } from './components/SeasonDecor.js';
-import { currentSeason, pretendSeason, seasonAt } from './components/Seasons.js';
+import { currentSeason, pretendSeason, seasonAt, seasonGreeting } from './components/Seasons.js';
 import { ACHIEVEMENTS, unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
@@ -349,7 +349,8 @@ function buildWorld(tiles) {
   environment = createEnvironment();
   scene.add(environment.group);
   divinity = new Divinity({ scene, map, environment });
-  seasonDecor = new SeasonDecor(environment);
+  // (Read when a theme is built: the first world is built before the particles and the camera exist.)
+  seasonDecor = new SeasonDecor(environment, { get particles() { return particles; }, get camera() { return camera; } });
   seasonDecor.apply(gardenSeason);
   if (houses[0]) map.add(houses[0].house);
 }
@@ -630,12 +631,31 @@ function applySeason() {
   seasonDecor.apply(gardenSeason);
   weather.setSeason(gardenSeason);
   setEnemySeason(gardenSeason);
-  hud.season = gardenSeason;
-  for (const season of ['halloween']) document.body.classList.toggle(`season-${season}`, gardenSeason?.id === season);
+  hud.season = gardenSeason && { ...gardenSeason, greeting: seasonGreeting(gardenSeason) };
+  // The title's colours (style.css, `body[data-season]`).
+  const body = document.body;
+  if (gardenSeason) {
+    body.dataset.season = gardenSeason.id;
+    const { word, glow, glow2, sub, note, noteBg } = gardenSeason.colors;
+    Object.entries({ word, glow, glow2, sub, note, 'note-bg': noteBg }).forEach(([name, value]) => body.style.setProperty(`--season-${name}`, value));
+  } else delete body.dataset.season;
 }
 applySeason();
-/** The calm song (title, menus): the season's own while it's on. */
-const calmSong = () => (gardenSeason?.id === 'halloween' ? 'pumpkin' : 'garden');
+/** The calm song (title, menus): the theme's own while one shows. */
+const calmSong = () => gardenSeason?.song ?? 'garden';
+
+// The theme follows the calendar by itself: checked every minute (and when the tab comes back), so a game left
+// open switches at midnight. Mid-run only the garden's looks change; bees already flying keep their hats.
+let seasonShown = currentSeason()?.id ?? null;
+function watchSeasons() {
+  const id = currentSeason()?.id ?? null;
+  if (id === seasonShown) return;
+  seasonShown = id;
+  applySeason();
+  refreshMenu();
+}
+setInterval(watchSeasons, 60_000);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && watchSeasons());
 
 // --- Collisions & movement ---
 const next = new THREE.Vector3();
@@ -8569,7 +8589,7 @@ function openSettings() {
     calmFx: settings.calmFx,
     showFps: settings.showFps,
     autoSpit: touch.enabled ? null : settings.autoSpit,
-    season: currentSeason(),
+    season: currentSeason() && { ...currentSeason(), greeting: seasonGreeting(currentSeason()) },
     seasonal: settings.seasonal,
   });
 }
@@ -8800,7 +8820,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     updatePropFade(realDelta);
     if (arena.id === 'garden') {
       environment.update(clock.elapsedTime);
-      seasonDecor.update(clock.elapsedTime);
+      seasonDecor.update(clock.elapsedTime, delta, weather.time === 'night' || weather.time === 'sunset');
     } else builtArenas.get(arena.id)?.update(clock.elapsedTime, delta);
     // At the Tournament of the Gods reality itself glitches now and then.
     if (arena.id === 'cosmos' && PLAYING.has(phase) && (realityGlitch -= delta) <= 0) {
@@ -9060,6 +9080,7 @@ if (import.meta.env.DEV) {
     /** game.setSeason('halloween') shows a season whatever the date ('none': none, no argument: the calendar's). */
     setSeason(id) {
       pretendSeason(id);
+      watchSeasons();
       applySeason();
       refreshMenu();
     },

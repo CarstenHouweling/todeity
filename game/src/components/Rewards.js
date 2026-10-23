@@ -8,7 +8,7 @@
  * Shared by the game and the server (server/saves.js pays the rewards), so no three.js here. `progress` is the cloud
  * save's progress object (see Meta.js `meta` for the local copy).
  */
-import { seasonById, seasonOn } from './Seasons.js';
+import { seasonById, seasonOnUtc } from './Seasons.js';
 
 export const KETTLE_HOURS = 4;
 const HOUR = 3_600_000;
@@ -231,6 +231,7 @@ export const GARDEN_SONGS = [
   { id: 'celestial', name: 'Celestial Steep', icon: '🌌', level: 20 },
   { id: 'infernal', name: 'Infernal Waltz', icon: '😈', achievement: 'beezebub' },
   { id: 'pumpkin', name: 'Pumpkin Patch Creep', icon: '🎃', season: 'halloween' },
+  { id: 'snowfall', name: 'Snowfall Waltz', icon: '❄️', season: ['winterfest', 'winter', 'newyear'], hint: '❄️ All winter long' },
 ];
 export const gardenSong = (id) => GARDEN_SONGS.find((song) => song.id === id) ?? GARDEN_SONGS[0];
 
@@ -238,14 +239,14 @@ export const gardenSong = (id) => GARDEN_SONGS.find((song) => song.id === id) ??
 export function songUnlocked(id, progress) {
   const song = GARDEN_SONGS.find((s) => s.id === id);
   if (!song) return false;
-  if (song.season) return seasonOn(song.season);
+  if (song.season) return seasonOnUtc(song.season);
   if (song.achievement) return Boolean(progress.achievements?.includes(song.achievement));
   return accountLevel(progress).level >= (song.level ?? 1);
 }
 
 /** How a song unlocks, for the song list. */
 export const songHint = (song) =>
-  song.season ? `${seasonById(song.season).icon} ${seasonById(song.season).name} only` : song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`;
+  song.hint ?? (song.season ? `${seasonById(song.season).icon} ${seasonById(song.season).name} only` : song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`);
 
 const LEVEL_XP = 150;
 const LEVEL_CURVE = 1.4;

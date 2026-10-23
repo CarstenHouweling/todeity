@@ -950,9 +950,9 @@ export class Hud {
         </div>
       </div>
       <div class="title-main">
-        <h1 class="wordmark">Todeity</h1>
+        <h1 class="wordmark"${this.season ? ` data-icon="${this.season.icon}"` : ''}>Todeity</h1>
         <p class="subtitle">Rise of the Tea God</p>
-        ${this.season ? `<button type="button" class="season-note" data-action="settings" title="Seasonal decorations: ⚙️ Settings">${this.season.icon} Happy ${this.season.name}! ${this.season.greeting}</button>` : ''}
+        ${this.season ? `<button type="button" class="season-note" data-action="settings" title="Seasonal decorations: ⚙️ Settings">${this.season.icon} ${this.season.hello} ${this.season.greeting}</button>` : ''}
         ${intro}
         ${best && fresh ? `<p class="best">Best score: ${best}</p>` : ''}
         <p class="portrait-hint"><span class="turn-phone">📱</span> Turn your phone sideways: Todeity plays best in landscape</p>

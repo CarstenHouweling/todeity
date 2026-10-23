@@ -2017,41 +2017,43 @@ body.coop-menu .corner-buttons {
   cursor: pointer;
 }
 
-/* Seasons (Seasons.js, main.js `applySeason`): body.season-<id> while one shows. The title says hello (the note
-   opens ⚙️ Settings, where the decorations switch off) and dresses its wordmark. */
+/* Seasons (Seasons.js, main.js `applySeason`): body[data-season] while a theme shows, its colours as --season-*
+   variables. The title says hello (the note opens ⚙️ Settings, where the decorations switch off) and dresses its
+   wordmark with the theme's colours and icon. */
 .season-note {
   margin: -4px 0 12px;
   padding: 5px 14px;
-  border: 1px solid rgba(255, 170, 70, 0.55);
+  border: 1px solid color-mix(in srgb, var(--season-glow, #ffaa46) 70%, transparent);
   border-radius: 999px;
-  background: rgba(36, 14, 48, 0.7);
-  color: #ffd2a0;
+  background: var(--season-note-bg, rgba(36, 14, 48, 0.7));
+  color: var(--season-note, #ffd2a0);
   font: inherit;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 0 18px rgba(255, 120, 30, 0.25);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--season-glow, #ff781e) 35%, transparent);
 }
 
-body.season-halloween .menu.title-screen {
-  background: linear-gradient(rgba(34, 10, 46, 0.72), rgba(34, 10, 46, 0.15) 45%, rgba(34, 10, 46, 0) 70%, rgba(34, 10, 46, 0.55));
+body[data-season] .title-screen h1.wordmark {
+  color: var(--season-word);
+  text-shadow: 0 0 18px var(--season-glow), 0 0 42px var(--season-glow2), 0 4px 0 rgba(0, 0, 0, 0.35);
 }
 
-body.season-halloween .title-screen h1.wordmark {
-  color: #ffb347;
-  text-shadow: 0 0 18px rgba(255, 120, 20, 0.75), 0 0 42px rgba(160, 60, 220, 0.55), 0 4px 0 #3a1550;
-}
-
-body.season-halloween .title-screen h1.wordmark::after {
-  content: ' 🎃';
+body[data-season] .title-screen h1.wordmark::after {
+  content: ' ' attr(data-icon);
   font-size: 0.6em;
   vertical-align: 0.25em;
   text-shadow: none;
 }
 
-body.season-halloween .title-screen .subtitle {
-  color: #e8c8ff;
-  text-shadow: 0 0 12px rgba(170, 80, 255, 0.85), 0 2px 0 rgba(0, 0, 0, 0.4);
+body[data-season] .title-screen .subtitle {
+  color: var(--season-sub);
+  text-shadow: 0 0 12px var(--season-glow), 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Halloween also darkens the title's veil to a violet. */
+body[data-season='halloween'] .menu.title-screen {
+  background: linear-gradient(rgba(34, 10, 46, 0.72), rgba(34, 10, 46, 0.15) 45%, rgba(34, 10, 46, 0) 70%, rgba(34, 10, 46, 0.55));
 }
 
 .title-dock {

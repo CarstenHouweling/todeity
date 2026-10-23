@@ -11,7 +11,7 @@
  */
 import { accountLevel, ownedTrinkets } from './Rewards.js';
 import { bestTier } from './Emotes.js';
-import { seasonAt, seasonById, seasonOn } from './Seasons.js';
+import { seasonAt, seasonById, seasonOnUtc, seasonUntil } from './Seasons.js';
 
 export const SLOTS = [
   { id: 'head', name: 'Hats', icon: '🎩' },
@@ -43,6 +43,8 @@ export const WEARABLES = [
   { id: 'teacup', slot: 'head', name: 'Teacup Hat', icon: '☕', unlock: { trinkets: 10 } },
   { id: 'witchhat', slot: 'head', name: 'Witch Hat', icon: '🧙', unlock: { season: 'halloween' } },
   { id: 'pumpkinhat', slot: 'head', name: "Jack-o'-Lantern", icon: '🎃', unlock: { season: 'halloween' } },
+  { id: 'festivehat', slot: 'head', name: 'Festive Hat', icon: '🎅', unlock: { season: 'winterfest' } },
+  { id: 'bunnyears', slot: 'head', name: 'Bunny Ears', icon: '🐰', unlock: { season: 'easter' } },
   // Face
   { id: 'specs', slot: 'face', name: 'Round Specs', icon: '👓' },
   { id: 'shades', slot: 'face', name: 'Cool Shades', icon: '😎', unlock: { level: 4 } },
@@ -56,6 +58,7 @@ export const WEARABLES = [
   { id: 'freckles', slot: 'face', name: 'Freckles', icon: '🟤', unlock: { trinkets: 5 } },
   { id: 'starglasses', slot: 'face', name: 'Star Glasses', icon: '⭐', unlock: { achievement: 'flawless' } },
   { id: 'mask', slot: 'face', name: 'Masquerade Mask', icon: '🎭', unlock: { level: 16 } },
+  { id: 'rose', slot: 'face', name: 'Red Rose', icon: '🌹', unlock: { season: 'valentine' } },
   // Body
   { id: 'scarf', slot: 'body', name: 'Cozy Scarf', icon: '🧣' },
   { id: 'bowtie', slot: 'body', name: 'Bow Tie', icon: '🎀', unlock: { achievement: 'photo' } },
@@ -70,6 +73,7 @@ export const WEARABLES = [
   { id: 'bandana', slot: 'body', name: 'Bandana', icon: '🔴', unlock: { achievement: 'bitter' } },
   { id: 'vest', slot: 'body', name: "Gardener's Vest", icon: '🦺', unlock: { level: 14 } },
   { id: 'pearls', slot: 'body', name: 'Pond Pearls', icon: '📿', unlock: { trinkets: 15 } },
+  { id: 'luckyscarf', slot: 'body', name: 'Lucky Red Scarf', icon: '🧧', unlock: { season: 'lunar' } },
   // Back
   { id: 'cape', slot: 'back', name: 'Hero Cape', icon: '🦸', unlock: { level: 2 } },
   { id: 'teapack', slot: 'back', name: 'Teapot Backpack', icon: '🫖', unlock: { level: 5 } },
@@ -102,6 +106,7 @@ export const WEARABLES = [
   { id: 'goldleaf', slot: 'aura', name: 'Golden Leaf Fall', icon: '🍁', unlock: { trinkets: 30 } },
   { id: 'butterflies', slot: 'aura', name: 'Butterflies', icon: '🦋', unlock: { trinkets: 35 } },
   { id: 'bats', slot: 'aura', name: 'Bat Swarm', icon: '🦇', unlock: { season: 'halloween' } },
+  { id: 'sparklers', slot: 'aura', name: 'New Year Sparkles', icon: '🎇', unlock: { season: 'newyear' } },
 ];
 
 export const wearableById = (id) => WEARABLES.find((item) => item.id === id);
@@ -114,7 +119,7 @@ export function wearableUnlocked(item, progress = {}) {
   if (!item) return false;
   if (!unlock) return true;
   if (unlock.champion) return Boolean(progress.wearables?.includes(item.id));
-  if (unlock.season) return seasonOn(unlock.season) || Boolean(progress.wearables?.includes(item.id));
+  if (unlock.season) return seasonOnUtc(unlock.season) || Boolean(progress.wearables?.includes(item.id));
   if (unlock.achievement) return Boolean(progress.achievements?.includes(unlock.achievement));
   if (unlock.tier) return bestTier(progress) >= unlock.tier;
   if (unlock.trinkets) return ownedTrinkets(progress).length >= unlock.trinkets;
@@ -129,7 +134,7 @@ export function wearableHint(item, achievementName = (id) => id, progress = {}) 
   if (unlock.season) {
     const season = seasonById(unlock.season);
     if (progress.wearables?.includes(item.id)) return `${season.icon} ${season.name} wardrobe: yours for good`;
-    return seasonOn(season.id) ? `${season.icon} ${season.name}: finish a run by ${season.until} to keep it` : `${season.icon} Comes back every ${season.name}`;
+    return seasonOnUtc(season.id) ? `${season.icon} ${season.name}: finish a run by ${seasonUntil(season)} to keep it` : `${season.icon} Back for ${season.name} every year`;
   }
   if (unlock.achievement) return `Achievement: ${achievementName(unlock.achievement)}`;
   if (unlock.tier) return `Become ${FORMS[unlock.tier]} Tode in a run`;

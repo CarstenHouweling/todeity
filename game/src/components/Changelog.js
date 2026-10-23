@@ -3,6 +3,19 @@
 
 export const CHANGELOG = [
   {
+    version: '0.39.0',
+    date: '2026-10-23',
+    title: 'A garden for every season',
+    changes: [
+      '🌸 The garden follows the year: blossom and tulips in spring, sunflowers in summer, falling leaves and a harvest in autumn, snow and snowmen in winter',
+      "🎉 And it celebrates: fireworks for New Year, red lanterns for Lunar New Year, heart balloons for Valentine's Day, painted eggs for Easter, Halloween, and a decorated tree with presents and fairy lights for the Winter Holidays",
+      '🕛 It switches by itself at midnight, even with the game open',
+      '🐝 The bees dress up too: flower crowns, sun hats, acorn caps, bobble hats, party hats and more',
+      "👕 New for the celebrations: a Festive Hat, New Year Sparkles, a Lucky Red Scarf, a Red Rose and Bunny Ears. Finish a run during the celebration to keep them",
+      '🎵 A new winter song: Snowfall Waltz',
+    ],
+  },
+  {
     version: '0.38.0',
     date: '2026-10-23',
     title: 'The garden puts on a costume',

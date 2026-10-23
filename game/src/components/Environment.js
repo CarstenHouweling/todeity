@@ -630,19 +630,23 @@ export function createEnvironment() {
   group.add(insideGrass, outsideGrass);
   outside.push(outsideGrass);
 
+  const flowerMeshes = [];
   ['#ffffff', '#ffd84d', '#ff8fb8', '#b48cff'].forEach((color) => {
     const flowers = scatterPoints(45, { inside: insideArena(10), spacing: 22, avoid: blocked });
     const wild = scatterPoints(70, { inside: outsideArena(5, 500), spacing: 20, avoid: keepClear });
     const geometry = flower(color);
     const wildMesh = instanced(geometry, wild, { shadows: false });
-    group.add(instanced(geometry, flowers, { shadows: false }), wildMesh);
+    const gardenMesh = instanced(geometry, flowers, { shadows: false });
+    group.add(gardenMesh, wildMesh);
     outside.push(wildMesh);
+    flowerMeshes.push(gardenMesh, wildMesh);
   });
 
   const mushrooms = GARDEN_PROPS.filter(([kind]) => kind.endsWith('Tree')).flatMap(([, x, y]) =>
     Array.from({ length: 3 }, () => ({ x: x + range(-28, 28), y: y + range(-28, 28), scale: range(0.8, 1.3) }))
   );
-  group.add(instanced(mushroom(), mushrooms, { shadows: false }));
+  const mushroomMesh = instanced(mushroom(), mushrooms, { shadows: false });
+  group.add(mushroomMesh);
 
   const pollen = createPollen();
   const butterflies = createButterflies();
@@ -659,8 +663,11 @@ export function createEnvironment() {
     insideGrass,
     blocked,
     keepClear,
-    // For the seasons (SeasonDecor.js): bats fly instead of the butterflies, the pollen changes colour.
+    // For the seasons (SeasonDecor.js): bats fly instead of the butterflies, flowers hide under the snow, the pollen
+    // changes colour.
     butterflies: butterflies.butterflies,
+    flowers: flowerMeshes,
+    mushrooms: [mushroomMesh],
     pollen: pollen.points,
     update(time) {
       pond.update(time);

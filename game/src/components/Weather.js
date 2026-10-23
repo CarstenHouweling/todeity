@@ -14,8 +14,8 @@ const PALETTES = {
   cosmic: { sky: '#f3dcef', sun: '#ffe7c4', sunIntensity: 1.5, hemiSky: '#f0dcff', hemiGround: '#9a7ac8', hemi: 0.95, ambient: 0.38 },
 };
 
-// The garden's times of day during a season (Seasons.js): Halloween's are hazy and violet, its night a deep purple
-// for the jack-o'-lanterns to glow in.
+// The garden's times of day during a theme (Seasons.js). Halloween has its own: hazy and violet, its night a deep
+// purple for the jack-o'-lanterns to glow in.
 const SEASON_PALETTES = {
   halloween: {
     morning: { sky: '#c8b6d6', sun: '#ffe2b8', sunIntensity: 2.0, hemiSky: '#e4d4f0', hemiGround: '#5a5a2a', hemi: 1.3, ambient: 0.55 },
@@ -25,6 +25,41 @@ const SEASON_PALETTES = {
     night: { sky: '#1e1236', sun: '#b49cff', sunIntensity: 0.85, hemiSky: '#5a3c9a', hemiGround: '#24180e', hemi: 0.8, ambient: 0.32 },
   },
 };
+
+// The other themes tint the usual times of day: the sky (`sky`, `mix`), the sunlight (`sun`, `sunMix`), the light
+// from above (`hemiSky`) and the light bounced off the ground (`ground`, `groundMix`: snow is bright). By night the
+// sky tint is weaker, so nights stay dark.
+const WINTER_TINT = { sky: '#e4f0fa', mix: 0.45, sun: '#eaf2ff', sunMix: 0.5, hemiSky: '#f0f6ff', hemiMix: 0.4, ground: '#d0dce8', groundMix: 0.75 };
+const SEASON_TINTS = {
+  spring: { sky: '#bde6ff', mix: 0.2, hemiSky: '#f4ffe8', hemiMix: 0.2, ground: '#5aa83a', groundMix: 0.25 },
+  easter: { sky: '#d6eeff', mix: 0.3, hemiSky: '#fff4fa', hemiMix: 0.25, ground: '#5aa83a', groundMix: 0.25 },
+  summer: { sky: '#7cc8ff', mix: 0.25, sun: '#fff2cc', sunMix: 0.45, ground: '#6a8a2a', groundMix: 0.2 },
+  autumn: { sky: '#f2d2a6', mix: 0.32, sun: '#ffd8a0', sunMix: 0.45, hemiSky: '#ffe8cc', hemiMix: 0.3, ground: '#7a6428', groundMix: 0.45 },
+  winter: WINTER_TINT,
+  winterfest: WINTER_TINT,
+  newyear: { ...WINTER_TINT, sky: '#c8d4f4', mix: 0.4 },
+  lunar: { sky: '#ffd6b8', mix: 0.22, sun: '#ffd4a0', sunMix: 0.35, hemiSky: '#ffe4d0', hemiMix: 0.25 },
+  valentine: { sky: '#ffd4e4', mix: 0.32, sun: '#ffe4ec', sunMix: 0.3, hemiSky: '#ffe0ec', hemiMix: 0.35 },
+};
+const tinted = new Map(); // `${season} ${time}` → the tinted palette
+
+function tintPalette(season, time) {
+  const key = `${season} ${time}`;
+  if (tinted.has(key)) return tinted.get(key);
+  const base = PALETTES[time];
+  const tint = SEASON_TINTS[season];
+  const night = time === 'night' ? 0.3 : 1;
+  const mix = (from, to, amount) => (to ? `#${new THREE.Color(from).lerp(new THREE.Color(to), amount).getHexString()}` : from);
+  const palette = {
+    ...base,
+    sky: mix(base.sky, tint.sky, (tint.mix ?? 0) * night),
+    sun: mix(base.sun, tint.sun, tint.sunMix ?? 0),
+    hemiSky: mix(base.hemiSky, tint.hemiSky, (tint.hemiMix ?? 0) * night),
+    hemiGround: mix(base.hemiGround, tint.ground, (tint.groundMix ?? 0) * night),
+  };
+  tinted.set(key, palette);
+  return palette;
+}
 
 export const WEATHERS = {
   clear: { name: 'Clear skies', icon: '☀️', text: '', dim: 1 },
@@ -113,7 +148,11 @@ export class Weather {
   }
 
   resolve() {
-    const palette = this.arena?.palette ?? (this.cosmic ? PALETTES.cosmic : SEASON_PALETTES[this.season]?.[this.time] ?? PALETTES[this.time]);
+    const palette =
+      this.arena?.palette ??
+      (this.cosmic
+        ? PALETTES.cosmic
+        : SEASON_PALETTES[this.season]?.[this.time] ?? (SEASON_TINTS[this.season] ? tintPalette(this.season, this.time) : PALETTES[this.time]));
     const dim = this.info.dim * (this.darkLeft > 0 ? 0.35 : 1);
     return { ...palette, dim };
   }

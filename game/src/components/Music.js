@@ -202,6 +202,29 @@ Object.assign(SONGS, {
       if (note) instruments.musicBox(at, note.note + 12, 0.07, 0.996);
     },
   },
+  // Winter's song: a slow waltz of sleigh-bell shimmer, music box and bells over soft strings, snow falling.
+  snowfall: {
+    bpm: 78,
+    chords: [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]],
+    roots: [48, 45, 41, 43],
+    melody: melody([
+      [[0, 76, 5], [5, 79, 5], [10, 77, 6]],
+      [[0, 76, 5], [5, 72, 5], [10, 69, 6]],
+      [[0, 72, 5], [5, 77, 5], [10, 81, 4], [14, 79, 2]],
+      [[0, 79, 5], [5, 74, 5], [10, 71, 6]],
+    ]),
+    calm: ({ at, s, bar, chord, root, note, stepTime, barTime }) => {
+      if (s === 0) {
+        instruments.sustain(at, chord, barTime, 0.022);
+        instruments.subBass(at, root, stepTime * 4);
+      }
+      // Three beats in a bar of sixteenths: 0, 5, 10.
+      if (s === 5 || s === 10) chord.forEach((n) => instruments.harp(at, n + 12, 0.03));
+      if (s % 2 === 1) instruments.shaker(at, false);
+      if (s === 0 && bar % 2 === 0) instruments.bell(at, chord[2] + 24, 0.045);
+      if (note) instruments.musicBox(at, note.note + 12, 0.075);
+    },
+  },
   // Bee-zebub's waltz: one-two-three in the dark, low strings and a music box gone sour.
   infernal: {
     bpm: 84,

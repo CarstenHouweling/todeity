@@ -182,26 +182,85 @@ function createHorns() {
   return horns;
 }
 
-// Halloween (Seasons.js): the garden's bees wear little witch hats. One shared mesh each, on the head bone.
-let seasonHats = false;
-let hatGeometry = null;
+// Seasons (Seasons.js): the garden's bees wear a little hat for the theme. One shared mesh each, on the head bone.
+let seasonHat = null; // the theme id whose hat new bees wear
+const hatGeometries = new Map();
 const HAT_MATERIAL = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8 });
 const HAT_LIFT = 0.8; // world units above the head bone, for a drone
 const HAT_SIZE = 0.48; // the hat's size on a drone
 
 /** Bees spawned from now on dress for `season` (null: none). */
 export function setEnemySeason(season) {
-  seasonHats = season?.id === 'halloween';
+  seasonHat = season && SEASON_HATS[season.id] ? season.id : null;
 }
 
-function witchHat() {
-  if (hatGeometry) return hatGeometry;
-  const parts = [
-    [new THREE.CylinderGeometry(6.4, 6.4, 0.8, 10), '#2a1f3a', [0, 0.4, 0]],
+const dome = (radius) => new THREE.SphereGeometry(radius, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+const C = (top, bottom, height, segments = 8) => new THREE.CylinderGeometry(top, bottom, height, segments);
+const ball = (radius) => new THREE.IcosahedronGeometry(radius, 0);
+// Each hat: [geometry, colour, position, rotation?, scale?], modelled Y-up around the top of the head.
+const SEASON_HATS = {
+  halloween: () => [
+    [C(6.4, 6.4, 0.8, 10), '#2a1f3a', [0, 0.4, 0]],
     [new THREE.ConeGeometry(3.8, 8.5, 8), '#33264a', [0, 4.9, 0]],
-    [new THREE.CylinderGeometry(3.6, 3.8, 1.3, 8), '#ff8a1a', [0, 1.4, 0]],
-  ].map(([geometry, color, position]) => {
+    [C(3.6, 3.8, 1.3), '#ff8a1a', [0, 1.4, 0]],
+  ],
+  spring: () => [
+    ...[0, 1, 2, 3, 4].map((i) => {
+      const a = (i / 5) * Math.PI * 2;
+      return [ball(1.7), i % 2 ? '#ffd1e3' : '#ffffff', [Math.cos(a) * 2.4, 1.2, Math.sin(a) * 2.4], null, [1, 0.45, 1]];
+    }),
+    [ball(1.3), '#ffd23f', [0, 1.5, 0]],
+  ],
+  summer: () => [
+    [C(6.2, 6.2, 0.6, 12), '#e8cf8a', [0, 0.3, 0]],
+    [C(3, 3.3, 2.8), '#d9b86a', [0, 1.9, 0]],
+    [C(3.4, 3.4, 0.9), '#e8443a', [0, 1, 0]],
+  ],
+  autumn: () => [
+    [dome(4), '#8a5a2a', [0, 0, 0]],
+    [C(4.2, 4.2, 0.8, 8), '#6b4423', [0, 0.2, 0]],
+    [C(0.5, 0.7, 2.2, 5), '#5a3a1a', [0, 4.6, 0]],
+  ],
+  winter: () => [
+    [dome(4.2), '#3a7ac8', [0, 0.6, 0]],
+    [C(4.4, 4.4, 1.6, 10), '#e8f0f8', [0, 0.8, 0]],
+    [ball(1.7), '#ffffff', [0, 5, 0]],
+  ],
+  winterfest: () => [
+    [C(4.3, 4.3, 1.5, 10), '#f6f6f2', [0, 0.7, 0]],
+    [new THREE.ConeGeometry(3.8, 7.5, 8), '#d4262e', [0, 5, 0], [0, 0, -0.35]],
+    [ball(1.6), '#ffffff', [-2.4, 8.4, 0]],
+  ],
+  newyear: () => [
+    [new THREE.ConeGeometry(3.2, 7.5, 8), '#5fb8ff', [0, 3.75, 0]],
+    [C(2.2, 2.5, 1, 8), '#ffd23f', [0, 2.6, 0]],
+    [C(1.1, 1.4, 1, 8), '#ff5a7a', [0, 5.2, 0]],
+    [ball(1.3), '#ffd23f', [0, 7.8, 0]],
+  ],
+  lunar: () => [
+    [dome(3.9), '#c8102e', [0, 0.4, 0]],
+    [C(4, 4, 1, 10), '#ffcf3a', [0, 0.6, 0]],
+    [ball(1.2), '#ffcf3a', [0, 4.6, 0]],
+  ],
+  valentine: () => [
+    [C(0.35, 0.35, 4.4, 4), '#2a2a2a', [0, 2.2, 0]],
+    [ball(1.6), '#e8264e', [-1, 5.4, 0]],
+    [ball(1.6), '#e8264e', [1, 5.4, 0]],
+    [new THREE.ConeGeometry(2.3, 3, 4), '#e8264e', [0, 3.9, 0], [Math.PI, Math.PI / 4, 0]],
+  ],
+  easter: () =>
+    [-1, 1].flatMap((side) => [
+      [ball(1.6), '#f8f6f0', [side * 1.8, 4.6, 0], [0, 0, side * -0.25], [0.8, 3.2, 0.5]],
+      [ball(1), '#ffadc8', [side * 1.85, 4.6, 0.5], [0, 0, side * -0.25], [0.6, 2.8, 0.3]],
+    ]),
+};
+
+function hatGeometry(id) {
+  if (hatGeometries.has(id)) return hatGeometries.get(id);
+  const parts = SEASON_HATS[id]().map(([geometry, color, position, rotation = null, scale = null]) => {
     const g = geometry.toNonIndexed();
+    if (scale) g.scale(...scale);
+    if (rotation) g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...rotation)));
     g.translate(...position);
     const c = new THREE.Color(color);
     const colors = new Float32Array(g.attributes.position.count * 3);
@@ -211,11 +270,12 @@ function witchHat() {
     geometry.dispose();
     return g;
   });
-  hatGeometry = mergeGeometries(parts);
-  hatGeometry.rotateZ(-0.25); // a jaunty tilt
-  hatGeometry.rotateX(Math.PI / 2); // modelled Y-up, the world is Z-up
-  hatGeometry.computeVertexNormals();
-  return hatGeometry;
+  const merged = mergeGeometries(parts);
+  merged.rotateZ(-0.25); // a jaunty tilt
+  merged.rotateX(Math.PI / 2); // modelled Y-up, the world is Z-up
+  merged.computeVertexNormals();
+  hatGeometries.set(id, merged);
+  return merged;
 }
 
 let template = null;
@@ -410,7 +470,7 @@ export class Enemy {
     if (type.boss && !this.rig) {
       this.mixer.update(0);
       this.addCrown();
-    } else if (seasonHats && !this.rig) {
+    } else if (seasonHat && !this.rig) {
       this.mixer.update(0);
       this.addHat();
     }
@@ -422,7 +482,7 @@ export class Enemy {
     if (!head) return;
     this.group.updateMatrixWorld(true);
     const top = head.getWorldPosition(new THREE.Vector3());
-    const hat = new THREE.Mesh(witchHat(), HAT_MATERIAL);
+    const hat = new THREE.Mesh(hatGeometry(seasonHat), HAT_MATERIAL);
     hat.castShadow = true;
     hat.userData.shared = true; // the geometry and material stay for the next bee
     const size = this.type.scale / ENEMY_TYPES.drone.scale;

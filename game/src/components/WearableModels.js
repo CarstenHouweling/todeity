@@ -333,6 +333,25 @@ const MODELS = {
     }, [0.35, 0, 0.15]);
     return { update: (time) => (tail.rotation.z = 0.15 + Math.sin(time * 2.6) * 0.12) };
   },
+  luckyscarf(rig, f) {
+    // A red silk scarf with golden trim and a lucky coin at the knot (Lunar New Year).
+    const top = backTop(f);
+    const z = f.L / 2 - 3.4;
+    piece(rig.parts.body, [0, 0, z], (add) => {
+      add([f.W + 1.6, 1.6, 5], [0, top - 0.2, 0], '#c8102e', { material: 'cloth' });
+      add([f.W + 1.8, 0.5, 5.2], [0, top + 0.1, 0], '#ffcf3a', { material: 'cloth' });
+      for (const s of [-1, 1]) add([1.4, 4.4, 5], [s * (f.W / 2 + 0.6), top - 2.6, 0], '#c8102e', { material: 'cloth' });
+      add([f.W + 1.6, 2.6, 1.4], [0, top - 4.2, 3.2], '#c8102e', { material: 'cloth' });
+      add([2.4, 2.4, 0.6], [f.W / 2 - 2, top - 4.2, 4.1], '#ffcf3a', { material: 'shiny' });
+      add([0.8, 0.8, 0.7], [f.W / 2 - 2, top - 4.2, 4.2], '#8a1020');
+    });
+    const tail = piece(rig.parts.body, [-f.W / 2 + 2, top - 4.6, f.L / 2 - 1.2], (add) => {
+      add([2.6, 6, 0.8], [0, -3, 0], '#c8102e', { material: 'cloth' });
+      add([2.8, 0.6, 1], [0, -5.6, 0], '#ffcf3a', { material: 'cloth' });
+      for (const x of [-0.9, 0, 0.9]) add([0.5, 1.2, 0.6], [x, -6.6, 0], '#ffcf3a', { material: 'cloth' });
+    }, [0.35, 0, 0.15]);
+    return { update: (time) => (tail.rotation.z = 0.15 + Math.sin(time * 2.6) * 0.12) };
+  },
   bowtie(rig, f) {
     piece(rig.parts.body, [0, 1.5 - f.H / 2 + 2.2, f.L / 2 + 0.3], (add) => {
       for (const s of [-1, 1]) {
@@ -650,6 +669,50 @@ Object.assign(MODELS, {
       for (const x of [-1.3, 1.3]) add([1, 0.7, 0.4], [x, 1.4, z], '#ffc240', { material: 'glow' });
     });
   },
+  festivehat(rig, f) {
+    // A red stocking cap with a white fur trim, its tip and bobble flopping over to one side (the Winter Holidays).
+    piece(rig.parts.head, [0, HAT_Y - 0.4, 2.5], (add) => {
+      add([f.headW + 1.6, 2.2, 11], [0, 1.1, 0], '#f6f6f2', { material: 'cloth' });
+      add([f.headW - 0.6, 3, 9], [0, 3.6, -0.3], '#d4262e', { material: 'cloth' });
+      add([f.headW - 3.6, 2.6, 7], [0, 6.2, -0.6], '#c81e28', { material: 'cloth' });
+    });
+    const tip = piece(rig.parts.head, [0, HAT_Y + 7.4, 1.5], (add) => {
+      add([f.headW - 6.6, 2.6, 4.6], [0, 1.2, 0], '#d4262e', { material: 'cloth' });
+      add([2.6, 2.6, 3], [0, 3.6, 0], '#c81e28', { material: 'cloth' });
+      add([3.4, 3.4, 3.4], [0, 6, 0], '#ffffff', { material: 'cloth' });
+    }, [0, 0, -1.15]);
+    return { update: (time) => (tip.rotation.z = -1.15 + Math.sin(time * 2.2) * 0.12) };
+  },
+  bunnyears(rig, f) {
+    // Two tall ears with pink insides on a headband; they twitch now and then (Easter).
+    piece(rig.parts.head, [0, HAT_Y - 0.4, 2.5], (add) => add([f.headW + 0.6, 0.8, 1.6], [0, 0.4, 0], '#f4f1ea'));
+    const ears = [-1, 1].map((s) =>
+      piece(rig.parts.head, [s * 2.6, HAT_Y, 2.5], (add) => {
+        add([2.8, 9, 1.4], [0, 4.6, 0], '#f8f6f0');
+        add([1.4, 7, 0.4], [0, 4.8, 0.8], '#ffadc8');
+        add([2, 1.4, 1.2], [0, 9.6, 0], '#f8f6f0');
+      }, [0, 0, s * -0.18])
+    );
+    return {
+      update(time) {
+        ears.forEach((ear, i) => {
+          const twitch = Math.max(0, Math.sin(time * 1.3 + i * 2.5)) ** 12;
+          ear.rotation.x = -0.1 - twitch * 0.5;
+        });
+      },
+    };
+  },
+  rose(rig, f) {
+    // A red rose held in the corner of the smile (Valentine's Day).
+    piece(rig.parts.head, [f.headW / 2 - 3, 0.5, 9.6], (add) => {
+      add([7, 0.6, 0.6], [1.6, 0, 0], '#3f8a2e', { rotation: [0, 0, 0.15] });
+      add([2.4, 0.4, 1.4], [1.4, 0.6, 0.4], '#4caf50', { rotation: [0, 0, 0.5] });
+      add([2.8, 2.8, 2.8], [5.4, 0.8, 0], '#d4123a');
+      add([2, 1.6, 3.2], [5.4, 1.8, 0], '#e8264e');
+      add([3.2, 1.2, 2], [5.6, 0.2, 0], '#b80e30');
+      add([1, 1, 1], [5.4, 2.6, 0.4], '#ff5a7a');
+    });
+  },
   teacup(rig, f) {
     // A whole teacup on its saucer, still steaming.
     piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
@@ -957,6 +1020,7 @@ const AURAS = {
   bees: { motion: 'orbit', shape: 'bee', colors: ['#ffd23f', '#ffb000', '#ffe14a'], size: [2.3, 2.3, 2.3], speed: 1.6, buzz: true },
   goldleaf: { motion: 'fall', shape: 'leaf', colors: ['#ffd36b', '#ffcf3a', '#fff2a0', '#e8a820'], size: [1.8, 1.8, 1.8], spin: 2, speed: 6 },
   butterflies: { motion: 'orbit', shape: 'butterfly', colors: ['#ff9ec7', '#7fd8ff', '#ffd23f', '#c58aff'], size: [3.4, 3.4, 3.4], speed: 0.55, flap: true },
+  sparklers: { motion: 'orbit', colors: ['#ffe27a', '#ffffff', '#7fc8ff', '#ff8ac8'], size: [0.7, 0.7, 0.7], speed: 1.8, twinkle: true, spin: 6 },
   bats: { motion: 'orbit', shape: 'bat', colors: ['#2a1f3a', '#3a2a52', '#1e1828'], size: [3.2, 3.2, 3.2], speed: 1.1, flap: true },
 };
 
