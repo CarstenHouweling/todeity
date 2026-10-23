@@ -3,11 +3,12 @@
  *
  *   0 everything · 1 no bloom · 2 no multisampling, and no post-processing between screen effects ("lite")
  *   3 no shadows · 4 Low: also the lowest resolutions, fewer particles, plain character materials and no arena
- *     floor shaders or floating motes
+ *     floor shaders or floating motes. The garden's grass field thins out from step 2 and is gone at Low.
  *
  * Auto starts at 0 (or at 4 on a device that looks weak) and steps down while the frame rate stays low (see
- * `adaptQuality` in main.js), lowering the resolution in between. Steps never come back during a session, so the
- * quality settles instead of see-sawing.
+ * `adaptQuality` in main.js), lowering the resolution in between. Since v0.40 Auto also climbs back: after a calm
+ * stretch it tries undoing its last step down and keeps it only if the frame rate holds (`considerStepUp`), with
+ * back-offs so the quality settles instead of see-sawing.
  */
 export const GRAPHICS = ['auto', 'high', 'low'];
 export const GRAPHICS_LABELS = { auto: 'Auto', high: 'High', low: 'Low' };
@@ -22,6 +23,7 @@ export function stepFeatures(step) {
     shadows: step < 3,
     particles: step >= LOW_STEP ? 0.45 : 1,
     arenaFx: step < LOW_STEP,
+    grass: step >= LOW_STEP ? 0 : step >= 2 ? 0.5 : 1, // the share of the garden's grass blades (Grass.js)
     plainCharacters: step >= LOW_STEP,
     shadowSize: step >= 2 ? 1024 : 2048,
     beeDetail: step >= 2 ? 0.65 : 1, // fewer segments on the arena bees' spheres and limbs: a swarm is 50–200 bees // the sun's shadow map: a quarter of the pixels to draw and sample

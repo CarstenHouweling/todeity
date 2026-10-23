@@ -299,6 +299,7 @@ export class Divinity {
     this.map.setStyle(tier >= 4 ? 'marble' : tier >= 1 ? 'lush' : 'garden', tier >= 4 ? 'clouds' : 'meadow');
     for (const mesh of this.environment.outside) mesh.visible = tier < 4;
     this.environment.insideGrass.visible = tier < 4; // no weeds between the marble tiles
+    this.environment.grassField.mesh.visible = tier < 4;
 
     for (const looks of this.variants) {
       const shown = Math.max(...Object.keys(looks).map(Number).filter((t) => t <= tier));

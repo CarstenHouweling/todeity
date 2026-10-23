@@ -101,6 +101,7 @@ export class TitleGarden {
     this.held = this.selected = null;
     for (const { id, x, y, r } of decor) if (trinketById(id)) this.add(id, x, y, r);
     this.updateSets(false);
+    this.onLayout?.();
   }
 
   add(id, x, y, r = 0) {
@@ -114,7 +115,8 @@ export class TitleGarden {
 
   remove(item) {
     disposeTrinket(item.model);
-    this.items.splice(this.items.indexOf(item), 1);
+    const index = this.items.indexOf(item);
+    if (index >= 0) this.items.splice(index, 1); // (an index of -1 would take the last trinket instead)
     if (this.selected === item) this.selected = null;
   }
 
@@ -131,22 +133,44 @@ export class TitleGarden {
     let added = false;
     for (const id of ids) {
       if (this.items.some((item) => item.id === id) || this.items.length >= MAX_DECOR) continue;
-      const spot = this.freeSpot();
-      const item = this.add(id, spot.x, spot.y, Math.random() * Math.PI * 2);
+      const item = this.add(id, 0, 0, Math.random() * Math.PI * 2);
+      Object.assign(item, this.freeSpot(this.footprint(item), item));
+      this.place(item);
       item.bounce = 1;
       added = true;
     }
     if (added) this.changed();
   }
 
-  freeSpot() {
-    for (let tries = 0; tries < 60; tries++) {
+  /** How far a trinket reaches from its middle on the lawn (its night glow left out), measured once. */
+  footprint(item) {
+    if (item.footprint) return item.footprint;
+    const box = new THREE.Box3();
+    item.model.updateMatrixWorld(true);
+    item.model.traverse((o) => o.isMesh && o !== item.model.userData.glow && box.expandByObject(o));
+    const reach = Math.max(-box.min.x + item.x, box.max.x - item.x, -box.min.y + item.y, box.max.y - item.y);
+    return (item.footprint = Number.isFinite(reach) ? THREE.MathUtils.clamp(reach, 8, 45) : 18);
+  }
+
+  /**
+   * A spot where a trinket of this reach stands clear of the others: in a ring around Tode first, then anywhere in
+   * the garden. With 40+ trinkets the ring fills up, and the old fallback dropped them anywhere, often right inside
+   * another one (a full garden had bird baths in idols and pagodas through jars). Failing that, the roomiest spot.
+   */
+  freeSpot(reach, self = null) {
+    const others = this.items.filter((item) => item !== self);
+    const room = (spot) => Math.min(Infinity, ...others.map((item) => Math.hypot(item.x - spot.x, item.y - spot.y) - this.footprint(item) - reach));
+    let best = null;
+    let bestRoom = -Infinity;
+    for (let tries = 0; tries < 400; tries++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = 75 + Math.random() * 110;
+      const distance = tries < 100 ? 75 + Math.random() * 110 : 40 + reach + Math.random() * (DECOR_RADIUS - 40 - 2 * reach);
       const spot = { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance };
-      if (this.items.every((item) => (item.x - spot.x) ** 2 + (item.y - spot.y) ** 2 > 36 ** 2)) return spot;
+      const free = room(spot);
+      if (free >= 4) return spot;
+      if (free > bestRoom) [best, bestRoom] = [spot, free];
     }
-    return { x: (Math.random() - 0.5) * 300, y: (Math.random() - 0.5) * 300 };
+    return best;
   }
 
   inside(item) {
@@ -172,6 +196,7 @@ export class TitleGarden {
     }
     this.onChange?.(this.decor());
     this.updateSets(true);
+    this.onLayout?.(); // (main.js clears the grass under the trinkets)
   }
 
   undo() {

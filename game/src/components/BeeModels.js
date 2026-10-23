@@ -1,24 +1,34 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { upgradeMaterial } from './Graphics.js';
+import { sculpt } from './Sculpt.js';
 
 /**
- * Procedural bees for the arenas after the garden (the garden keeps the original glTF bee). Whatever the arena, they
+ * Procedural bees for every arena (Low quality keeps the original glTF bee everywhere). Whatever the arena, they
  * must still read as bees from the high gameplay camera (testers called the old Underworld ones bats): every bee has
  * bold stripes on its abdomen and see-through, veined insect wings. Only the boss queens keep their special wings
  * (the Seraph's feathers, Bee-zebub's demon wings); `bugWing` is a style's colour for the insect wings.
  * Every arena has its own species, built from smooth primitives with more detail each arena:
+ *   0 Tode's Garden   – chubby honeybees sculpted from soft shapes (Sculpt.js: one seamless furry body and a
+ *                       grooved, striped abdomen), a fluffy collar, glossy eyes with a sparkle, stripes in their kind's
+ *                       colour; Queen Buzzbelle has a crown, an ermine ruff, a cape and a honeycomb sceptre
  *   1 Sage Mountain   – armoured ronin hornets with kabuto helmets and amber wings
  *   2 Sky Citadel     – golden seraph bees in royal blue, with halos and feathered wings
  *   3 Tournament      – obsidian void wasps with glowing crystals and orbiting shards
  *   4 The Underworld  – charred demon hornets with horns, spikes, lava veins and bat wings
- * Bosses get their own regalia (a shogun's crest and banner, six seraph wings, a crystal crown, demon horns).
+ * Bosses get their own regalia (a jewelled crown and ruff, a shogun's crest and banner, six seraph wings, a crystal
+ * crown, demon horns).
  *
  * Models are built Y-up facing +Z at the size of a drone (like the glTF bee); the Enemy scales and turns them.
  * Geometry is cached per kind and style; materials for the body are per bee (hit flashes), the rest shared.
  */
 
 export const STYLES = {
+  0: {
+    shell: '#2a1c14', shade: '#1e1410', armor: '#ffc21a', trim: '#ffd23f', band: '#ffc21a', eye: '#1a1210',
+    wing: '#eaf8ff', wingOpacity: 0.5, wings: 'insect', flap: 28, roughness: 0.6, metalness: 0,
+    fuzz: '#ffe07a', face: '#f0a818', garden: true, sculpted: true, rim: 0.4, goldFirst: true, chubby: 1.12, // (a golden face, so the dark eyes show)
+  },
   1: {
     shell: '#1c1414', shade: '#2a1c18', armor: '#b8322a', trim: '#d9b25a', band: '#f0a020', eye: '#ffc23f',
     wing: '#ffcf80', wingOpacity: 0.42, wings: 'insect', flap: 26, roughness: 0.35, metalness: 0.3,
@@ -86,19 +96,71 @@ function withGlow(pieces, value) {
 
 const GLOW = '1.35'; // as bright as the old glow material: just past the bloom threshold
 
-/** The bee's surface draws vertices marked `glow` as unlit light in their vertex colour (hit flashes still add). */
-function glowShader(material) {
+/**
+ * The bee's surface draws vertices marked `glow` as unlit light in their vertex colour (hit flashes still add).
+ * `rim` adds a soft warm light around the bee's outline (the garden's bees), so it stands out from the lawn.
+ * `sway` (a uniform, radians) swings the vertices marked `aTail` (the abdomen, merged into the body's mesh since
+ * v0.40: one draw call less a bee) about the waist, the way the abdomen's own pivot did.
+ */
+function glowShader(material, rim = 0, sway = null) {
   material.onBeforeCompile = (shader) => {
+    if (sway) shader.uniforms.uSway = sway;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float glow;\nvarying float vGlow;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;');
+      .replace('#include <common>', `#include <common>\nattribute float glow;\nattribute float aTail;\nvarying float vGlow;\nuniform float uSway;\nconst vec3 TAIL_PIVOT = vec3(${TAIL_PIVOT.join(', ')});`)
+      .replace(
+        '#include <beginnormal_vertex>',
+        `#include <beginnormal_vertex>
+float swayAngle = uSway * aTail;
+mat3 swayTurn = mat3(1.0, 0.0, 0.0, 0.0, cos(swayAngle), sin(swayAngle), 0.0, -sin(swayAngle), cos(swayAngle));
+objectNormal = swayTurn * objectNormal;`
+      )
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = glow;\ntransformed = TAIL_PIVOT + swayTurn * (transformed - TAIL_PIVOT);');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vGlow;')
       .replace('#include <color_fragment>', `#include <color_fragment>\nvec3 glowLight = vColor.rgb * vGlow * ${GLOW};\ndiffuseColor.rgb *= 1.0 - vGlow;`)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += glowLight;');
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+totalEmissiveRadiance += glowLight;
+${rim ? `totalEmissiveRadiance += vec3(1.0, 0.9, 0.7) * ${rim.toFixed(2)} * pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0) * (1.0 - vGlow);` : ''}`
+      );
   };
-  material.customProgramCacheKey = () => 'bee-glow';
+  material.customProgramCacheKey = () => `bee-glow-${rim}-tail`;
   return material;
+}
+
+const TAIL_PIVOT = [0, 10, -1.5]; // where the abdomen hangs from the thorax
+
+const HAT_SIZE = 0.8; // a seasonal hat on the garden's bees, in their model's units
+
+/**
+ * Body and abdomen in one geometry, the abdomen's vertices marked `aTail` (see glowShader), and a seasonal hat on the
+ * head when there is one (it was a mesh of its own: one draw call more a bee). Cached with the parts, per hat.
+ */
+function bodyWithTail(parts, kind, hat) {
+  parts.whole ??= new Map();
+  const key = hat?.id ?? '';
+  if (parts.whole.has(key)) return parts.whole.get(key);
+  const mark = (g, name, value) => g.setAttribute(name, new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(value), 1));
+  const body = parts.body.clone();
+  const tail = parts.abdomen.clone().translate(...TAIL_PIVOT);
+  mark(body, 'aTail', 0);
+  mark(tail, 'aTail', 1);
+  const pieces = [body, tail];
+  if (hat) {
+    // The hat is modelled for the world's Z-up (Enemy.js): turned back Y-up and set on top of the head.
+    const bulk = BUILDS[kind]?.bulk ?? 1;
+    const g = hat.geometry.index ? hat.geometry.toNonIndexed() : hat.geometry.clone();
+    g.rotateX(-Math.PI / 2).scale(HAT_SIZE, HAT_SIZE, HAT_SIZE).rotateX(-0.25).translate(0, 11 + 4.4 * bulk, 8.2 * bulk);
+    for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(name)) g.deleteAttribute(name);
+    mark(g, 'glow', 0);
+    mark(g, 'aTail', 0);
+    pieces.push(g);
+  }
+  const whole = mergeGeometries(pieces);
+  pieces.forEach((g) => g.dispose());
+  parts.whole.set(key, whole);
+  return whole;
 }
 
 // The shadow pass skips the glowing parts (they never cast shadows when they were meshes of their own): their
@@ -179,26 +241,55 @@ function batWing(style, size, seg) {
 
 // --- The bee ---------------------------------------------------------------------------------
 
-function buildGeometry(kind, styleId, detail = 1) {
+function buildGeometry(kind, styleId, detail = 1, tintOf = null) {
   const style = STYLES[styleId];
   const build = BUILDS[kind] ?? BUILDS.drone;
   const { bulk } = build;
+  const tint = tintOf ?? build.tint;
   // Smoother every arena; bosses are big on screen, so they get more. (Kept modest: a swarm is 50 bees.) `detail`
   // below 1 on the lighter quality steps (Quality.js `beeDetail`).
   const seg = Math.max(6, Math.round((9 + styleId * 2) * (build.boss ? 1.6 : 1) * detail));
-  const shell = build.tint ? mix(style.shell, build.tint, styleId === 2 ? 0.25 : 0.2) : style.shell;
-  const armor = build.tint ? mix(style.armor, build.tint, 0.35) : style.armor;
+  // Sculpted bodies (Sculpt.js): the grid spacing in model units, about the same number of cells whatever the bulk;
+  // finer for the big bosses. (0.62 made a drone 13k triangles, the Queen 40k.)
+  const cell = ((build.boss ? 0.58 : 0.9) * bulk) / detail;
+  // The garden's bees keep their dark shell and wear their kind's colour in the stripes, where it shows.
+  const shell = tint && !style.garden ? mix(style.shell, tint, styleId === 2 ? 0.25 : 0.2) : style.shell;
+  const armor = tint ? mix(style.armor, tint, 0.35) : style.armor;
+  const band = tint && style.garden ? mix(style.band, tint, 0.7) : style.band;
   const body = [];
   const glow = [];
   const abdomen = [];
   const abdomenGlow = [];
 
   // Thorax and head
-  body.push(piece(new THREE.SphereGeometry(6 * bulk, seg, seg), shell, { position: [0, 10, 0.5], scale: [1.05, 0.95, 1.1] }));
-  body.push(piece(new THREE.SphereGeometry(4.6 * bulk, seg, seg), shell, { position: [0, 11, 8.2 * bulk], scale: [1.1, 0.95, 1] }));
+  if (style.sculpted) {
+    // One soft body: a furry thorax melting into the head and a little muzzle.
+    const fur = (x, y, z, d) => {
+      const near = Math.min(1, Math.max(0, (4.2 * bulk - z) / (2 * bulk))); // the thorax only, not the face
+      return d - near * 0.22 * Math.sin(x * 1.7 + y * 0.6) * Math.sin(y * 1.6 + z * 1.1) * Math.sin(z * 1.9 + x * 0.8);
+    };
+    body.push(
+      sculpt(
+        [
+          { ellipsoid: [0, 10, 0.5], radii: [6.3 * bulk, 5.7 * bulk, 6.6 * bulk], color: shell },
+          { ellipsoid: [0, 11, 8.2 * bulk], radii: [5.06 * bulk, 4.37 * bulk, 4.6 * bulk], color: style.face, blend: 2.4 * bulk },
+          { ellipsoid: [0, 9.2, 11.4 * bulk], radii: [2.7 * bulk, 2.1 * bulk, 1.8 * bulk], color: mix(style.face, '#fff2c0', 0.25), blend: 1.6 * bulk },
+          // A fluffy collar where the head meets the thorax.
+          ...Array.from({ length: 11 }, (_, i) => {
+            const a = (i / 11) * Math.PI * 2;
+            return { ellipsoid: [Math.cos(a) * 4.9 * bulk, 10.2 + Math.sin(a) * 4.5 * bulk, 4.3 * bulk], radii: [1.9 * bulk, 1.9 * bulk, 1.5 * bulk], color: i % 2 ? style.fuzz : mix(style.fuzz, '#ffffff', 0.3), blend: 1.1 * bulk };
+          }),
+        ],
+        { cell, carve: fur }
+      )
+    );
+  } else {
+    body.push(piece(new THREE.SphereGeometry(6 * bulk, seg, seg), shell, { position: [0, 10, 0.5], scale: [1.05, 0.95, 1.1] }));
+    body.push(piece(new THREE.SphereGeometry(4.6 * bulk, seg, seg), style.face ?? shell, { position: [0, 11, 8.2 * bulk], scale: [1.1, 0.95, 1] }));
+  }
   // Compound eyes (glowing) and mandibles
   for (const side of [-1, 1]) {
-    glow.push(piece(new THREE.SphereGeometry(2.3 * bulk, seg, seg), style.eye, { position: [side * 3 * bulk, 12, 10.2 * bulk], scale: [0.8, 1.15, 0.85] }));
+    (style.garden ? body : glow).push(piece(new THREE.SphereGeometry(2.3 * bulk, seg, seg), style.eye, { position: [side * 3 * bulk, 12, 10.2 * bulk], scale: [0.8, 1.15, 0.85] })); // (the garden's are glossy, not glowing)
     body.push(piece(new THREE.ConeGeometry(0.9 * bulk, 4 * bulk, seg), style.shade, { position: [side * 1.5 * bulk, 8.6, 12.6 * bulk], rotation: [Math.PI / 2 + 0.3, 0, -side * 0.5] }));
     // Antennae
     body.push(piece(new THREE.CapsuleGeometry(0.3, 5, 2, seg), style.shade, { position: [side * 1.6, 15.5, 9 * bulk + 1], rotation: [0.7, 0, -side * 0.35] }));
@@ -209,13 +300,33 @@ function buildGeometry(kind, styleId, detail = 1) {
 
   // Abdomen: banded segments behind the pivot, ending in a stinger.
   let z = -3;
+  const chubby = style.chubby ?? 1;
+  const segments = [];
   for (let i = 0; i < build.abdomen; i++) {
-    const r = (5.6 - i * (3.4 / build.abdomen)) * bulk;
-    const color = i % 2 ? style.band : shell;
-    abdomen.push(piece(new THREE.SphereGeometry(r, seg, seg), color, { position: [0, 0, z], scale: [1, 0.92, 1.05] }));
+    const r = (5.6 - i * (3.4 / build.abdomen)) * bulk * chubby;
+    const color = (i + (style.goldFirst ? 1 : 0)) % 2 ? band : shell;
+    segments.push({ z, r, color });
+    if (!style.sculpted) abdomen.push(piece(new THREE.SphereGeometry(r, seg, seg), color, { position: [0, 0, z], scale: [1, 0.92, 1.05] }));
     if (styleId === 2 && i % 2 === 0) abdomen.push(piece(new THREE.TorusGeometry(r * 0.98, 0.35, 6, seg * 2), style.armor, { position: [0, 0, z - r * 0.5] }));
     if ((styleId === 3 || styleId === 4) && i % 2) abdomenGlow.push(piece(new THREE.TorusGeometry(r * 0.97, 0.3, 6, seg * 2), style.trim, { position: [0, 0, z] }));
     z -= r * 0.8;
+  }
+  if (style.sculpted) {
+    // One smooth tapering abdomen, painted in bands with a groove between each.
+    const bounds = segments.slice(1).map((seg, i) => (segments[i].z + seg.z) / 2);
+    const bandAt = (pz) => bounds.filter((b) => pz < b).length;
+    const groove = (pz) => Math.min(...bounds.map((b) => Math.abs(pz - b)));
+    const colors = segments.map((seg) => new THREE.Color(seg.color));
+    abdomen.push(
+      sculpt(
+        segments.map((seg) => ({ ellipsoid: [0, 0, seg.z], radii: [seg.r, seg.r * 0.92, seg.r * 1.05], color: seg.color, blend: 2.2 * bulk })),
+        {
+          cell: cell * 1.3, // (a simple shape: a coarser grid holds it, ~1.5k triangles on a drone instead of 2.6k)
+          paint: (x, y, pz, color) => color.copy(colors[bandAt(pz)]),
+          carve: (x, y, pz, d) => d + 0.38 * bulk * Math.max(0, 1 - groove(pz) / (0.9 * bulk)) ** 2,
+        }
+      )
+    );
   }
   const stingLength = build.sniper ? 8 : 5;
   (build.sniper ? abdomenGlow : abdomen).push(
@@ -224,7 +335,13 @@ function buildGeometry(kind, styleId, detail = 1) {
   if (build.sniper) abdomenGlow.push(piece(new THREE.SphereGeometry(2.2 * bulk, seg, seg), style.eye, { position: [0, 0, z + 1] }));
 
   // Armour and arena regalia
-  if (styleId === 1) {
+  if (styleId === 0) {
+    // (The fluffy collar is part of the sculpted body.) A sparkle in each eye and a cross little brow.
+    for (const side of [-1, 1]) {
+      glow.push(piece(new THREE.IcosahedronGeometry(0.55 * bulk, 0), '#fff8e8', { position: [side * 2.6 * bulk, 13.1, 12 * bulk] }));
+      if (!build.boss) body.push(piece(new THREE.BoxGeometry(2.8 * bulk, 0.7, 0.9), style.shade, { position: [side * 3 * bulk, 15.1, 10.9 * bulk], rotation: [-0.3, 0, side * 0.38] }));
+    }
+  } else if (styleId === 1) {
     // Lacquered plates and a kabuto helmet with a golden crest.
     body.push(piece(new THREE.SphereGeometry(6.7 * bulk, seg, seg, 0, Math.PI * 2, 0, Math.PI / 2.1), armor, { position: [0, 10.4, 0.5], scale: [1.05, 1, 1.1] }));
     body.push(piece(new THREE.SphereGeometry(5.1 * bulk, seg, seg, 0, Math.PI * 2, 0, Math.PI / 2), armor, { position: [0, 11.4, 8.2 * bulk], scale: [1.15, 1, 1.05] }));
@@ -277,6 +394,7 @@ function buildGeometry(kind, styleId, detail = 1) {
   if (build.boss) addRegalia(kind, styleId, style, bulk, seg, body, glow);
 
   const wings = build.boss ? style.wings : 'insect';
+  const royal = build.boss && styleId === 0;
   return {
     body: merge([...withGlow(body, 0), ...withGlow(glow, 1)]),
     abdomen: merge([...withGlow(abdomen, 0), ...withGlow(abdomenGlow, 1)]),
@@ -287,15 +405,56 @@ function buildGeometry(kind, styleId, detail = 1) {
         : wings === 'bat'
           ? batWing(style, build.wing, Math.max(4, seg >> 1))
           : insectWing({ ...style, wing: style.bugWing ?? style.wing }, build.wing),
-    extraWings: build.boss && (styleId === 2 || styleId === 4),
-    cape: build.boss && (styleId === 3 || kind === 'shogun'),
+    extraWings: build.boss && (styleId === 0 || styleId === 2 || styleId === 4),
+    cape: build.boss && (styleId === 3 || kind === 'shogun' || royal),
   };
 }
 
 /** Crowns, crests, banners and halos for the bosses. */
 function addRegalia(kind, styleId, style, bulk, seg, body, glow) {
   const headZ = 8.2 * bulk;
-  if (kind === 'shogun' || styleId === 1) {
+  if (styleId === 0 && kind !== 'shogun') {
+    // Queen Buzzbelle: a jewelled crown worn a little back, an ermine ruff, lashes, rosy cheeks and a sceptre.
+    const gold = '#ffc93c';
+    const crownY = 15.4;
+    const tilt = [-0.28, 0, 0.08];
+    const atCrown = (x, y, z) => {
+      const p = new THREE.Vector3(x, y, z).applyEuler(euler.set(...tilt));
+      return [p.x, crownY + p.y, headZ - 0.6 + p.z];
+    };
+    body.push(piece(new THREE.CylinderGeometry(4.4 * bulk, 3.8 * bulk, 2.6, 10), gold, { position: atCrown(0, 0, 0), rotation: tilt }));
+    body.push(piece(new THREE.TorusGeometry(4.1 * bulk, 0.45, 4, 10), '#e0a020', { position: atCrown(0, -1.1, 0), rotation: [tilt[0] + Math.PI / 2, 0, tilt[2]] }));
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + Math.PI / 2;
+      const [x, z] = [Math.cos(a) * 4.1 * bulk, Math.sin(a) * 4.1 * bulk];
+      const tall = i === 0 ? 4.6 : 3.2;
+      body.push(piece(new THREE.ConeGeometry(1.1, tall, 4), gold, { position: atCrown(x, 1.2 + tall / 2, z), rotation: tilt }));
+      glow.push(piece(new THREE.IcosahedronGeometry(i === 0 ? 0.9 : 0.6, 0), i % 2 ? '#ff4a7a' : '#7fd8ff', { position: atCrown(x, 1.4 + tall, z) }));
+    }
+    glow.push(piece(new THREE.OctahedronGeometry(1.2, 0), '#ff2a5a', { position: atCrown(0, 0.1, 4.5 * bulk), scale: [1, 1.3, 0.6] }));
+    // The ruff: two rows of white puffs, with a few black ermine tips.
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < 12; i++) {
+        const a = ((i + row * 0.5) / 12) * Math.PI * 2;
+        const r = (5.6 + row * 0.9) * bulk;
+        const color = row === 1 && i % 4 === 1 ? '#2a2420' : row ? '#fffaf0' : '#f2e8d8';
+        body.push(piece(new THREE.IcosahedronGeometry((2 - row * 0.3) * bulk, 1), color, { position: [Math.cos(a) * r, 10.2 + Math.sin(a) * r * 0.85, (4.2 - row * 1.1) * bulk], rotation: [a, i, 0] }));
+      }
+    }
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        body.push(piece(new THREE.ConeGeometry(0.28, 2.2, 3), '#120c08', { position: [side * (3.6 + k * 0.6) * bulk, 14.6 - k * 0.5, 11.2 * bulk], rotation: [0.3, 0, -side * (0.5 + k * 0.35)] }));
+      }
+      body.push(piece(new THREE.SphereGeometry(1.2 * bulk, 6, 4), '#ff8a9a', { position: [side * 3.4 * bulk, 9.6, 11.9 * bulk], scale: [1, 0.6, 0.4] }));
+    }
+    // The sceptre in a front leg: a golden rod with a glowing honeycomb cell on top.
+    const rod = [7.2 * bulk, 9, 9 * bulk];
+    const lean = [0.35, 0, -0.25];
+    body.push(piece(new THREE.CylinderGeometry(0.45, 0.55, 15, 5), gold, { position: rod, rotation: lean }));
+    const top = new THREE.Vector3(0, 7.8, 0).applyEuler(euler.set(...lean)).add(new THREE.Vector3(...rod));
+    body.push(piece(new THREE.CylinderGeometry(2, 2, 1.4, 6), gold, { position: top.toArray(), rotation: [Math.PI / 2 + lean[0], 0, lean[2]] }));
+    glow.push(piece(new THREE.CylinderGeometry(1.4, 1.4, 1.6, 6), '#ffb020', { position: top.toArray(), rotation: [Math.PI / 2 + lean[0], 0, lean[2]] }));
+  } else if (kind === 'shogun' || styleId === 1) {
     // A huge golden crescent crest and katana mandibles.
     body.push(piece(new THREE.TorusGeometry(6, 0.9, 8, seg * 2, Math.PI), style.trim, { position: [0, 18, headZ + 2], rotation: [0, 0, 0] }));
     for (const side of [-1, 1]) body.push(piece(new THREE.BoxGeometry(0.6, 0.8, 10), '#e8e8f0', { position: [side * 2.2, 8.6, headZ + 8], rotation: [0.25, side * -0.3, 0] }));
@@ -323,6 +482,22 @@ function addRegalia(kind, styleId, style, bulk, seg, body, glow) {
 }
 
 const geometryCache = new Map();
+
+/**
+ * Builds the bees' geometry ahead of time, a kind per idle moment: sculpting one takes tens of milliseconds, and the
+ * first wave spawning several kinds at once would hitch.
+ */
+export function prepareBees(styleId, detail = 1, kinds = ['drone', 'zipper', 'brute', 'stinger', 'queen']) {
+  const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 50));
+  const next = () => {
+    const kind = kinds.shift();
+    if (!kind) return;
+    const key = `${kind}:${styleId}:${detail}:null`;
+    if (!geometryCache.has(key)) geometryCache.set(key, buildGeometry(kind, styleId, detail));
+    idle(next);
+  };
+  idle(next);
+}
 const sharedMaterials = new Map();
 
 function shared(styleId) {
@@ -340,7 +515,12 @@ function shared(styleId) {
       emissive: style.wing,
       emissiveIntensity: styleId === 3 ? 0.5 : 0.08,
     });
-    const cape = new THREE.MeshStandardMaterial({ color: styleId === 3 ? '#3a1a6a' : '#b8322a', side: THREE.DoubleSide, roughness: 0.7, emissive: styleId === 3 ? '#2a0a5a' : '#000000' });
+    const cape = new THREE.MeshStandardMaterial({
+      color: styleId === 3 ? '#3a1a6a' : styleId === 0 ? '#7a2ab0' : '#b8322a',
+      side: THREE.DoubleSide,
+      roughness: 0.7,
+      emissive: styleId === 3 ? '#2a0a5a' : '#000000',
+    });
     const bugOpacity = style.bugWingOpacity ?? style.wingOpacity;
     const bugWing = style.bugWing
       ? new THREE.MeshStandardMaterial({
@@ -439,33 +619,30 @@ const sharedMesh = (geometry, material) => {
 
 /**
  * Builds a bee: `{ root, materials, animate(time, delta, enemy) }`. `root` is Y-up facing +Z like the glTF bee.
+ * `tint` recolours its stripes (garden raid adds), `hat` ({ id, geometry }) puts a seasonal hat on its head.
  */
-export function buildBee(kind, styleId, detail = 1) {
-  const key = `${kind}:${styleId}:${detail}`;
-  if (!geometryCache.has(key)) geometryCache.set(key, buildGeometry(kind, styleId, detail));
+export function buildBee(kind, styleId, detail = 1, tint = null, hat = null) {
+  const key = `${kind}:${styleId}:${detail}:${tint}`;
+  if (!geometryCache.has(key)) geometryCache.set(key, buildGeometry(kind, styleId, detail, tint));
   const parts = geometryCache.get(key);
   const style = STYLES[styleId];
   const materials = shared(styleId);
 
-  // The body is per bee so hit flashes and status glows only light up this one.
-  const surface = glowShader(upgradeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: style.roughness, metalness: style.metalness }), styleId));
+  // The body is per bee so hit flashes and status glows only light up this one (and its abdomen sways on its own).
+  const sway = { value: 0 };
+  const surface = glowShader(upgradeMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: style.roughness, metalness: style.metalness }), styleId), style.rim ?? 0, sway);
   surface.color.set('#ffffff');
+  if (style.garden) Object.assign(surface, { sheen: 0.6, sheenRoughness: 0.55 }); // a velvety, furry sheen
 
   const root = new THREE.Group();
   const inner = new THREE.Group(); // bobs while flying
   root.add(inner);
-  const body = new THREE.Mesh(parts.body, surface);
+  // Body and abdomen are one mesh; the abdomen sways in the shader (its shadow stays put, which doesn't show).
+  const body = new THREE.Mesh(bodyWithTail(parts, kind, hat), surface);
   body.userData.keepGeometry = true;
   body.castShadow = true;
   body.customDepthMaterial = glowlessDepth;
   inner.add(body);
-
-  const tail = new THREE.Group(); // the abdomen sways
-  tail.position.set(0, 10, -1.5);
-  const abdomen = new THREE.Mesh(parts.abdomen, surface);
-  abdomen.userData.keepGeometry = true; // (only the body casts a shadow: fewer draw calls for a swarm)
-  tail.add(abdomen);
-  inner.add(tail);
 
   const slowFlap = parts.wings !== 'insect';
   if (!parts.wingSet) {
@@ -517,7 +694,7 @@ export function buildBee(kind, styleId, detail = 1) {
       enemy.flapTime = (enemy.flapTime ?? Math.random() * 10) + delta * rate;
       const t = enemy.flapTime;
       inner.position.y = Math.sin(t * 3) * 1.4;
-      tail.rotation.x = Math.sin(t * 4.2) * 0.1 - (enemy.glow > 0.3 ? 0.35 : 0);
+      sway.value = Math.sin(t * 4.2) * 0.1 - (enemy.glow > 0.3 ? 0.35 : 0);
       flap.flapT.value = t; // the wings flap in their shader (flappingWings)
       if (cape) cape.rotation.x = 0.45 + Math.sin(t * 2.3) * 0.12;
       if (orbit) orbit.rotation.y = t * 1.3;

@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 export const HOUSE_SCALE = 65;
 
 const loader = new GLTFLoader();
+// How far back each material of the model is drawn: walls, inner walls, glass, trims (the door stays in front).
+const DEPTH_LAYERS = { mat21: 4, mat25: 3, mat3: 2, mat15: 1 };
 
 /**
  * Loads a house at (x, y), rotated by `turns` quarter turns, sitting on the ground.
@@ -19,6 +21,10 @@ export async function loadHouse({ x, y, turns = 0 }) {
     if (child.isMesh) {
       child.castShadow = true;
       child.receiveShadow = true;
+      // The model's glass, trims and door lie flush on its walls and flickered through them: each layer is drawn a
+      // little further back, so the one on top wins (see game.coplanar()).
+      const behind = DEPTH_LAYERS[child.material.name];
+      if (behind) Object.assign(child.material, { polygonOffset: true, polygonOffsetFactor: behind, polygonOffsetUnits: behind });
     }
   });
   house.position.set(x, y, 0);

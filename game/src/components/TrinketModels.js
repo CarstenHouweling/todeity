@@ -542,7 +542,8 @@ const BUILDERS = {
     const disc = new THREE.Group();
     disc.position.set(0, 33, 0);
     for (const side of [-1, 1]) disc.add(cyl(0.3, 0.3, 6, mat('#3a2a1a'), [side * 4, -3, 0], 4));
-    const face = cyl(10, 10, 1.4, GOLD(), [0, -15, 0], 20, [Math.PI / 2, 0, 0]);
+    // (thinner than the rim, whose flat facets lay in the face's plane and flickered)
+    const face = cyl(9.6, 9.6, 1, GOLD(), [0, -15, 0], 20, [Math.PI / 2, 0, 0]);
     disc.add(face, cyl(4, 4, 1.8, mat('#ffe680', { emissive: '#a06a00', intensity: 0.6, metal: 0.8, rough: 0.2 }), [0, -15, 0], 16, [Math.PI / 2, 0, 0]));
     disc.add(torus(10, 0.8, mat('#b07a10', { metal: 0.8, rough: 0.3 }), [0, -15, 0]));
     g.add(disc);
@@ -691,7 +692,8 @@ const BUILDERS = {
     g.add(cyl(7, 8, 3, STONE(), [0, 1.5, 0], 10));
     g.add(cyl(2.5, 3.5, 14, STONE(), [0, 10, 0], 8));
     g.add(cyl(13, 6, 5, STONE(), [0, 19, 0], 14));
-    g.add(cyl(11.5, 11.5, 0.6, mat('#7fd8ff', { emissive: '#2a7aaa', intensity: 0.5, rough: 0.1, opacity: 0.85 }), [0, 21.2, 0], 14));
+    // The water sits a little above the basin's rim: flush with it, the two flickered through each other.
+    g.add(cyl(11.5, 11.5, 0.6, mat('#7fd8ff', { emissive: '#2a7aaa', intensity: 0.5, rough: 0.1, opacity: 0.85 }), [0, 21.5, 0], 14));
     // A bird on the rim dips its head for a drink.
     const bird = new THREE.Group();
     bird.position.set(-10, 23, 3);
@@ -782,7 +784,7 @@ const BUILDERS = {
   sprout: (g) => {
     g.add(cyl(8, 6, 9, mat('#c8693a', { rough: 0.7 }), [0, 4.5, 0], 10));
     g.add(cyl(8.6, 8.6, 1.6, mat('#a8552e', { rough: 0.7 }), [0, 9, 0], 10));
-    g.add(cyl(7.4, 7.4, 0.4, mat('#4a3020', { rough: 1 }), [0, 9.6, 0], 10));
+    g.add(cyl(7.4, 7.4, 0.4, mat('#4a3020', { rough: 1 }), [0, 9.9, 0], 10)); // above the rim's top (9.8), not flush
     g.add(cyl(0.9, 1.3, 8, WOOD(), [0, 13, 0], 5));
     // A little tea bush: glossy leaf clumps and white tea flowers, swaying.
     const bush = new THREE.Group();

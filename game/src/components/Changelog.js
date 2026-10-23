@@ -3,6 +3,43 @@
 
 export const CHANGELOG = [
   {
+    version: '0.40.0',
+    date: '2026-10-23',
+    title: 'The garden comes alive',
+    changes: [
+      '🐝 New garden bees: plump, fuzzy honeybees sculpted in one soft piece, with big shiny eyes, a fluffy collar, see-through buzzing wings and stripes in their kind\'s colour (Brutes red, Stingers purple, Nurses green)',
+      '👑 Queen Buzzbelle in full regalia: a jewelled crown, an ermine ruff, a royal cape, long lashes, rosy cheeks, a honeycomb sceptre and a second pair of wings',
+      '🌱 The lawn is a field of grass swaying in the wind, and it bows aside where you walk',
+      '🔭 The title screen and your garden look like a little miniature world, softly out of focus at the edges',
+      '🪴 Fixed flickering on the bird bath, the tea sprout, the gong and the house windows',
+      '🏡 New trinkets find a free spot instead of landing inside another one',
+      '⚙️ Low graphics keeps the classic bee and a plain lawn, so it stays fast',
+      '📈 Auto graphics now comes back up: after a heavy wave lowered it, it returns to full looks once things calm down (and only keeps what your device can hold)',
+      '🔋 Phones in battery saver (capped at 30 fps) no longer drop to Low for good',
+    ],
+  },
+  {
+    version: '0.39.2',
+    date: '2026-10-23',
+    title: 'Supernova',
+    changes: [
+      '💥 Tea Nova goes supernova: a pillar of light pours down on you while it charges (nothing can touch you), then the golden dome blasts the arena and two echoes race out after it, hitting every bee again. Bosses take about 40% of their health (was 25%)',
+      '🌀 Tempest Star bursts into a towering tornado crackling with lightning. It is bigger, lasts longer, hunts down the swarm (and chases a boss), and ends in a blast of wind. Bosses take about 45% (was about 30%)',
+      '🃏 The ultimate pick shows all seven in one row instead of wrapping; on phones held upright the row swipes sideways',
+    ],
+  },
+  {
+    version: '0.39.1',
+    date: '2026-10-23',
+    title: 'Endless without the lag',
+    changes: [
+      '⚡ Late endless waves no longer get slower and slower, above all on phones in co-op: lightning, meteors and other effects are much cheaper to draw',
+      '🐝 Endless keeps the crowd of Bee-zebub\'s wave instead of growing it every wave (the bees still get tougher), and squads wait for room instead of piling up',
+      '📱 Phones show fewer bolts and sparks at once in the busiest moments',
+      "🧪 Co-op: while you're down, your teammates' flasks, spits and bombs no longer freeze in mid-air and pile up for the rest of the wave (an Alchemist's flasks clogged the arena)",
+    ],
+  },
+  {
     version: '0.39.0',
     date: '2026-10-23',
     title: 'A garden for every season',

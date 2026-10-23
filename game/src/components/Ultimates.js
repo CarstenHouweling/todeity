@@ -36,9 +36,9 @@ export const ULTIMATES = {
     id: 'nova',
     name: 'Tea Nova',
     icon: '💥',
-    short: 'A dome of golden light swells across the whole arena.',
+    short: 'A supernova of golden light blasts the whole arena, three times.',
     unlock: { level: 3 },
-    text: 'Draw every last drop of power into one breath, then explode: a dome of golden light swells across the whole arena and blasts every bee it touches.',
+    text: 'A pillar of light pours down on you as you draw in every last drop of power. Then you go supernova: a dome of golden light blasts the whole arena, and two echoes race out after it. Nothing can touch you while it builds.',
   },
   starfall: {
     id: 'starfall',
@@ -52,9 +52,9 @@ export const ULTIMATES = {
     id: 'tempest',
     name: 'Tempest Star',
     icon: '🌀',
-    short: 'A bladed sphere of wind bursts into a shredding storm.',
+    short: 'Hurl a sphere of wind: a lightning tornado hunts the swarm, then bursts.',
     unlock: { level: 9 },
-    text: 'Spin a howling sphere of wind with four blades in your palm and hurl it. Where it lands it bursts into a storm that shreds everything inside.',
+    text: 'Spin a howling sphere of wind with four blades in your palm and hurl it. It bursts into a towering tornado crackling with lightning that hunts down the swarm, shreds everything inside, then explodes.',
   },
   legion: {
     id: 'legion',
@@ -590,7 +590,7 @@ const glowFragment = /* glsl */ `
     gl_FragColor = vec4(mix(color, hot, clamp(rim * 0.8 + bands * low * 0.5, 0.0, 1.0)), clamp(alpha, 0.0, 1.0));
   }`;
 
-function glowMaterial(color, hot, swirl = 0) {
+function glowMaterial(color, hot, swirl = 0, blending = THREE.AdditiveBlending) {
   return new THREE.ShaderMaterial({
     uniforms: { color: { value: new THREE.Color(color) }, hot: { value: new THREE.Color(hot) }, opacity: { value: 1 }, time: { value: 0 }, swirl: { value: swirl } },
     vertexShader: glowVertex,
@@ -598,16 +598,38 @@ function glowMaterial(color, hot, swirl = 0) {
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    blending,
     fog: false,
   });
 }
 
 const DUST = ['#d9c9a0', '#b8a47a', '#8a7a6a', '#fff3c4'];
 
-// --- Tea Nova: a dome of light that swells across the arena ------------------------------
+// --- Tea Nova: a supernova of tea light that swells across the arena, twice more in echoes -----------------
 
-const NOVA = { charge: 0.9, grow: 1.25, fade: 0.7, bee: 45, boss: 0.25, force: 1100 };
+// Main front: `bee` × the wave's toughness and `boss` of a boss's health; each echo another `echoBee`/`echoBoss`
+// (v0.39.2: a lone boss takes ~40%, was 25%, and bees 105× where they took 45×).
+const NOVA = { charge: 1.1, grow: 1.2, echoes: 2, echoGap: 0.42, echoGrow: 0.95, fade: 0.9, bee: 55, boss: 0.2, echoBee: 25, echoBoss: 0.1, force: 1100, rays: 14 };
+const PILLAR_HEIGHT = 900;
+
+/** Thin wedges of light from the centre out to radius 1, bright at the centre and fading to nothing (additive). */
+function sunburstGeometry(count) {
+  const positions = [];
+  const colors = [];
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + (i % 2) * 0.09;
+    const w = i % 2 ? 0.035 : 0.06;
+    positions.push(0, 0, 0, Math.cos(a - w), Math.sin(a - w), 0, Math.cos(a + w), Math.sin(a + w), 0);
+    colors.push(1, 1, 1, 0, 0, 0, 0, 0, 0);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/** An open tube standing on the ground, radius 1 and height 1 (scaled to size). */
+const pillarGeometry = (top = 1, bottom = 1) => new THREE.CylinderGeometry(top, bottom, 1, 32, 6, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
 
 class TeaNova {
   constructor(ctx) {
@@ -631,12 +653,31 @@ class TeaNova {
     this.edge = new THREE.Mesh(new THREE.RingGeometry(1, 1.02, 160), plain('#7a4a10', 0.5));
     this.front.position.z = this.edge.position.z = 1.5;
     for (const mesh of [this.tint, this.front, this.edge]) mesh.visible = false;
-    this.group.add(this.core, this.dome, this.disk, this.tint, this.front, this.edge);
+    // The charge: a pillar of light pours down on him from the sky, two sigils close in around him.
+    this.pillar = new THREE.Mesh(pillarGeometry(), glowMaterial('#ffc94a', '#ffffff', 1));
+    this.pillarCore = new THREE.Mesh(pillarGeometry(), additive('#fff6dc', 0));
+    this.sigils = [0.9, 0.82].map((inner, i) => {
+      const sigil = new THREE.Mesh(new THREE.RingGeometry(inner, 1, 6 + i * 2, 1), additive(i ? '#fff3c4' : '#ffb02e', 0));
+      sigil.position.z = 2 + i;
+      return sigil;
+    });
+    // The burst: a sunburst of rays across the ground, and the echoes that race out after the dome.
+    this.rays = new THREE.Mesh(sunburstGeometry(NOVA.rays), new THREE.MeshBasicMaterial({ vertexColors: true, color: '#ffa726', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    this.rays.position.z = 2.5;
+    this.echoes = Array.from({ length: NOVA.echoes }, () => {
+      const ring = new THREE.Mesh(this.front.geometry, additive('#ffc94a', 0));
+      ring.position.z = 2;
+      ring.visible = false;
+      return { ring, hit: new Set() };
+    });
+    this.group.add(this.core, this.dome, this.disk, this.tint, this.front, this.edge, this.pillar, this.pillarCore, this.rays, ...this.sigils, ...this.echoes.map((echo) => echo.ring));
     this.group.position.copy(this.center);
     ctx.scene.add(markEffect(this.group));
     ctx.player.channeling = true;
-    ctx.player.unstoppableLeft = Math.max(ctx.player.unstoppableLeft, NOVA.charge + 0.4);
+    // Nothing touches him from the first breath until the dome has swept the arena.
+    ctx.player.unstoppableLeft = Math.max(ctx.player.unstoppableLeft, NOVA.charge + NOVA.grow + 0.3);
     ctx.play('beamCharge');
+    ctx.play('powerUp');
   }
 
   update(delta) {
@@ -644,36 +685,55 @@ class TeaNova {
     this.age += delta;
     const t = this.age;
     this.dome.material.uniforms.time.value = t;
+    this.pillar.material.uniforms.time.value = t;
     if (t < NOVA.charge) {
-      // Gathering: light pours into him, the ground glows, the air shakes harder and harder.
+      // Gathering: light pours into him from above, the sigils close in, the air shakes harder and harder.
       const k = t / NOVA.charge;
       this.center.copy(ctx.player.position).setZ(0);
       this.group.position.copy(this.center);
       this.core.scale.setScalar(3 + k * k * 16 * (1 + 0.08 * Math.sin(t * 50)));
       this.disk.scale.setScalar(40 + k * 60);
       this.disk.material.opacity = 0.35 * k;
-      ctx.particles.burst(this.center, { count: 4, colors: GOLD, ring: 120 - k * 40, speed: -260, up: 20, gravity: 0, height: 14, life: 0.4, glow: true });
-      ctx.shake(2 + k * 10);
-      ctx.postfx.pulse({ bloom: k * 0.6, aberration: k * 0.5 });
+      const width = 34 - k * 20 + 2 * Math.sin(t * 40);
+      this.pillar.scale.set(width, width, PILLAR_HEIGHT);
+      this.pillar.material.uniforms.opacity.value = Math.min(1, k * 2);
+      this.pillarCore.scale.set(width * 0.35, width * 0.35, PILLAR_HEIGHT);
+      this.pillarCore.material.opacity = 0.7 * k;
+      this.sigils.forEach((sigil, i) => {
+        sigil.scale.setScalar(260 - k * 170 + i * 40);
+        sigil.rotation.z = (i ? -1 : 1) * t * (2 + k * 6);
+        sigil.material.opacity = 0.8 * Math.min(1, k * 3);
+      });
+      ctx.particles.burst(this.center, { count: 5, colors: GOLD, ring: 160 - k * 60, speed: -320, up: 20, gravity: 0, height: 14, life: 0.45, glow: true });
+      ctx.particles.burst(this.center, { count: 2, colors: GOLD, ring: width, speed: 0, up: -500, gravity: 0, height: 420, size: 2.4, life: 0.8, glow: true });
+      ctx.shake(2 + k * 12);
+      ctx.postfx.pulse({ bloom: k * 0.7, aberration: k * 0.6 });
       return true;
     }
     if (!this.burst) {
       this.burst = true;
       ctx.player.channeling = false;
       for (const mesh of [this.dome, this.tint, this.front, this.edge]) mesh.visible = true;
+      for (const sigil of this.sigils) sigil.visible = false;
       ctx.play('nova');
       ctx.play('boom');
-      ctx.shake(34);
-      ctx.postfx.flash('#fff1d0', 0.7);
-      ctx.postfx.pulse({ bloom: 1.2, warp: 1.2, aberration: 1.2 });
+      ctx.play('sonicBoom');
+      ctx.shake(40);
+      // (kept below a white-out: the field and the bees must stay readable through the burst)
+      ctx.postfx.flash('#ffd98a', 0.3);
+      ctx.postfx.pulse({ bloom: 0.8, warp: 1.3, aberration: 1.2 });
       ctx.effects.ring(this.center, { radius: 260, color: '#ffffff', duration: 0.45, thickness: 0.3 });
-      ctx.particles.burst(this.center, { count: 80, colors: GOLD, speed: 520, up: 260, size: 3, height: 14, life: 1, glow: true });
+      ctx.effects.ring(this.center, { radius: 420, color: '#ffd36b', duration: 0.7, thickness: 0.12 });
+      ctx.particles.burst(this.center, { count: 90, colors: GOLD, speed: 620, up: 300, size: 3.2, height: 14, life: 1.1, glow: true });
+      ctx.particles.burst(this.center, { count: 16, colors: GOLD, speed: 60, up: 900, size: 2.6, height: 20, life: 0.9, glow: true });
     }
-    const g = (t - NOVA.charge) / NOVA.grow;
+    const after = t - NOVA.charge;
+    const g = after / NOVA.grow;
     const k = Math.min(1, g);
     const radius = Math.max(30, this.reach * (1 - (1 - k) ** 3));
+    const end = NOVA.grow + NOVA.echoGap * NOVA.echoes + NOVA.echoGrow * 0.6;
+    const fade = after < end ? 1 - k * 0.35 : Math.max(0, 0.65 * (1 - (after - end) / NOVA.fade));
     this.dome.scale.set(radius, radius, radius * 0.75);
-    const fade = g < 1 ? 1 - k * 0.35 : Math.max(0, 0.65 * (1 - (t - NOVA.charge - NOVA.grow) / NOVA.fade));
     this.dome.material.uniforms.opacity.value = fade;
     this.core.scale.setScalar(Math.max(0.01, 19 * (1 - k * 2)));
     this.tint.scale.copy(this.dome.scale);
@@ -685,21 +745,60 @@ class TeaNova {
     this.front.material.opacity = 0.85 * (1 - k * 0.5);
     this.disk.scale.setScalar(radius);
     this.disk.material.opacity = 0.3 * fade * (1 - k);
+    // The pillar flares wide, then thins away into the sky.
+    const flare = Math.min(1, after / 0.35);
+    const pillarWidth = Math.max(0.01, 14 + Math.sin(flare * Math.PI) * 55);
+    this.pillar.scale.set(pillarWidth, pillarWidth, PILLAR_HEIGHT);
+    this.pillar.material.uniforms.opacity.value = (1 - flare) * 0.8;
+    this.pillarCore.scale.set(pillarWidth * 0.3, pillarWidth * 0.3, PILLAR_HEIGHT);
+    this.pillarCore.material.opacity = 0.45 * (1 - flare);
+    this.rays.scale.setScalar(radius * 1.05);
+    this.rays.rotation.z = after * 0.35;
+    this.rays.material.opacity = 0.32 * fade * (0.8 + 0.2 * Math.sin(after * 18));
     if (g < 1) {
       // The wall of light tears up the ground as it passes, and sweeps every bullet and bee away.
       ctx.particles.burst(this.center, { count: 12, colors: DUST, ring: radius, speed: 140, up: 220, size: 3, height: 3, life: 0.9 });
       ctx.particles.burst(this.center, { count: 6, colors: GOLD, ring: radius, speed: 60, up: 320, size: 2.2, height: 6, life: 0.6, glow: true });
       ctx.cancelBullets?.(this.center, radius);
-      ctx.shake(10 * (1 - k));
-      for (const enemy of ctx.aliveEnemies()) {
-        if (this.hit.has(enemy)) continue;
-        const away = enemy.position.clone().sub(this.center).setZ(0);
-        if (away.length() > radius + enemy.radius) continue;
-        this.hit.add(enemy);
-        ultimateHit(ctx, enemy, NOVA, away.normalize(), NOVA.force);
-      }
+      ctx.shake(12 * (1 - k));
+      this.sweep(radius, this.hit, NOVA.bee, NOVA.boss);
     }
-    return t < NOVA.charge + NOVA.grow + NOVA.fade;
+    // The echoes: two more fronts of light race out after the dome, each hitting every bee again.
+    this.echoes.forEach((echo, i) => {
+      const e = (after - NOVA.grow * 0.55 - NOVA.echoGap * i) / NOVA.echoGrow;
+      echo.ring.visible = e > 0 && e < 1;
+      if (!echo.ring.visible) return;
+      if (!echo.started) {
+        echo.started = true;
+        ctx.play('nova');
+        ctx.shake(16);
+        ctx.postfx.pulse({ bloom: 0.6, warp: 0.5 });
+      }
+      const echoRadius = Math.max(20, this.reach * (1 - (1 - e) ** 2));
+      echo.ring.scale.setScalar(echoRadius);
+      echo.ring.material.opacity = 0.85 * (1 - e * 0.6);
+      ctx.particles.burst(this.center, { count: 6, colors: GOLD, ring: echoRadius, speed: 90, up: 260, size: 2.4, height: 4, life: 0.6, glow: true });
+      ctx.cancelBullets?.(this.center, echoRadius);
+      this.sweep(echoRadius, echo.hit, NOVA.echoBee, NOVA.echoBoss);
+    });
+    // Afterglow: golden embers drift down over the field.
+    if (after > NOVA.grow * 0.5 && fade > 0.1) {
+      const spot = this.center.clone().add(new THREE.Vector3((Math.random() - 0.5) * radius * 1.2, (Math.random() - 0.5) * radius * 1.2, 0));
+      ctx.particles.burst(spot, { count: 2, colors: GOLD, speed: 20, up: -40, gravity: 30, height: 260, size: 2, life: 1.4, glow: true });
+    }
+    return after < end + NOVA.fade;
+  }
+
+  /** Hits every bee inside `radius` that `hit` hasn't seen yet. */
+  sweep(radius, hit, bee, boss) {
+    const { ctx } = this;
+    for (const enemy of ctx.aliveEnemies()) {
+      if (hit.has(enemy)) continue;
+      const away = enemy.position.clone().sub(this.center).setZ(0);
+      if (away.length() > radius + enemy.radius) continue;
+      hit.add(enemy);
+      ultimateHit(ctx, enemy, { bee, boss }, away.normalize(), NOVA.force);
+    }
   }
 
   show(shown) {
@@ -836,9 +935,11 @@ class Starfall {
   }
 }
 
-// --- Tempest Star: a bladed sphere of wind, thrown, bursting into a cutting storm ----------------
+// --- Tempest Star: a bladed sphere of wind, thrown, bursting into a tornado that hunts the swarm ----------------
 
-const TEMPEST = { form: 0.8, speed: 760, minRange: 180, maxRange: 560, grow: 0.25, last: 2.4, collapse: 0.3, radius: 260, tick: 0.1, bee: 7, boss: 0.012, pull: 240 };
+// Each tick `bee` × the wave's toughness and `boss` of a boss's health; the final burst `burstBee`/`burstBoss`
+// (v0.39.2: a lone boss in it takes ~41%, was ~31%; bigger, longer, and it drifts after the crowd).
+const TEMPEST = { form: 0.8, speed: 760, minRange: 180, maxRange: 560, grow: 0.3, last: 3.2, collapse: 0.35, radius: 300, tick: 0.1, bee: 9, boss: 0.011, pull: 280, drift: 120, retarget: 0.25, burstBee: 40, burstBoss: 0.06, burstReach: 1.5, bolt: 0.09, funnel: 250 };
 const WIND = ['#e8fff8', '#bff3e6', '#8fe0d0', '#fff3c4'];
 
 class TempestStar {
@@ -846,6 +947,7 @@ class TempestStar {
     this.ctx = ctx;
     this.age = 0;
     this.tick = 0;
+    this.boltIn = 0;
     this.group = new THREE.Group();
     this.ball = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), glowMaterial('#7fe0d0', '#ffffff', 1));
     // Four blades of wind around it, spinning flat.
@@ -861,16 +963,28 @@ class TempestStar {
     this.group.add(this.ball, this.blades, this.ring);
     // The storm's cuts: thin arcs of wind slashing in every direction.
     this.cuts = new THREE.Group();
-    for (let i = 0; i < 16; i++) {
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 4, 24, Math.PI * (0.35 + Math.random() * 0.4)), additive(i % 3 ? '#ffffff' : '#bff3e6', 0.75));
+    for (let i = 0; i < 10; i++) {
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 4, 24, Math.PI * (0.35 + Math.random() * 0.4)), additive(i % 3 ? '#8fe0d0' : '#e8fff8', 0.35));
       arc.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
       arc.userData.spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(16);
-      arc.userData.size = 0.6 + Math.random() * 0.45;
+      arc.userData.size = 0.5 + Math.random() * 0.35;
       this.cuts.add(arc);
     }
     this.cuts.visible = false;
     this.group.add(this.cuts);
-    ctx.scene.add(markEffect(this.group));
+    // The tornado on the ground: two funnels of wind spinning against each other, and a wind-carved ring on the floor.
+    this.storm = new THREE.Group();
+    // The outer funnel is painted, not added: additive layers over the ball washed a bright arena white. The inner one
+    // glows.
+    this.funnel = new THREE.Mesh(pillarGeometry(0.62, 0.22), glowMaterial('#2f8f86', '#d8fff8', 1, THREE.NormalBlending));
+    this.inner = new THREE.Mesh(pillarGeometry(0.38, 0.1), glowMaterial('#1d6b63', '#e8fff8', 1));
+    // Only their far, inner side: the near wall swept across half the screen whenever the storm was by the frog.
+    this.funnel.material.side = this.inner.material.side = THREE.BackSide;
+    this.floor = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 96), additive('#bff3e6', 0));
+    this.floor.position.z = 1.5;
+    this.storm.add(this.funnel, this.inner, this.floor);
+    this.storm.visible = false;
+    ctx.scene.add(markEffect(this.group), markEffect(this.storm));
     ctx.player.channeling = true;
     ctx.player.unstoppableLeft = Math.max(ctx.player.unstoppableLeft, TEMPEST.form + 0.3);
     ctx.play('beamCharge');
@@ -903,29 +1017,44 @@ class TempestStar {
       toward.copy(offset.normalize());
     }
     const range = THREE.MathUtils.clamp(distance, TEMPEST.minRange, TEMPEST.maxRange);
+    return this.clampToField(from.addScaledVector(toward, range));
+  }
+
+  clampToField(spot) {
     const limit = MAP_HALF_SIZE - 60;
-    const target = from.addScaledVector(toward, range);
-    target.x = THREE.MathUtils.clamp(target.x, -limit, limit);
-    target.y = THREE.MathUtils.clamp(target.y, -limit, limit);
-    return target;
+    spot.x = THREE.MathUtils.clamp(spot.x, -limit, limit);
+    spot.y = THREE.MathUtils.clamp(spot.y, -limit, limit);
+    return spot;
+  }
+
+  /** Where the landed storm drifts: after a boss near it, or else to the middle of the bees around it. */
+  pickDrift() {
+    const near = seeEnemies(this.ctx).filter((enemy) => enemy.position.distanceTo(this.center) < TEMPEST.radius * 2.2);
+    const boss = near.find((enemy) => enemy.type.boss);
+    this.chasing = Boolean(boss);
+    if (boss) return void (this.drift = this.clampToField(boss.position.clone().setZ(0)));
+    const sum = new THREE.Vector3();
+    for (const enemy of near) sum.add(enemy.position);
+    this.drift = near.length ? this.clampToField(sum.divideScalar(near.length).setZ(0)) : null;
   }
 
   update(delta) {
     const { ctx } = this;
     this.age += delta;
     const t = this.age;
-    this.ball.material.uniforms.time.value = t;
+    for (const material of [this.ball.material, this.funnel.material, this.inner.material]) material.uniforms.time.value = t;
     this.blades.rotation.z += delta * (this.landed ? 30 : 18);
     if (t < TEMPEST.form) {
       // Spun up in his hand, above his head: wind howls in from all around.
       const k = t / TEMPEST.form;
       this.group.position.copy(ctx.player.position).setZ(48);
-      this.ball.scale.setScalar(4 + k * 10);
-      this.blades.scale.setScalar(6 + k * 26);
-      this.ring.scale.setScalar(10 + k * 16);
+      this.ball.scale.setScalar(4 + k * 12);
+      this.blades.scale.setScalar(6 + k * 30);
+      this.ring.scale.setScalar(10 + k * 18);
       this.ring.rotation.x = Math.sin(t * 9) * 0.3;
-      ctx.particles.burst(ctx.player.position, { count: 3, colors: WIND, ring: 90, speed: -200, up: 40, gravity: 0, height: 40, life: 0.4, glow: true });
-      ctx.shake(2 + k * 4);
+      ctx.particles.burst(ctx.player.position, { count: 4, colors: WIND, ring: 110, speed: -240, up: 40, gravity: 0, height: 40, life: 0.4, glow: true });
+      ctx.shake(2 + k * 5);
+      ctx.postfx.pulse({ aberration: k * 0.4 });
       return true;
     }
     if (!this.thrown) {
@@ -941,29 +1070,45 @@ class TempestStar {
     if (!this.landed) {
       const k = Math.min(1, (t - this.thrownAt) / this.flight);
       this.group.position.lerpVectors(this.from, this.target, k).setZ(48 * (1 - k) + 22 * k);
-      ctx.particles.burst(this.group.position, { count: 3, colors: WIND, speed: 40, up: 20, gravity: 0, size: 2, height: 0, life: 0.35, glow: true });
+      ctx.particles.burst(this.group.position, { count: 4, colors: WIND, speed: 40, up: 20, gravity: 0, size: 2.2, height: 0, life: 0.4, glow: true });
       if (k < 1) return true;
       this.landed = true;
       this.landedAt = t;
       this.center = this.target.clone();
       this.cuts.visible = true;
+      this.storm.visible = true;
       ctx.play('sonicBoom');
       ctx.play('boom');
-      ctx.shake(26);
-      ctx.postfx.flash('#e8fff8', 0.5);
-      ctx.postfx.pulse({ bloom: 0.8, warp: 0.9, aberration: 0.9 });
-      ctx.effects.ring(this.center, { radius: TEMPEST.radius * 1.5, color: '#e8fff8', duration: 0.5, thickness: 0.25 });
+      ctx.play('thunder');
+      ctx.shake(30);
+      ctx.postfx.flash('#bff3e6', 0.3);
+      ctx.postfx.pulse({ bloom: 0.4, warp: 1.1, aberration: 1 });
+      ctx.effects.ring(this.center, { radius: TEMPEST.radius * 1.6, color: '#e8fff8', duration: 0.5, thickness: 0.25 });
+      ctx.particles.burst(this.center, { count: 50, colors: [...WIND, ...DUST], speed: 380, up: 240, size: 2.8, height: 10, life: 0.9 });
     }
-    // The storm: it swells, shreds and pulls everything in, then collapses with a bang.
+    // The storm: it swells, shreds, pulls everything in and hunts the crowd, then collapses and bursts.
     const s = t - this.landedAt;
     const grow = Math.min(1, s / TEMPEST.grow);
     const closing = Math.max(0, (s - TEMPEST.last) / TEMPEST.collapse);
-    const radius = TEMPEST.radius * (1 - (1 - grow) ** 2) * (1 - closing) * (1 + 0.04 * Math.sin(t * 40));
-    this.group.position.copy(this.center).setZ(radius * 0.25);
+    const radius = TEMPEST.radius * (1 - (1 - grow) ** 2) * (1 - closing * closing) * (1 + 0.04 * Math.sin(t * 40));
+    if ((this.retargetIn = (this.retargetIn ?? 0) - delta) <= 0) {
+      this.retargetIn = TEMPEST.retarget;
+      this.pickDrift();
+    }
+    if (this.drift) {
+      const toward = this.drift.clone().sub(this.center);
+      const distance = toward.length();
+      const speed = TEMPEST.drift * (this.chasing ? 1.8 : 1); // it hunts a boss down faster
+      if (distance > 4) this.center.addScaledVector(toward.divideScalar(distance), Math.min(distance, speed * delta));
+    }
+    // Landed, it hugs the ground (squashed): a storm as tall as it is wide reached up past the camera when it landed
+    // on the camera's side, and its arcs crossed the whole screen.
+    this.group.position.copy(this.center).setZ(radius * 0.12);
+    this.group.scale.set(1, 1, 0.4);
     this.ball.scale.setScalar(Math.max(0.01, radius));
-    this.ball.material.uniforms.opacity.value = 0.6;
+    this.ball.material.uniforms.opacity.value = 0.18;
     this.blades.scale.setScalar(Math.max(0.01, radius * 1.05));
-    for (const blade of this.blades.children) blade.material.opacity = 0.22;
+    for (const blade of this.blades.children) blade.material.opacity = 0.12;
     this.ring.scale.setScalar(Math.max(0.01, radius * 1.15));
     this.ring.rotation.x = 0;
     this.cuts.children.forEach((arc) => {
@@ -972,18 +1117,38 @@ class TempestStar {
       arc.rotation.z += arc.userData.spin.z * delta;
       arc.scale.setScalar(Math.max(0.01, radius * arc.userData.size));
     });
+    // The tornado towers over the storm and leans as it wanders.
+    const wobble = Math.sin(t * 2.3) * 0.08;
+    this.storm.position.copy(this.center);
+    this.funnel.scale.set(Math.max(0.01, radius * 0.95), Math.max(0.01, radius * 0.95), Math.max(0.01, TEMPEST.funnel * grow * (1 - closing)));
+    this.funnel.rotation.set(wobble, -wobble, this.funnel.rotation.z + delta * 7);
+    this.funnel.material.uniforms.opacity.value = 0.55;
+    this.inner.scale.set(Math.max(0.01, radius * 0.9), Math.max(0.01, radius * 0.9), Math.max(0.01, TEMPEST.funnel * 0.85 * grow * (1 - closing)));
+    this.inner.rotation.set(-wobble, wobble, this.inner.rotation.z - delta * 11);
+    this.inner.material.uniforms.opacity.value = 0.3;
+    this.floor.scale.setScalar(Math.max(0.01, radius * 1.2));
+    this.floor.rotation.z -= delta * 3;
+    this.floor.material.opacity = 0.35 * (1 - closing);
     if (closing > 0 && !this.collapsing) {
       this.collapsing = true;
       ctx.play('nova');
     }
     if (closing >= 1) {
-      ctx.effects.ring(this.center, { radius: TEMPEST.radius * 1.3, color: '#ffffff', duration: 0.4, thickness: 0.3 });
-      ctx.particles.burst(this.center, { count: 60, colors: WIND, speed: 420, up: 200, size: 2.6, height: 20, life: 0.8, glow: true });
-      ctx.shake(18);
+      this.finale();
       return false;
     }
-    ctx.shake(5);
-    ctx.particles.burst(this.center, { count: 4, colors: WIND, ring: radius * 0.9, speed: -120, up: 60, gravity: 0, size: 2, height: 10, life: 0.4, glow: true });
+    ctx.shake(6);
+    // Debris whirls in and is torn up into the funnel; lightning crackles inside it.
+    ctx.particles.burst(this.center, { count: 4, colors: WIND, ring: radius * 0.9, speed: -140, up: 60, gravity: 0, size: 2, height: 10, life: 0.4, glow: true });
+    ctx.particles.burst(this.center, { count: 3, colors: DUST, ring: radius * 0.5, speed: -40, up: 260, gravity: -120, size: 2.6, height: 6, life: 0.9 });
+    if ((this.boltIn -= delta) <= 0 && radius > 40) {
+      this.boltIn = TEMPEST.bolt * (0.6 + Math.random() * 0.8);
+      const a = Math.random() * Math.PI * 2;
+      const high = this.center.clone().add(new THREE.Vector3(Math.cos(a) * radius * 0.5, Math.sin(a) * radius * 0.5, 160 + Math.random() * 260));
+      const low = this.center.clone().add(new THREE.Vector3((Math.random() - 0.5) * radius, (Math.random() - 0.5) * radius, 6));
+      ctx.effects.bolt(high, low, { color: '#9ff4ff', width: 2.5, life: 0.16, jitter: 16 });
+      if (Math.random() < 0.3) ctx.play('zap');
+    }
     ctx.cancelBullets?.(this.center, radius);
     this.tick -= delta;
     if (this.tick <= 0 && radius > 20) {
@@ -997,13 +1162,41 @@ class TempestStar {
     return true;
   }
 
+  /** The storm collapses into a point and bursts: a last blast of wind that throws every bee around it away. */
+  finale() {
+    const { ctx } = this;
+    const reach = TEMPEST.radius * TEMPEST.burstReach;
+    ctx.play('boom');
+    ctx.play('sonicBoom');
+    ctx.shake(30);
+    ctx.postfx.flash('#bff3e6', 0.3);
+    ctx.postfx.pulse({ bloom: 0.5, warp: 1.2, aberration: 1.1 });
+    ctx.effects.ring(this.center, { radius: reach, color: '#ffffff', duration: 0.45, thickness: 0.3 });
+    ctx.effects.ring(this.center, { radius: reach * 1.25, color: '#8fe0d0', duration: 0.7, thickness: 0.12 });
+    ctx.particles.burst(this.center, { count: 80, colors: WIND, speed: 560, up: 220, size: 2.8, height: 20, life: 0.9, glow: true });
+    ctx.particles.burst(this.center, { count: 30, colors: DUST, speed: 300, up: 380, size: 3, height: 10, life: 1 });
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
+      const tip = this.center.clone().add(new THREE.Vector3(Math.cos(a) * reach, Math.sin(a) * reach, 8));
+      ctx.effects.bolt(this.center.clone().setZ(30), tip, { color: '#bff3e6', width: 4, life: 0.25, jitter: 20 });
+    }
+    ctx.cancelBullets?.(this.center, reach);
+    for (const enemy of ctx.aliveEnemies()) {
+      const away = enemy.position.clone().sub(this.center).setZ(0);
+      if (away.length() > reach + enemy.radius) continue;
+      ultimateHit(ctx, enemy, { bee: TEMPEST.burstBee, boss: TEMPEST.burstBoss }, away.normalize(), 700);
+    }
+  }
+
   show(shown) {
     this.group.visible = shown;
+    this.storm.visible = shown && Boolean(this.landed);
   }
 
   dispose() {
     this.ctx.player.channeling = false;
     disposeTree(this.group);
+    disposeTree(this.storm);
   }
 }
 

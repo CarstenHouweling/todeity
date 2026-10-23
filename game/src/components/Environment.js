@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MAP_HALF_SIZE } from './Map.js';
+import { createGrass } from './Grass.js';
 
 // Fixed seed: the garden looks the same every run.
 function seededRandom(seed) {
@@ -622,6 +623,23 @@ export function createEnvironment() {
     { x: HOME.x, y: HOME.y, radius: 75 },
     ...PATH.map(([x, y]) => ({ x, y, radius: 34 })),
   ];
+  // The lawn itself: a field of blades swaying in the wind (Grass.js), off the path, the pond and the house.
+  const nearPath = (x, y) =>
+    PATH.some(([ax, ay], i) => {
+      const [bx, by] = PATH[i + 1] ?? [ax, ay];
+      const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1)));
+      return Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay)) < 19;
+    });
+  const grassField = createGrass({
+    half: MAP_HALF_SIZE,
+    clear: (x, y) =>
+      nearPath(x, y) ||
+      Math.hypot(x - POND.x, y - POND.y) < POND.radius + 7 ||
+      (Math.abs(x - HOME.x) < 62 && Math.abs(y - HOME.y) < 62) ||
+      Math.hypot(x - TEA_TABLE.x, y - TEA_TABLE.y) < 20,
+  });
+  group.add(grassField.mesh);
+
   const grassInside = scatterPoints(220, { inside: insideArena(10), spacing: 18, avoid: blocked });
   const grassOutside = scatterPoints(900, { inside: outsideArena(8, 700), spacing: 16, avoid: keepClear });
   const tuft = grassTuft();
@@ -661,6 +679,7 @@ export function createEnvironment() {
     outside,
     pondWater: pond.water,
     insideGrass,
+    grassField,
     blocked,
     keepClear,
     // For the seasons (SeasonDecor.js): bats fly instead of the butterflies, flowers hide under the snow, the pollen
@@ -669,7 +688,9 @@ export function createEnvironment() {
     flowers: flowerMeshes,
     mushrooms: [mushroomMesh],
     pollen: pollen.points,
-    update(time) {
+    /** `frogs`: where the frogs are, to bend the grass around them. */
+    update(time, frogs) {
+      grassField.update(time, frogs);
       pond.update(time);
       pollen.update(time);
       butterflies.update(time);

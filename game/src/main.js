@@ -243,6 +243,7 @@ initProjectiles(scene);
 // The world (lawn, garden, divine transformations) is rebuilt when the garden is resized for co-op.
 let map = null;
 let environment = null;
+let worldBuilds = 0;
 let divinity = null;
 let seasonDecor = null; // the garden dressed for the season (SeasonDecor.js)
 // The season the garden shows (Seasons.js): the calendar's, unless switched off in ⚙️ Settings (`applySeason`).
@@ -353,6 +354,11 @@ function buildWorld(tiles) {
   seasonDecor = new SeasonDecor(environment, { get particles() { return particles; }, get camera() { return camera; } });
   seasonDecor.apply(gardenSeason);
   if (houses[0]) map.add(houses[0].house);
+  if (worldBuilds++) {
+    // (The first world is built before the quality setting and the garden exist; they set the grass up themselves.)
+    applyArenaFx();
+    clearGrass();
+  }
 }
 let houses = []; // footprints of loaded houses: { rect }
 
@@ -586,6 +592,14 @@ function rememberDailyBest(finalScore) {
 }
 
 const aliveEnemies = () => enemies.filter((enemy) => !enemy.dying);
+/**
+ * Takes `item` out of `list` if it's still there. (`list.splice(list.indexOf(item), 1)` on an item already gone
+ * removed the last item instead, which then stayed in the scene for good: a frozen spit, bomb or bee.)
+ */
+function dropFrom(list, item) {
+  const index = list.indexOf(item);
+  if (index >= 0) list.splice(index, 1);
+}
 
 // Hooks for the effect, ultimate and weather modules.
 const ctx = {
@@ -1009,7 +1023,7 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
 }
 
 function removeEnemy(enemy) {
-  enemies.splice(enemies.indexOf(enemy), 1);
+  dropFrom(enemies, enemy);
   if (mirrors.get(enemy.netId) === enemy) mirrors.delete(enemy.netId);
   hud.removeHealthBar(enemy);
   if (enemy.ai.telegraph) removeTelegraph(enemy.ai.telegraph);
@@ -2428,7 +2442,7 @@ function soakFailed() {
 }
 
 function clearSoak(soak) {
-  soaks.splice(soaks.indexOf(soak), 1);
+  dropFrom(soaks, soak);
   for (const zone of soak.zones) disposeTree(zone.group);
   for (const star of soak.stars) {
     star.removeFromParent();
@@ -2881,7 +2895,7 @@ function updateFireRings(delta) {
 }
 
 function removeFireRing(ring) {
-  fireRings.splice(fireRings.indexOf(ring), 1);
+  dropFrom(fireRings, ring);
   ring.wall.removeFromParent();
 }
 
@@ -3615,6 +3629,7 @@ const BOLT_TRAIL = ['#e0d0ff', '#b48cff', '#ffffff'];
 
 /** A teammate's spit: it flies and splatters, but the damage is done on their side. */
 function visualSpit(origin, direction, speed, range, radius, shape = null) {
+  if (!PLAYING.has(phase)) return; // (behind a menu or a cut-scene nothing moves it: it would hang there)
   const projectile = new Projectile(origin, direction, { speed, range, damage: 0, radius, shape });
   projectile.visual = true;
   projectiles.push(projectile);
@@ -3644,7 +3659,7 @@ function aimAssist(direction, range) {
 }
 
 function removeFrom(list, projectile) {
-  list.splice(list.indexOf(projectile), 1);
+  dropFrom(list, projectile);
   projectile.dispose();
 }
 
@@ -3705,6 +3720,8 @@ function steer(projectile, delta) {
   projectile.direction.lerp(steerTo, 1 - Math.exp(-7 * projectile.homing * delta)).normalize();
 }
 
+const PROJECTILE_MAX_AGE = 6; // seconds: a spit still flying after this (a broken range, a homing bolt circling) goes
+
 function updateProjectiles(delta) {
   buildBeeGrid(); // (the host builds it again once the bees have moved)
   for (const projectile of [...projectiles]) {
@@ -3725,7 +3742,7 @@ function updateProjectiles(delta) {
     }
     // Potions fly over the bees and only shatter where they land.
     if (projectile.lob) {
-      if (projectile.isSpent) {
+      if (projectile.isSpent || projectile.age > PROJECTILE_MAX_AGE) {
         shatterPotion(projectile);
         removeFrom(projectiles, projectile);
       }
@@ -3752,7 +3769,7 @@ function updateProjectiles(delta) {
     const used = target && projectile.hits.size > projectile.pierce;
     const blocked = !isInsideMap(projectile.position, -40);
     if (blocked) particles.burst(projectile.position, { count: 4, colors: SPIT_DROPS, speed: 40, up: 30, size: 1.2, height: 0 });
-    if (used || blocked || projectile.isSpent) removeFrom(projectiles, projectile);
+    if (used || blocked || projectile.isSpent || projectile.age > PROJECTILE_MAX_AGE) removeFrom(projectiles, projectile);
   }
 }
 
@@ -3838,7 +3855,7 @@ function updateBombs(delta) {
     bomb.mesh.rotation.y += delta * 9;
     particles.burst(bomb.mesh.position, { count: 1, colors: ['#ffffff', '#f3d29a'], speed: 10, up: 20, size: 1.6, height: 0, life: 0.4, gravity: -30 });
     if (t >= 1) {
-      bombs.splice(bombs.indexOf(bomb), 1);
+      dropFrom(bombs, bomb);
       bomb.mesh.removeFromParent();
       if (bomb.own) teaBlast(bomb.to);
     }
@@ -3936,7 +3953,7 @@ function updateSplashEffects(delta) {
 }
 
 function removeSplashEffect(effect) {
-  splashEffects.splice(splashEffects.indexOf(effect), 1);
+  dropFrom(splashEffects, effect);
   effect.ring.removeFromParent();
   effect.ring.geometry.dispose();
   effect.ring.material.dispose();
@@ -4216,7 +4233,7 @@ function updateDecoys(delta) {
 }
 
 function removeDecoy(decoy) {
-  decoys.splice(decoys.indexOf(decoy), 1);
+  dropFrom(decoys, decoy);
   decoy.mesh.removeFromParent();
 }
 
@@ -4497,6 +4514,11 @@ const garden = new TitleGarden({ scene, camera, canvas: renderer.domElement, par
 let decorating = false; // the garden view is open: editing your own, or visiting someone's
 let trayCollapsed = false;
 let rewardTimer = 0;
+/** No grass blades poke through the trinkets standing on the lawn. */
+function clearGrass() {
+  environment.grassField.clearAround(garden.items.map((item) => ({ x: item.x, y: item.y, radius: garden.footprint(item) * 0.85 })));
+}
+garden.onLayout = () => clearGrass();
 garden.onChange = (decor) => {
   saveDecor(decor);
   hub.sendDecor(decor); // visitors see the garden change live
@@ -5819,7 +5841,8 @@ function startHazards(number) {
   // A meteor shower is much faster than an arena's own hazard.
   hazard.every = waveMods.has('meteors') ? 1.4 : active ? plan.every / (1 + (number - plan.from) * 0.15) : 0;
   hazard.timer = 3 + Math.random() * 2;
-  hazard.squadsLeft = number >= 16 ? 4 + Math.floor((number - 16) / 3) : number >= 11 ? 3 : number >= 8 ? 2 : number >= 4 ? 1 : 0;
+  // (endless waves keep Bee-zebub's number of squads: they come on top of the crowd's limit)
+  hazard.squadsLeft = number >= 16 ? 4 + Math.floor((Math.min(number, HELL_WAVE) - 16) / 3) : number >= 11 ? 3 : number >= 8 ? 2 : number >= 4 ? 1 : 0;
   // Arena events: bullet curtains and other patterns sweeping the field, more often deeper in (rarer in boss fights).
   hazard.eventEvery = number >= ARENA_EVENT_FROM ? Math.max(5, 15 - (number - ARENA_EVENT_FROM) * 0.6) * (waveConfig(number).isBoss ? 1.6 : 1) : 0;
   hazard.eventTimer = hazard.eventEvery * 0.5;
@@ -5838,7 +5861,10 @@ function updateHazards(delta) {
     hazard.eventTimer = hazard.eventEvery * (0.8 + Math.random() * 0.4);
     startArenaEvent();
   }
-  if (hazard.squadsLeft > 0 && (hazard.squadTimer -= delta) <= 0) {
+  // Squads come on top of the crowd's limit. In endless they wait for room: its bees live so long that squad after
+  // squad piled up (110+ bees where the limit was 72).
+  const squadRoom = wave <= HELL_WAVE || aliveEnemies().length < crowdLimit();
+  if (hazard.squadsLeft > 0 && (hazard.squadTimer -= delta) <= 0 && squadRoom) {
     hazard.squadsLeft--;
     hazard.squadTimer = 10 + Math.random() * 6;
     spawnSquad();
@@ -6037,8 +6063,19 @@ function burstRing(center, count, speed, offset = 0) {
   play('boom');
 }
 
+/**
+ * How many bees may be alive at once before the spawner waits. Bigger swarms in every arena: a bullet hell needs a
+ * horde. Endless keeps Bee-zebub's crowd (its bees get tougher instead): the limit used to grow by 2 a wave, and
+ * endless bees live so long that it was always full (late endless lagged on phones in co-op).
+ */
+function crowdLimit() {
+  const crowdWave = Math.min(wave, HELL_WAVE);
+  return Math.min(130, MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + 2 * Math.max(0, crowdWave - 12) + (coop ? 12 * (coop.size - 1) : 0));
+}
+
 /** Bees working together: an encirclement, a marching phalanx, a firing squad, bombers or a pincer. */
 function spawnSquad() {
+  const squadWave = Math.min(wave, HELL_WAVE); // endless squads stay Bee-zebub's size (their bees get tougher)
   const types = ['ring', 'phalanx', 'volley', ...(wave >= 8 ? ['bombers'] : []), ...(wave >= 11 ? ['pincer'] : [])];
   const type = types[Math.floor(Math.random() * types.length)];
   const tode = player.downed ? standingTodes()[0] ?? player : player;
@@ -6048,7 +6085,7 @@ function spawnSquad() {
   const kinds = wave >= 11 ? ['drone', 'zipper', 'brute'] : ['drone', 'zipper'];
   play('roar');
   if (type === 'ring') {
-    const count = 8 + Math.floor(wave / 3);
+    const count = 8 + Math.floor(squadWave / 3);
     hud.showCallout('Surrounded!');
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
@@ -6062,7 +6099,7 @@ function spawnSquad() {
     const along = side % 2 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
     const march = side === 0 ? new THREE.Vector3(1, 0, 0) : side === 1 ? new THREE.Vector3(0, -1, 0) : side === 2 ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(0, 1, 0);
     const start = march.clone().multiplyScalar(-limit);
-    const count = 9 + Math.floor(wave / 4);
+    const count = 9 + Math.floor(squadWave / 4);
     hud.showCallout('Phalanx!');
     for (let i = 0; i < count; i++) {
       const spot = clamp(start.clone().addScaledVector(along, ((i + 0.5) / count - 0.5) * limit * 1.8));
@@ -6077,7 +6114,7 @@ function spawnSquad() {
     const angle = Math.atan2(center.y, center.x) + Math.PI + (Math.random() - 0.5) * 1.2;
     const march = new THREE.Vector3(-Math.cos(angle), -Math.sin(angle), 0);
     const side = new THREE.Vector3(-march.y, march.x, 0);
-    const count = 4 + Math.floor(wave / 5);
+    const count = 4 + Math.floor(squadWave / 5);
     hud.showCallout('Bombing run!');
     for (let i = 0; i < count; i++) {
       const spot = clamp(center.clone().addScaledVector(march, -460 - i * 50).addScaledVector(side, (i % 2 ? 1 : -1) * 18));
@@ -6093,7 +6130,7 @@ function spawnSquad() {
     // Two phalanxes from opposite sides at once.
     const axis = Math.random() < 0.5 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
     const along = new THREE.Vector3(-axis.y, axis.x, 0);
-    const count = 6 + Math.floor(wave / 5);
+    const count = 6 + Math.floor(squadWave / 5);
     hud.showCallout('Pincer squad!');
     for (const sign of [1, -1]) {
       const march = axis.clone().multiplyScalar(sign);
@@ -6108,7 +6145,7 @@ function spawnSquad() {
     }
   } else {
     // Stingers in an arc that fire together.
-    const count = 5 + Math.floor(wave / 6);
+    const count = 5 + Math.floor(squadWave / 6);
     hud.showCallout('Firing squad!');
     const facing = Math.random() * Math.PI * 2;
     for (let i = 0; i < count; i++) {
@@ -6214,8 +6251,7 @@ function updateWave(delta) {
     }
   } else if (phase === 'fighting' && !isGuest()) {
     spawnTimer -= delta;
-    // Bigger swarms in every arena: a bullet hell needs a horde.
-    const maxAlive = Math.min(130, MAX_ALIVE_ENEMIES + 6 * ARENAS.indexOf(arena) + 2 * Math.max(0, wave - 12) + (coop ? 12 * (coop.size - 1) : 0));
+    const maxAlive = crowdLimit();
     if (spawnQueue.length && spawnTimer <= 0 && aliveEnemies().length < maxAlive) {
       // An adapted hive sends its bees in packs (see HIVE), or a strong build waits for every single one.
       const pack = hivePack();
@@ -7028,7 +7064,7 @@ function handleNet(from, message) {
       effects.meteor(vec(message.p), { ...message.o, hitsBees: false, hurtsPlayer: !player.downed });
       break;
     case 'bomb':
-      launchBomb(vec(message.o), vec(message.t), false);
+      if (PLAYING.has(phase)) launchBomb(vec(message.o), vec(message.t), false);
       break;
     case 'decoy':
       placeDecoy(vec(message.p));
@@ -8664,6 +8700,12 @@ function updateGame(delta) {
   for (const charm of charmDrops.update(delta, player.position, !player.downed)) gainCharm(charm);
   lap('waves, hazards, events, boss mechanics');
   if (player.downed) {
+    // The world goes on while I spectate: teammates' spits, bombs and decoys keep arriving and used to freeze where
+    // they were, piling up for the rest of the wave (hundreds of an Alchemist's flasks hanging in the air).
+    updateDecoys(delta);
+    updateProjectiles(delta);
+    updateBombs(delta);
+    lap('spits (own and teammates\')');
     updateLeaves(delta); // or they freeze in mid-air
     updateEnemies(delta);
     lap('bees');
@@ -8819,7 +8861,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     weather.update(delta, player.position, clock.elapsedTime);
     updatePropFade(realDelta);
     if (arena.id === 'garden') {
-      environment.update(clock.elapsedTime);
+      environment.update(clock.elapsedTime, [player.position]);
       seasonDecor.update(clock.elapsedTime, delta, weather.time === 'night' || weather.time === 'sunset');
     } else builtArenas.get(arena.id)?.update(clock.elapsedTime, delta);
     // At the Tournament of the Gods reality itself glitches now and then.
@@ -8860,10 +8902,16 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     bloom: look.bloom * (boost.tierBloom ?? 1) + (boost.bloom ?? 0),
     warp: look.warp * soft + (boost.warp ?? 0),
     aberration: look.aberration * soft + (boost.aberration ?? 0),
+    // The title and the garden look like a miniature (not while placing trinkets, which needs the whole lawn sharp).
+    tilt: (phase === 'title' || decorating) && !garden.editing ? 1 : 0,
   });
   // Calm effects soften flashes, shakes and particles during play (cut-scenes keep the full show).
   postfx.calm = settings.calmFx && PLAYING.has(phase);
   particles.density = quality.features.particles * (postfx.calm ? 0.5 : 1);
+  // Phones and Low: fewer bolts and particles in flight at once (late endless builds kept ~100 bolts and every particle).
+  const lean = document.body.classList.contains('touch') || quality.features.particles < 1;
+  effects.boltBudget = lean ? 24 : 60;
+  particles.max = lean ? 500 : 900;
   updateCamera(phase === 'paused' ? 0 : realDelta);
   postfx.update(realDelta);
   lap('hud widgets, camera');
@@ -8892,7 +8940,30 @@ function frame(realDelta, render = true, elapsed = realDelta) {
 const MAX_PIXEL_RATIO = Math.min(window.devicePixelRatio || 1, 1.5);
 // `ceiling` drops below a resolution that proved too slow, so quality settles instead of see-sawing
 // (every change reallocates the render targets, which shows as a hitch).
-const quality = { step: 0, features: stepFeatures(0), ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO, time: 0, frames: [], goodWindows: 0, slowWindows: 0 };
+const RECOVER_WAIT = 20; // s of smooth frames before Auto tries the next notch up
+const RECOVER_MAX = 320; // s at most between tries of the same notch
+const quality = {
+  step: 0,
+  features: stepFeatures(0),
+  ratio: MAX_PIXEL_RATIO,
+  ceiling: MAX_PIXEL_RATIO,
+  time: 0,
+  frames: [],
+  goodWindows: 0,
+  slowWindows: 0,
+  // Coming back up (v0.40, Auto only): what each step down left behind, newest last, to undo one at a time.
+  history: [],
+  calm: 0, // s of smooth frames, away from the action, toward the next try
+  waits: [], // s to wait before trying to undo history[i] again (doubles after every failed try)
+  probe: null, // a try in progress: { from (the state to go back to), fps (before), windows }
+  refresh: 60, // the screen's frame rate, as far as seen (a 120 Hz screen counts as smooth at 57 too)
+  cap: 0, // fps a capped screen (battery saver: 30) can't go past; slower than this counts as slow
+  ratioWait: RECOVER_WAIT, // s before trying a sharper picture again (when the next notch keeps failing)
+  streak: 0, // tries kept in a row: each makes the next one come sooner
+  clock: 0, // s the watch has run (judged or not)
+  restored: null, // the notch last won back: { depth, at }, to see whether it's lost again soon (see stepDown)
+  backoff: 1, // every wait × this: doubles whenever a notch won back is lost again soon (1–16)
+};
 const QUALITY_WINDOW = 2; // s of frames judged together
 const QUALITY_GRACE = 3; // s not judged after a scene change
 
@@ -8934,12 +9005,51 @@ function setQualityStep(step) {
 function applyGraphicsSetting() {
   quality.ceiling = MAX_PIXEL_RATIO;
   quality.goodWindows = 0;
-  setQualityStep(startStep(settings.graphics, renderer.getContext()));
+  Object.assign(quality, { history: [], waits: [], calm: 0, probe: null, cap: 0, ratioWait: RECOVER_WAIT, streak: 0, restored: null, backoff: 1 });
+  const start = startStep(settings.graphics, renderer.getContext());
+  // A phone guessed weak starts on Low, but may climb from there like any step Auto took down.
+  if (settings.graphics === 'auto') for (let step = 0; step < start; step++) quality.history.push({ step, ratio: MAX_PIXEL_RATIO, ceiling: MAX_PIXEL_RATIO });
+  setQualityStep(start);
   setPixelRatio(maxRatio());
 }
 
-/** Low graphics: no floor shaders or floating motes in the arenas. */
+/** Where the quality stands now (to step back to). */
+const qualityState = () => ({ step: quality.step, ratio: quality.ratio, ceiling: quality.ceiling });
+
+function setQualityState({ step, ratio, ceiling }) {
+  if (step !== quality.step) setQualityStep(step);
+  quality.ceiling = Math.min(ceiling, maxRatio());
+  setPixelRatio(ratio);
+}
+
+/** Auto, one notch down the ladder, remembering how it was. False when there's nothing left to lower. */
+function stepDown() {
+  const before = qualityState();
+  if (!AUTO_LADDER.some((step) => step())) return false;
+  // A notch won back and lost again within 90 s counts as a failed try (heavy waves between calm ones made the
+  // quality see-saw); one that held for 5 minutes starts over.
+  const depth = quality.history.length;
+  const { restored } = quality;
+  if (restored?.depth === depth) {
+    const held = quality.clock - restored.at;
+    // Every try waits longer from then on too: a device that can't hold its looks through the heavy waves has 8
+    // notches to lose, and each failing on its own still meant a step change every minute or so on an old phone.
+    if (held < 90) {
+      quality.waits[depth] = Math.min(RECOVER_MAX, (quality.waits[depth] ?? RECOVER_WAIT) * 2);
+      quality.backoff = Math.min(16, quality.backoff * 2);
+    } else if (held > 300) {
+      delete quality.waits[depth];
+      quality.backoff = Math.max(1, quality.backoff / 2);
+    }
+    quality.restored = null;
+  }
+  quality.history.push(before);
+  return true;
+}
+
+/** Low graphics: no floor shaders or floating motes in the arenas, and a thinner lawn (none at Low). */
 function applyArenaFx() {
+  environment.grassField.setDensity(quality.features.grass);
   for (const built of builtArenas.values()) {
     built.group.traverse((object) => {
       if (object.userData.arenaFx) object.visible = quality.features.arenaFx;
@@ -8950,7 +9060,7 @@ function applyArenaFx() {
 /** Low graphics: the frogs and bees keep the garden's plain materials in every arena. */
 function applyCharacterGraphics() {
   const level = quality.features.plainCharacters ? 0 : arena.gfx;
-  setEnemyGraphics(level, quality.features.beeDetail);
+  setEnemyGraphics(level, quality.features.beeDetail, quality.features.plainCharacters);
   player.setGraphics(level);
   if (coop) for (const remote of coop.remotes.values()) remote.puppet.setGraphics(level);
 }
@@ -8969,6 +9079,7 @@ const AUTO_LADDER = [() => lowerRatio(1), () => stepTo(1), () => stepTo(2), () =
 
 function adaptQuality(delta) {
   updateFpsMeter(delta);
+  quality.clock += delta;
   if (qualityHold > 0) {
     qualityHold -= delta;
     quality.time = 0;
@@ -8980,28 +9091,116 @@ function adaptQuality(delta) {
   if (quality.time < QUALITY_WINDOW) return;
   // The typical frame (the median), not the average: a few hitches (a shader compiling, garbage collection, a big
   // effect starting) made a smooth game look slow, and every slow window cost a step for good.
-  const frames = quality.frames.sort((a, b) => a - b);
+  const frames = quality.frames.slice().sort((a, b) => a - b);
   const fps = 1 / Math.max(1e-3, frames[Math.floor(frames.length / 2)]);
   const average = frames.length / quality.time;
   quality.time = 0;
   quality.frames.length = 0;
   if (document.hidden) return;
-  if (fps < 45 || average < 25) {
+  quality.refresh = Math.min(240, Math.max(quality.refresh, Math.round(fps)));
+  if (quality.cap && fps > quality.cap * 1.2) quality.cap = 0; // the cap is gone (battery saver off)
+  if (settings.graphics === 'auto' && judgeProbe(fps)) return;
+  // A capped screen is as fast as it gets: slow only below its cap.
+  const slow = quality.cap ? fps < quality.cap * 0.88 : fps < 45 || average < 25;
+  if (slow) {
     quality.goodWindows = 0;
+    quality.calm = 0;
+    quality.streak = 0;
     // One slow window may be a passing moment: step down after two in a row (at once when it's very slow).
     if (++quality.slowWindows < 2 && fps >= 25) return;
     quality.slowWindows = 0;
-    // Very slow: two steps at once, so a weak phone doesn't stutter for long.
-    if (settings.graphics === 'auto') for (let i = fps < 25 ? 2 : 1; i > 0; i--) AUTO_LADDER.some((step) => step());
-    else if (!lowerRatio(quality.features.minRatio) && fps < 30 && settings.graphics === 'high') sun.castShadow = false; // last resort
+    if (settings.graphics === 'auto') {
+      // Very slow: two steps at once, so a weak phone doesn't stutter for long.
+      let lowered = false;
+      for (let i = fps < 25 ? 2 : 1; i > 0; i--) lowered = stepDown() || lowered;
+      // Nothing left to lower and still slow: this is the device's pace (or its screen is capped, like battery
+      // saver's 30 fps, and lowering never helped). Slow now means slower than this; the climb back (below) then
+      // restores every notch that doesn't cost frames, so a capped screen gets its full looks back.
+      if (!lowered) quality.cap = Math.round(fps);
+    } else if (!lowerRatio(quality.features.minRatio) && fps < 30 && settings.graphics === 'high') sun.castShadow = false; // last resort
     return;
   }
   quality.slowWindows = 0;
-  if (fps <= 57) quality.goodWindows = 0;
+  if (settings.graphics === 'auto') considerStepUp(fps, frames);
+  // Smooth: near the screen's rate (a capped screen: at its cap).
+  const smooth = fps > Math.min(57, quality.refresh * 0.92) || (quality.cap && fps >= quality.cap * 0.95);
+  if (!smooth) quality.goodWindows = 0;
   else if (quality.ratio < quality.ceiling - 0.01 && ++quality.goodWindows >= 3) {
     setPixelRatio(Math.min(quality.ceiling, quality.ratio + 0.1));
     quality.goodWindows = 0;
   }
+}
+
+/**
+ * Auto comes back up (v0.40). Steps used to never return in a session: one heavy late wave left the rest of the
+ * session, the garden included, on Low. Now, after RECOVER_WAIT s of smooth frames (or of steady ones on a capped
+ * screen) away from the action (title, garden, menus, between waves: a try recompiles shaders, which would hitch a
+ * fight), Auto undoes its last step down and watches two windows. It keeps it unless those are slower than before
+ * (and slow); otherwise it goes back and waits twice as long before trying that notch again (up to RECOVER_MAX).
+ */
+function considerStepUp(fps, frames) {
+  if (quality.probe || !quality.history.length) return;
+  if (quality.ratio < quality.ceiling - 0.01) return; // the resolution is still climbing back (below)
+  const smooth = fps >= Math.min(57, quality.refresh * 0.92) || (quality.cap && fps >= quality.cap * 0.95);
+  // Steady: a capped screen (30 fps in battery saver) never looks smooth, but its frames don't vary either.
+  const steady = !smooth && frames[Math.floor(frames.length * 0.9)] < frames[Math.floor(frames.length * 0.1)] * 1.15;
+  if (!smooth && !steady) {
+    quality.calm = 0;
+    return;
+  }
+  if (PLAYING.has(phase)) return; // (keeps what it has counted: the next menu or wave break may be the moment)
+  quality.calm += QUALITY_WINDOW;
+  const depth = quality.history.length - 1;
+  // Each notch kept in a row makes the next try come sooner (20, 10, 7, 6 s: from Low back to full in about a
+  // minute instead of three), and on a capped screen lowering never helped, so sooner still. Every try is checked.
+  const wait = (quality.waits[depth] ?? Math.max(6, (quality.cap ? RECOVER_WAIT / 2.5 : RECOVER_WAIT) / (1 + quality.streak))) * quality.backoff;
+  // The next notch failed before: meanwhile try a sharper picture at this step (the ladder lowered the resolution
+  // between steps, and only undoing the step above would bring it back).
+  if (quality.waits[depth] > RECOVER_WAIT && quality.ratio < maxRatio() - 0.01 && quality.calm >= quality.ratioWait * quality.backoff) {
+    quality.calm = 0;
+    const from = qualityState();
+    const ratio = Math.min(maxRatio(), quality.ratio + 0.15);
+    quality.ceiling = Math.max(quality.ceiling, ratio);
+    setPixelRatio(ratio);
+    quality.probe = { from, fps, windows: 0, sharper: true };
+    qualityGrace(1);
+    return;
+  }
+  if (quality.calm < wait) return;
+  quality.calm = 0;
+  const from = qualityState();
+  const next = quality.history.pop();
+  // (A sharper picture won meanwhile stays: the step above is tried at it.)
+  setQualityState({ ...next, ratio: Math.max(next.ratio, quality.ratio), ceiling: Math.max(next.ceiling, quality.ceiling) });
+  quality.probe = { from, fps, windows: 0, depth };
+  qualityGrace(1.5); // the step up compiles shaders and allocates targets: not a sign of a slow device
+}
+
+/** A try in progress: true while it decides (the window is its, not the usual watch's). */
+function judgeProbe(fps) {
+  const probe = quality.probe;
+  if (!probe) return false;
+  // Worse than before the try, and slow: the notch costs more than this device has.
+  const failed = fps < probe.fps * 0.9 && fps < 45;
+  if (failed) {
+    quality.streak = 0;
+    if (probe.sharper) quality.ratioWait = Math.min(RECOVER_MAX, (quality.ratioWait ?? RECOVER_WAIT) * 2);
+    else {
+      quality.history.push(qualityState());
+      quality.waits[probe.depth] = Math.min(RECOVER_MAX, (quality.waits[probe.depth] ?? RECOVER_WAIT) * 2);
+    }
+    setQualityState(probe.from);
+    quality.probe = null;
+    qualityGrace(1);
+    return true;
+  }
+  if (++probe.windows < 2) return true;
+  // Kept. On a capped screen the frame rate didn't move: remember the cap, so it isn't taken for slowness.
+  if (probe.fps < 45 && fps < 45) quality.cap = Math.max(quality.cap, Math.round(Math.max(probe.fps, fps)));
+  if (!probe.sharper) quality.restored = { depth: quality.history.length, at: quality.clock };
+  quality.streak++;
+  quality.probe = null;
+  return false;
 }
 
 // The optional FPS counter (pause menu), for players to put in their reports.
@@ -9090,7 +9289,8 @@ if (import.meta.env.DEV) {
     hud,
     action: (name, data = {}) => hud.onAction(name, data), // press a menu button: game.action('garden'), ('emote', { id: 'power' })
     sound: { play, meter, setSound, unlock: unlockAudio }, // const level = game.sound.meter(); level() → RMS now
-    quality, // graphics: { step, features, ratio }; game.setQualityStep(0–4) to try a step
+    quality, // graphics: { step, features, ratio, history… }; game.setQualityStep(0–4) to try a step
+    adaptQuality: (seconds) => adaptQuality(seconds), // feed it frame times to test Auto: game.adaptQuality(1 / 30)
     setQualityStep,
     setPixelRatio,
     /** game.shadowFollow = false: the sun's shadows cover the whole field again (to compare). */
@@ -9109,6 +9309,7 @@ if (import.meta.env.DEV) {
     },
     player,
     enemies,
+    Enemy, // new game.Enemy('queen'): a bee for a lineup (add its .group to game.scene, then game.snap)
     projectiles,
     bullets,
     scene,
@@ -9253,4 +9454,7 @@ if (import.meta.env.DEV) {
     },
   };
   import('./dev/bot.js').then(({ makeBot }) => (window.game.makeBot = () => makeBot(window.game)));
+  import('./dev/gputime.js').then(({ makeGpuTime }) => (window.game.gpuTime = makeGpuTime(window.game)));
+  import('./dev/snap.js').then(({ makeSnap }) => (window.game.snap = makeSnap(window.game)));
+  import('./dev/coplanar.js').then(({ findCoplanar }) => (window.game.coplanar = (target = scene, options) => findCoplanar(target, options)));
 }

@@ -2,6 +2,17 @@ import * as THREE from 'three';
 
 const GRAVITY = 260; // units per second², pulls particles back to the ground
 
+// Colours are parsed once: setting a THREE.Color from a CSS string for every particle, every frame, added up.
+const colorCache = new Map();
+const colorOf = (css) => {
+  if (css?.isColor) return css;
+  if (!colorCache.has(css)) {
+    if (colorCache.size > 500) colorCache.clear(); // (in case a caller makes its colours on the fly)
+    colorCache.set(css, new THREE.Color(css));
+  }
+  return colorCache.get(css);
+};
+
 function particleMesh(material, max) {
   const mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), material, max);
   mesh.count = 0;
@@ -26,7 +37,6 @@ export class Particles {
     this.quaternion = new THREE.Quaternion();
     this.position = new THREE.Vector3();
     this.scale = new THREE.Vector3();
-    this.color = new THREE.Color();
     this.density = 1; // fewer particles with calm effects (pause menu)
   }
 
@@ -55,7 +65,7 @@ export class Particles {
         glow,
         age: 0,
         life: life * (0.7 + Math.random() * 0.6),
-        color: colors[Math.floor(Math.random() * colors.length)],
+        color: colorOf(colors[Math.floor(Math.random() * colors.length)]),
       });
     }
   }
@@ -78,7 +88,7 @@ export class Particles {
       const mesh = p.glow ? this.glowing : this.lit;
       const index = p.glow ? glowing++ : lit++;
       mesh.setMatrixAt(index, this.matrix);
-      mesh.setColorAt(index, this.color.set(p.color));
+      mesh.setColorAt(index, p.color);
     }
     for (const [mesh, count] of [
       [this.lit, lit],

@@ -549,7 +549,7 @@ function snowCover(k) {
   meadow.position.z = -0.3;
   meadow.receiveShadow = true;
   k.group.add(lawn, meadow);
-  k.hide.push(...k.env.flowers, ...k.env.mushrooms);
+  k.hide.push(...k.env.flowers, ...k.env.mushrooms, k.env.grassField.mesh);
 }
 
 // --- The themes ------------------------------------------------------------------------------------------------------

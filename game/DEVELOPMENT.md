@@ -337,25 +337,36 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   **Ultimates to unlock** (v0.36, `unlock: { level }` in `ULTIMATES`, `ultimateUnlocked`; the owner wanted powerful
   new ones to come with progress): **Tea Nova** (3: a charge, then a dome of light, a rim shader on a hemisphere, swells
   to 1.6 × the arena's half size, hitting each bee once as its front passes and cancelling bullets; on bright floors
-  added light barely shows, so the inside is tinted gold and the front is a solid gold band with a dark edge),
+  added light barely shows, so the inside is tinted gold and the front is a solid gold band with a dark edge;
+  **since v0.39.2** a pillar of light and two closing sigils during the charge, Tode unstoppable from the charge until
+  the dome has swept the arena, a sunburst of rays across the floor, and two echo fronts (`NOVA.echoes`) that hit
+  every bee once more each),
   **Starfall** (6: 60 instanced orbs rise into a sunflower spiral over Tode, hover, then each homes in on a bee, a boss
   drawing four shares), **Tempest Star** (9: spun above his head, thrown at the thickest crowd near the aim, since
   the spit aims itself and on phones the aim is wherever the stick last pointed; it bursts into a storm that ticks and
-  pulls bees in) and **Frog Legion** (12: ten copies of the frog as he looks now, baked by `bakeFrog` into one geometry
+  pulls bees in; **since v0.39.2** radius 300 for 3.2 s, it drifts after a boss near it (`pickDrift`, faster) or the
+  middle of the bees around it, lightning crackles in a tornado (two funnels with the swirl shader, the outer one
+  normal-blended, both drawn `BackSide` only: additive layers and the near wall washed the screen white whenever the
+  storm sat by the frog, worst on the Sky Citadel's marble), the landed storm is squashed to 0.4 of its height (its
+  arcs reached past the camera), and it ends in a burst of wind, `finale`) and **Frog Legion** (12: ten copies of the frog as he looks now, baked by `bakeFrog` into one geometry
   per material and drawn as instanced meshes, a few draw calls instead of ten frogs of ~30 meshes; they hop to the
   nearest bee and spit homing shots; gold rings under them, since a pale frog on pale stones got lost). Damage:
   bees by the wave's toughness like the beam (`ultimateHit`, `bee` × `waveScale`), bosses a share of their health
-  (`boss`), about a third of a lone boss each at base power (Nova 25%, Starfall 33%, Tempest ~31%, Legion up to ~35%;
-  measured 30% and 39% for Nova and Tempest with skills running). Targeting uses `ctx.seeEnemies`, so a teammate's
+  (`boss`), about a third of a lone boss each at base power (Starfall 33%, Legion up to ~35%). Since v0.39.2 Nova
+  and Tempest are on par with the beam: Nova 20% + 2 × 10% = 40% (was 25%), Tempest 32 ticks × 1.1% + 6% from the
+  burst ≈ 41% (was ~31%); measured on the wave-5 Queen next to Tode with her health set to 50× her maximum so her
+  shield phase doesn't start (the share is of her maximum): 48–49% and 54% in 6 s, of which 8–9% was Tode's own
+  spits. Targeting uses `ctx.seeEnemies`, so a teammate's
   Starfall or Legion aims at the bees I see (only their screen deals damage); `ctx.cancelBullets` clears bullets
   (a teammate's doesn't). The pick (`showUltimatePick`, `hud.showUltimates({ choices, locked, fresh, daily })`) shows
   every unlocked one, keys 1–9, the locked ones greyed with their level, and "New" until one is chosen
-  (`meta.ultimatesUsed`). **Fitting seven cards** (v0.36.2, "Ultimates to unlock" in style.css; on a phone held
-  sideways they ran off the bottom): up to 820px tall or 900px wide the cards turn compact (icon left, name and text
-  beside it, in a grid); phones (up to 520px wide, or short screens) show each ultimate's one-line `short` instead
-  of its `text` and drop the spirit's line; upright phones get two columns and a one-line heading. Measured with
-  `resize_window` (last card's bottom inside the window): 640×320, 667×375, 780×350, 932×430, 360×640, 375×667,
-  414×896, 768×1024, 1024×768, 1280×720, 1440×900 and 1920×1080 all fit; only 320×568 scrolls (as every menu can).
+  (`meta.ultimatesUsed`). **One row** (v0.39.2, "Ultimates to unlock" in style.css; the owner didn't like seven cards
+  wrapping 5 + 2, and before that v0.36.2's compact grid): with more than three, every card shares one row (flex, no
+  wrap, at most 210px each): icon, name and text; below 1180px wide or 820px tall the one-line `short` instead of the
+  full `text`; short screens (phones sideways, zoomed by 0.68) use the whole width in zoomed units and drop the
+  spirit's line; at 900px wide and less (upright phones, narrow tablets) the row scrolls sideways (148px cards,
+  scroll snap). Measured with `resize_window` (one row, no text overflow, nothing below the window, no page scroll):
+  640×320, 932×430, 1280×720, 1920×1080, and scrolling at 390×844 and 768×1024.
   (v0.36.0 also toasted newly unlocked ones on the title screen; the owner found the
   big toast ugly on PC and phones, and v0.36.1 took it out: the pick's New tags tell it.) The Daily Brew offers only `STARTING_ULTIMATES` (its random-ultimate boon too), so it stays
   the same run for everyone. The server doesn't check ultimates.
@@ -391,7 +402,10 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   lagged): bees +18% health per wave, at most `ENDLESS_SWARM` (120) bees, each a third tougher; bees and stingers
   hit for +1 heart every 4 endless waves from the 2nd (`contactBonus`, `bulletBonus`); healing fades 6% per wave,
   down to 30% (`healScale`, applied in `healPlayer`); always 2–3 modifiers, every boss in turn (`ENDLESS_BOSSES`).
-  The wave banner says all of it.
+  The wave banner says all of it. **Since v0.39.1** endless keeps wave 21's crowd: `crowdLimit()` (the bees alive at
+  once) and the squads (`spawnSquad`'s sizes, `hazard.squadsLeft`) stop growing at `HELL_WAVE`, and a squad waits
+  until the crowd is below its limit (squads come on top of it; endless bees live so long that they piled up: 110+
+  bees where the limit was 72). See Co-op performance for why.
 - **Co-op classes:** every player plays their own class; the state message carries it (`c`) and `RemoteTode`
   rebuilds the puppet; spits carry their style (`st`), a Ninja's decoy is a `decoy` message (the host's bees chase it).
   The Summoner's pond toads are local only (their spits show as his).
@@ -536,7 +550,13 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   trinket. What moves is found by running `userData.anim` at five moments, day and night, and comparing transforms,
   visibility and material values. All 27 trinkets (then): about 220 meshes → 119, a full garden 424 draw calls → 306 (with
   the shadow pass). A part that only moves on an event (the trampoline's pad after a bounce) isn't seen moving, so
-  its builder lists it in `userData.moving`. Check a trinket still animates after changing it. **Since v0.29.1** the
+  its builder lists it in `userData.moving`. Check a trinket still animates after changing it. **Z-fighting**
+  (v0.40, `game.coplanar()`): faces of different colours lying flush flicker through each other; a full garden had it
+  on the bird bath's water (flush with the basin's rim), the tea sprout's soil, the gong's face against its rim's flat
+  facets and the house glTF's glass and trims (now drawn back in `DEPTH_LAYERS` with polygon offsets in House.js). Keep
+  a part's top at least ~0.1 above the face under it. **Placement** (v0.40, `freeSpot`): new trinkets keep clear of
+  the others by their `footprint` (their reach on the lawn), first in the ring around Tode, then anywhere; with 43
+  trinkets the old ring-or-anywhere fallback put about 20 of them inside one another. **Since v0.29.1** the
   probing puts every part back as it was: until then the parts stayed at the last probe (13.1 s), and trinket height
   fields (`trinketField` in GardenPhysics.js, sampled from a fresh model) caught them there. The cannon's steam puff
   hung high over the spout as a solid bump, so a shot hit it on its first frame and bounced back (the `bonk` in
@@ -1040,7 +1060,8 @@ against the game as it is: when a wave, boss or menu changes, check the contact 
 
 ## Graphics levels
 
-The garden keeps the original low-poly look; every new arena raises the graphics level (`GFX_LEVELS` in
+The garden keeps the original low-poly props (since v0.40 with sculpted bees, a grass field and a tilt-shift, see The
+garden comes alive below); every new arena raises the graphics level (`GFX_LEVELS` in
 `components/Graphics.js`, applied by `setArena()` in main.js during the travel flash):
 
 - **Props:** `setDetail(level)` in `Environment.js` makes `part()` rebuild primitives with more segments, smooth
@@ -1063,8 +1084,8 @@ The garden keeps the original low-poly look; every new arena raises the graphics
   shadows, 4 **Low**: also resolution 0.5–1×, 45% particles, plain character materials in every arena
   (`applyCharacterGraphics`) and no arena floor shaders or motes (`userData.arenaFx`, `applyArenaFx`). Auto starts
   at 4 when `looksWeak()` (≤2 GB memory, a phone with ≤4 cores, a tiny screen or a known weak GPU) and otherwise walks
-  down `AUTO_LADDER` (resolution and steps in turns, two at once below 25 fps) in 2 s windows under 45 fps; steps
-  never come back in a session. **Since v0.28.1** a window is judged by its median frame (or an average under 25
+  down `AUTO_LADDER` (resolution and steps in turns, two at once below 25 fps) in 2 s windows under 45 fps; since
+  v0.40 it climbs back too (see Auto comes back up below). **Since v0.28.1** a window is judged by its median frame (or an average under 25
   fps), a step needs two slow windows in a row (one below 25 fps), and `qualityGrace()` ignores 3 s after a scene
   change (`enterGarden`, `leaveGardenView`, `setArena`, the tab becoming visible again). Before, one hitch (shaders
   compiling, a garden's trinkets loading, garbage collection) in a 2 s window at ~50 fps cost a step for good, and
@@ -1122,6 +1143,69 @@ The garden keeps the original low-poly look; every new arena raises the graphics
     ability bar), not over him at 40%.
   To measure: `gl.readPixels` right after `game.postfx.render(0)`; Tode blinking after a hit hides his model on
   some frames, so clear the bees first.
+- **The garden comes alive** (v0.40). Researched what beats bodies made of primitives stuck through each other,
+  for a game that builds everything in code (no Blender on the dev Mac, no third-party models wanted): sculpting with
+  signed distance fields, one instanced grass field with its motion in the vertex shader, and cheap stylized shading.
+  - *Sculpted bees* (`components/Sculpt.js`, `sculpt(shapes, { cell, paint, carve })`): ellipsoids and capsules
+    melted together with a smooth minimum, sampled on a grid and meshed with surface nets, normals from the field's
+    gradient, colours from the nearest shapes. The garden's bees (`STYLES[0]`, `sculpted`) are one soft
+    thorax + head + muzzle + fluffy collar (with a fur ripple carved into the thorax) and one tapering abdomen painted in
+    bands with a groove carved between each; eyes, legs, antennae, stinger, wings and regalia are still `piece`s merged
+    in. `cell` is 0.9 × bulk (0.58 for bosses) ÷ `detail`: 0.62 made a drone 13k triangles and the Queen 40k, now
+    ~6.9k and ~19k (most of a drone is still its legs, wings and eyes). Sculpting a kind takes tens of ms, so
+    `prepareBees` (called by `setEnemyGraphics`) builds the common kinds in idle callbacks; nurses and guardians keep
+    their own colour in the garden (`buildBee(…, tint)`, cached by tint). The surface gets a warm fresnel rim
+    (`glowShader(material, rim)`, `style.rim`) and a velvet sheen. Queen Buzzbelle (`addRegalia`, style 0): jewelled
+    crown worn back on the head, two-row ermine ruff, lashes, cheeks, honeycomb sceptre, purple cape, a second wing
+    pair. Seasonal hats are merged into the body's mesh (`buildBee(…, hat)`, cached per hat; the glTF bee wears one on its Head bone). All five styles × eight kinds build
+    (checked with `buildBee` in a loop).
+  - *Grass field* (`components/Grass.js`, `environment.grassField`): 32,000 blades (a 4-segment tapering ribbon,
+    7 triangles) in 5 × 5 `InstancedMesh` chunks (one draw call each; the camera culls the ones out of view, their
+    bounds padded for the bending), no shadow casting. The vertex shader applies the instance,
+    then rolling gusts and a flutter scaled by height², and bends blades away from up to four frogs (`uPush`, set by
+    `environment.update(time, frogs)`); the fragment shader shades root to tip. Kept off the path, the pond, the
+    house and the tea table; `clearAround` hides the blades under trinkets (`garden.onLayout` → `clearGrass` in
+    main.js, at 0.85 of each trinket's `footprint`). Quality: `features.grass` (1, ½ from step 2, none at Low, via
+    `setDensity` in `applyArenaFx`); hidden from tier 4 (marble) and under winter snow (`k.hide`). The old lawn's
+    mowing squares live on as lighter and darker blades (`MOWN`).
+  - *Tilt-shift* (`tilt` in PostFX's reality shader): on the title and in gardens (not while editing), a 9-tap blur
+    growing away from a band just below the middle of the screen, and colours 14% richer. Off in lite mode (step 2+),
+    so those steps still render straight to the screen.
+  - Compare looks with `game.snap` (Testing and debugging). Measured at step 0 on a Mac: the garden walk 2.1 ms a
+    frame (render CPU 1.8); a run with ~40 garden bees 3.4 ms.
+- **Auto comes back up** (v0.40, `considerStepUp` / `judgeProbe` / `stepDown` in main.js). Steps used to never
+  return in a session: one heavy late wave (or a shader-compile hitch) left the rest of the session, the garden
+  included, on Low. Now every step down is remembered (`quality.history`, the state before it); after `RECOVER_WAIT`
+  (20 s) of smooth windows (median ≥ 57 fps, or 92% of the screen's rate as seen, `quality.refresh`) away from the
+  action (not in `PLAYING` phases: menus, the title, gardens and wave breaks are fine; a try compiles shaders), Auto
+  undoes the last one and judges the next two windows (`quality.probe`, after a 1.5 s grace). It keeps the notch
+  unless they are slower than before by 10% and under 45 fps; a failed notch waits twice as long (`quality.waits`,
+  up to `RECOVER_MAX` 320 s). Kept tries come sooner and sooner (`streak`: 20, 10, 7, 6 s). A notch won back and lost
+  again within 90 s counts as failed and doubles `quality.backoff` (all waits × 1–16; halves when one holds 5
+  minutes): an old phone has 8 notches to lose, and failing each on its own still changed steps every minute. While
+  the next notch keeps failing, it tries a sharper picture at the current step instead (`sharper`, +0.15 ratio,
+  `ratioWait`). **Capped screens** (iOS battery saver: 30 fps): when nothing is left to lower and it's still slow,
+  that frame rate becomes `quality.cap` (slow then means below 88% of it, smooth means at it, and a cap is dropped
+  when frames get 20% faster); steady windows (90th percentile frame within 15% of the 10th) count for the climb,
+  so a capped phone gets its full looks back. A phone that `looksWeak` starts on Low with the ladder above it in the
+  history, so it can climb too. Tested by feeding frame times to `game.adaptQuality(seconds)` (deterministic, no
+  real frames): a heavy wave then calm, back to full in 59 s; from Low on a fast device in 142 s (mostly the
+  resolution climbing 0.1 per 3 good windows); a 30 fps cap back to full in 92 s; a device that holds only step 3
+  settles there at full resolution; a 4 s hitch costs nothing for good; a 120 Hz screen stays full. With a device
+  model (GPU time ∝ step cost × ratio², CPU fixed, vsync at 60 Hz) and heavy/calm waves alternating for 20–40
+  minutes: a mid phone settles at full effects and ratio 1.1 within 5 minutes (no step changes), a weak phone at step
+  2 / 1.0, an old phone at Low / 1.0 (10 changes while it finds its level, at most 2 per 5 minutes after, then
+  none). Checked in the real frame loop too: 28 ms of busy-waiting a frame cost a notch in 4 s and it was back 25 s
+  after; 40 ms a frame went to Low in 12 s, and since that load was pure CPU, the looks came back while it lasted.
+- **Performance of v0.40** (Mac, M1 Max; GPU time with `game.gpuTime`, its clocks raised by 20 renders a query): the
+  full garden at the title, 1536×1152, ~1.5 ms at step 0 (grass ~0.1–0.2 ms, tilt-shift ~0.1 ms; with the GPU
+  idling the same frame read 3 ms). A garden run with ~25 bees and the Queen in a phone-sized landscape view
+  (740×360, buffer 1110×540, touch): step 0 1.55 ms GPU, 2 ms CPU, 336 draw calls, 671k triangles; step 2 0.9 ms;
+  Low 0.78 ms, 196 calls, 224k. A run with ~50 garden bees (desktop pane, 1536×1152): 3 ms GPU, 4 ms CPU. Not measured on a real
+  phone (none at hand): a phone GPU is several times slower, which the Auto ladder is for. What v0.40 does for
+  phones: the grass is 25 chunks the camera culls (`CHUNKS`), half the blades from step 2 and none at Low; the
+  tilt-shift is 9 reads and off in lite; a garden bee is 2 meshes + its shadow (the abdomen and the seasonal hat are
+  in the body's mesh), so no more draw calls than the glTF bee with its hat; Low keeps the glTF bee.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
   shader that caps point size and fades points near the camera.
@@ -1181,6 +1265,26 @@ server proxies `/ws` and `/api`).
   size). Axes, potions and fireballs are still meshes of several parts. Two batches (a lit and an unlit spit) stay in
   the scene while empty so their instanced shaders compile with each arena's lights during the journey, not at the
   first spit. A late build with ~100 spits in flight: ~580 → ~470 draw calls, render CPU 3.3 → 3.0 ms on a Mac.
+- **Late endless** (v0.39.1, co-op on phones got slower every wave past 21): measured solo on a Mac with a
+  lightning-heavy build, wave 19 ran at 2–4 ms a frame and wave 33 at 8–11 ms. What grew: effects in flight (~100
+  bolts from chain procs and 15–24 falling hazards, ~280 of the ~850 draw calls; hiding them halved the render time),
+  and bees (the crowd limit grew 2 a wave and squads stacked on top, 96–118 alive). Now every bolt is drawn by one
+  mesh (`BoltBatch` in Effects.js: their ribbons written into a shared buffer each frame, the fade in the vertex
+  colours) and at most `effects.boltBudget` are in flight (80, 24 on touch or Low; bolts are only looks, a strike's
+  own bolt passes `always`); circles and rings of effects share one radius-1 geometry per shape (`unitCircle`,
+  `unitRing`, kept in `SHARED`, which `Effect.dispose` skips), falling rocks share one geometry and a material per
+  look, and their trails puff at most 30 times a second; particles keep their parsed `THREE.Color` (the CSS string
+  was parsed for each particle every frame) and phones keep at most 500 (`particles.max`). With the crowd held at
+  wave 21's (see Endless above): wave 33–38 at 4.5–7 ms, 57 bolts cost 17 draw calls (were ~120). The hazards' rate
+  still grows each endless wave (the Underworld's brimstone: 4 every 3 s at wave 21, 8 every ~1 s by wave 33).
+- **Nothing left lying around** (v0.39.1): `updateGame` returns early while my frog is downed, and it used to skip
+  spits, bombs and decoys too, so teammates' spits (an Alchemist's flasks are meshes of four parts each, ~40 a second)
+  froze where they were and piled up until the next wave. The downed branch now updates them; teammates' spits and
+  bombs that arrive outside the playing phases (menus, cut-scenes) are dropped; a spit still flying after
+  `PROJECTILE_MAX_AGE` (6 s) goes. Lists are emptied with `dropFrom(list, item)`: `list.splice(list.indexOf(item),
+  1)` on an item already gone removed the *last* item, whose mesh then stayed in the scene for good. Checked with
+  the bot (an Alchemist through endless waves 22–30): at every wave start ~355–371 geometries and 100–160 scene
+  children, going up and down with the fight, not piling up.
 - **Guests and the boss intro:** a guest whose travel ends after the host's (a slow phone) got the host's boss intro
   mid-travel, which cut the travel short: that guest stayed in the old arena on the old wave. The intro now waits
   for the guest's landing (`guestBossIntro`, `pendingIntro`).
@@ -1244,6 +1348,9 @@ server proxies `/ws` and `/api`).
 | `components/Charms.js` | Charm definitions, rarity rolls and the charms lying on the ground (`CharmDrops`). |
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
+| `components/Sculpt.js` | Signed-distance sculpting: smooth-blended shapes meshed with surface nets (the garden's bees). |
+| `components/Grass.js` | The garden's instanced grass field: wind and frogs bending it in the vertex shader, cleared under trinkets. |
+| `dev/coplanar.js`, `dev/snap.js`, `dev/gputime.js` | Dev-only: `game.coplanar()` finds z-fighting faces, `game.snap()` renders contact sheets of close-ups, `game.gpuTime()` times a frame on the GPU. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
 | `components/GardenPhysics.js` | Height fields: what frogs stand on in a garden (the house, trinkets). |
 | `components/Emotes.js` | Garden emotes, their unlocks (achievements, or `minTier`) and `bestTier`. |
@@ -1298,7 +1405,9 @@ server proxies `/ws` and `/api`).
   Each effect updates in its own try/catch: an exception used to drop every effect still in flight from the list
   undisposed, and they stayed frozen in the scene into the garden (v0.24.7). Objects an effect adds to the scene
   outside `Effect.add` (skill roots, ultimates, the biscuit) are tagged with `markEffect`, and `effects.clear()`
-  also removes any tagged object left in the scene.
+  also removes any tagged object left in the scene. Effects that come by the dozen share their geometry (`unitCircle`,
+  `unitRing`, scaled to size) and bolts are one batched mesh (see Late endless under Co-op): don't give a frequent
+  effect fresh geometry of its own.
 - **Nothing in an arena blocks movement or shots** except the map edge and Tode's house: bees fly over trees,
   rocks and ponds, shots fly over everything, and Tode walks through props, which fade (`updatePropFade`) when
   he is near or between them and the camera (meshes made with `single()` are tagged `userData.prop`).
@@ -1306,7 +1415,9 @@ server proxies `/ws` and `/api`).
   gets worse, so they always separate).
 - **Zones:** each arena's centrepiece is a zone (`zone` on its obstacle): water (the pond, oil spring, fountain)
   slows Tode to a swim, the Tournament's rift speeds him up, the Underworld's lava pool burns.
-- **Bee models:** the garden uses the glTF bee, whose 7 parts are merged into one skinned mesh at load
+- **Bee models:** since v0.40 the garden has its own procedural species too (style 0, see The garden comes alive under
+  Graphics levels); the glTF bee is only used at Low quality (`setEnemyGraphics(level, detail, classic)`, `classic` =
+  `plainCharacters`), everywhere. Its 7 parts are merged into one skinned mesh at load
   (`mergeBeeParts` in `Enemy.js`); `Enemy.dispose()` frees each bee's skeleton (its bone texture). Every other
   arena has its own procedural species (`components/BeeModels.js`: ronin hornets, seraph bees, void wasps,
   demon hornets, plus regalia for each boss) with flapping wings, a swaying abdomen and a tumbling death,
@@ -1318,7 +1429,9 @@ server proxies `/ws` and `/api`).
   moved a label forces a layout, and `place()` did that for every health bar and damage number, every frame (1.2–1.8
   ms a frame with ~100 bees on a Mac, ~0.2 ms since v0.28.3). Don't read layout (`clientWidth`, `offsetWidth`,
   `getBoundingClientRect`) in per-frame code.
-- **Bee draw calls** (v0.28.2, `BeeModels.js`): a regular arena bee is 3 meshes (body, abdomen, wings), was 6. The
+- **Bee draw calls** (v0.28.2, `BeeModels.js`; since v0.40 the abdomen is in the body's mesh too, its vertices marked
+  `aTail` and swayed by the bee's own `uSway` uniform in `glowShader`, and a garden bee's seasonal hat is merged in,
+  `bodyWithTail`: 2 meshes a bee, 3 draw calls with the shadow): a regular arena bee is 3 meshes (body, abdomen, wings), was 6. The
   glowing pieces (eyes, veins, crystals, halos) are merged into the body and abdomen with a `glow` vertex attribute;
   `glowShader` (an `onBeforeCompile` on the bee's own surface material) draws them unlit at the old glow material's
   brightness (×1.35), and `glowlessDepth` (the body's `customDepthMaterial`) moves them out of the shadow pass, so
@@ -1383,6 +1496,11 @@ game.ascend(4)            // play the ascension cut-scene to a tier (game.setTie
 game.holdLevelUps = true  // level-ups wait for the wave's end, as in co-op (footage without pick screens)
 game.action('garden')     // press a menu button (hud.onAction); game.action('emote', { id: 'power' }) in a garden
 game.hub.fx.list          // the garden effects in flight; game.hub.myEmote: the emote playing
+await game.gpuTime()      // ms the GPU takes for the current frame (null without EXT_disjoint_timer_query_webgl2)
+game.adaptQuality(1 / 30) // feed Auto one frame time (test the quality watch without real frames; game.quality shows it)
+game.coplanar()           // z-fighting: differently coloured faces in one plane, biggest first ('birdbath': one trinket)
+game.snap([{ at: [x, y, z], dist: 80, yaw: -0.785, pitch: 0.6, label: 'queen' }])  // a contact sheet of close-ups
+const bee = new game.Enemy('queen'); game.scene.add(bee.group)  // a bee for a lineup (bee.update(0.016) poses it)
 ```
 
 Co-op profiling (Oct 16, v0.26.2, three tabs on a Mac, wave 21 with ~200 bees and late-game builds, High): host

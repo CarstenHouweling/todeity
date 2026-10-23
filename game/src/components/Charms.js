@@ -156,7 +156,8 @@ export class CharmDrops {
   }
 
   remove(drop) {
-    this.list.splice(this.list.indexOf(drop), 1);
+    const index = this.list.indexOf(drop);
+    if (index >= 0) this.list.splice(index, 1); // (an index of -1 would take the last drop instead)
     drop.group.removeFromParent();
     drop.gem.material.dispose();
     drop.ring.material.dispose();

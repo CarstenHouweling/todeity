@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
-import { buildBee, buildNest, buildWard } from './BeeModels.js';
+import { buildBee, buildNest, buildWard, prepareBees } from './BeeModels.js';
 import { buildDevil } from './DevilModel.js';
 
 export const ENEMY_SCALE = 5;
@@ -281,13 +281,16 @@ function hatGeometry(id) {
 let template = null;
 let graphicsLevel = 0;
 let beeDetail = 1; // the arena bees' geometry detail (Quality.js `beeDetail`)
+let classicBees = false; // Low quality: the glTF bee (one skinned mesh) instead of the procedural species
 let baseColors = null; // vertex colours of the merged bee, before tinting
 const geometryByType = {};
 
-/** Bees spawned from now on use this graphics level (see Graphics.js) and geometry detail. */
-export function setEnemyGraphics(level, detail = 1) {
+/** Bees spawned from now on use this graphics level (see Graphics.js) and geometry detail; `classic`: the glTF bee. */
+export function setEnemyGraphics(level, detail = 1, classic = false) {
   graphicsLevel = level;
   beeDetail = detail;
+  classicBees = classic;
+  if (!classic) prepareBees(level, detail);
 }
 
 export async function loadEnemyModel() {
@@ -369,9 +372,12 @@ export class Enemy {
       model = this.rig.root;
       model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
       this.materials.push(...this.rig.materials);
-    } else if (graphicsLevel > 0) {
-      // A new species for every arena after the garden (see BeeModels.js).
-      this.rig = buildBee(type.model ?? kind, graphicsLevel, beeDetail);
+    } else if (graphicsLevel > 0 || !classicBees) {
+      // A species for every arena (see BeeModels.js).
+      const garden = graphicsLevel === 0;
+      // In the garden, raid adds keep their own colour (green nurses) and bees wear the season's hat (in their mesh).
+      const hat = garden && seasonHat && !type.boss ? { id: seasonHat, geometry: hatGeometry(seasonHat) } : null;
+      this.rig = buildBee(type.model ?? kind, graphicsLevel, beeDetail, garden && type.model ? type.tint : null, hat);
       model = this.rig.root;
       model.scale.setScalar((type.scale / ENEMY_TYPES.drone.scale) * size);
       this.materials.push(...this.rig.materials);
