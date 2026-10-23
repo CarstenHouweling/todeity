@@ -14,6 +14,18 @@ const PALETTES = {
   cosmic: { sky: '#f3dcef', sun: '#ffe7c4', sunIntensity: 1.5, hemiSky: '#f0dcff', hemiGround: '#9a7ac8', hemi: 0.95, ambient: 0.38 },
 };
 
+// The garden's times of day during a season (Seasons.js): Halloween's are hazy and violet, its night a deep purple
+// for the jack-o'-lanterns to glow in.
+const SEASON_PALETTES = {
+  halloween: {
+    morning: { sky: '#c8b6d6', sun: '#ffe2b8', sunIntensity: 2.0, hemiSky: '#e4d4f0', hemiGround: '#5a5a2a', hemi: 1.3, ambient: 0.55 },
+    noon: { sky: '#b4b8de', sun: '#fff0d8', sunIntensity: 2.3, hemiSky: '#e0dcf4', hemiGround: '#55602a', hemi: 1.35, ambient: 0.58 },
+    golden: { sky: '#e8a878', sun: '#ffb46a', sunIntensity: 2.1, hemiSky: '#f4c8a8', hemiGround: '#5a4a2a', hemi: 1.15, ambient: 0.52 },
+    sunset: { sky: '#a8506e', sun: '#ff8a4c', sunIntensity: 1.7, hemiSky: '#e0a0b8', hemiGround: '#3a2a48', hemi: 0.95, ambient: 0.48 },
+    night: { sky: '#1e1236', sun: '#b49cff', sunIntensity: 0.85, hemiSky: '#5a3c9a', hemiGround: '#24180e', hemi: 0.8, ambient: 0.32 },
+  },
+};
+
 export const WEATHERS = {
   clear: { name: 'Clear skies', icon: '☀️', text: '', dim: 1 },
   rain: { name: 'Tea Rain', icon: '🌧️', text: 'Tea bomb blast radius +25%', dim: 0.62, splashRadius: 1.25 },
@@ -52,6 +64,7 @@ export class Weather {
     this.time = 'morning';
     this.kind = 'clear';
     this.cosmic = false;
+    this.season = null; // a season's own palettes for the garden (SEASON_PALETTES)
     this.arena = null; // an arena's own lighting replaces the time of day (see Arenas.js)
     this.darkLeft = 0;
     this.strikeTimer = 3;
@@ -86,6 +99,10 @@ export class Weather {
     this.cosmic = cosmic;
   }
 
+  setSeason(season) {
+    this.season = season?.id ?? null;
+  }
+
   setArena(arena) {
     this.arena = arena?.palette ? arena : null;
   }
@@ -96,7 +113,7 @@ export class Weather {
   }
 
   resolve() {
-    const palette = this.arena?.palette ?? PALETTES[this.cosmic ? 'cosmic' : this.time];
+    const palette = this.arena?.palette ?? (this.cosmic ? PALETTES.cosmic : SEASON_PALETTES[this.season]?.[this.time] ?? PALETTES[this.time]);
     const dim = this.info.dim * (this.darkLeft > 0 ? 0.35 : 1);
     return { ...palette, dim };
   }
@@ -275,12 +292,14 @@ export class Weather {
     material.opacity += ((dark ? 1 : 0) - material.opacity) * 0.03;
     points.visible = material.opacity > 0.01;
     if (!points.visible) return;
-    const tint = this.cosmic ? [0.85, 0.7, 1] : [0.95, 1, 0.55];
+    // (Halloween's are will-o'-wisps: orange and a few eerie green ones.)
+    const wisp = !this.cosmic && !this.arena && this.season === 'halloween';
+    const tint = this.cosmic ? [0.85, 0.7, 1] : wisp ? [1, 0.55, 0.15] : [0.95, 1, 0.55];
     flies.forEach((fly, i) => {
       const t = elapsed * fly.speed + fly.phase;
       positions.set([fly.x + Math.sin(t) * 30, fly.y + Math.cos(t * 0.8) * 30, fly.z + Math.sin(t * 2.1) * 6], i * 3);
       const blink = Math.max(0, Math.sin(elapsed * 2.5 + fly.phase * 3)) ** 2;
-      colors.set(tint.map((c) => c * blink), i * 3);
+      colors.set(wisp && i % 4 === 0 ? [0.45 * blink, blink, 0.35 * blink] : tint.map((c) => c * blink), i * 3);
     });
     points.geometry.attributes.position.needsUpdate = true;
     points.geometry.attributes.color.needsUpdate = true;

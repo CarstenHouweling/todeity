@@ -29,7 +29,7 @@ import { dailyTwists, previousDay } from '../src/components/DailyTwists.js';
 import { MEDAL, accountLevel, claimGift, claimKettle, claimMedal, cleanDecor, dayKey, gardenBeauty, ownedTrinkets, songUnlocked, withRewards } from '../src/components/Rewards.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { TAG_COLORS, cleanName, nameProblem, newTag, publicName } from '../src/components/PlayerTag.js';
-import { cleanOutfit } from '../src/components/Wearables.js';
+import { cleanOutfit, keepSeasonal } from '../src/components/Wearables.js';
 
 const FLAVOURS = [
   'MINT', 'CHAI', 'MATCHA', 'SENCHA', 'OOLONG', 'EARL', 'HONEY', 'LEMON', 'GINGER', 'PEACH', 'PLUM', 'ROSE',
@@ -239,6 +239,7 @@ function applyRun(save, body, now) {
   progress.bestWave = Math.max(progress.bestWave, run.wave);
   progress.maxTier = Math.max(progress.maxTier, run.maxTier);
   progress.eliteKills += run.eliteKills;
+  keepSeasonal(progress, now); // a run during a season keeps its wearables (Wearables.js)
   save.lastRunAt = now;
   return leaves;
 }

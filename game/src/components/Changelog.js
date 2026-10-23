@@ -3,6 +3,19 @@
 
 export const CHANGELOG = [
   {
+    version: '0.38.0',
+    date: '2026-10-23',
+    title: 'The garden puts on a costume',
+    changes: [
+      "🎃 Happy Halloween! Until Nov 2 the garden dresses up: jack-o'-lanterns along the path, autumn trees and fallen leaves, a pumpkin patch, a bubbling cauldron by the tea table, gravestones and friendly ghosts in the meadow, and bats where the butterflies flew",
+      '🌆 Hazy violet days and deep purple nights in the garden, with orange will-o\'-wisps after dark',
+      "🧙 The garden's bees wear little witch hats",
+      "👕 New in the wardrobe: the Witch Hat, a Jack-o'-Lantern hat and a Bat Swarm aura. Finish a run before Nov 2 to keep them for good",
+      '🎵 A spooky new song on the title and in your garden: Pumpkin Patch Creep',
+      '⚙️ Rather keep it plain? Switch the Halloween decorations off in Settings',
+    ],
+  },
+  {
     version: '0.37.3',
     date: '2026-10-22',
     title: 'A streak that never cools',

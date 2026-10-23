@@ -182,6 +182,26 @@ Object.assign(SONGS, {
       if (note) instruments.bell(at, note.note, 0.07);
     },
   },
+  // Halloween's song: an oom-pah creep in D minor, skeleton woodblocks and a music box up in the rafters.
+  pumpkin: {
+    bpm: 100,
+    chords: [[62, 65, 69], [58, 62, 65], [55, 58, 62], [57, 61, 64]],
+    roots: [38, 34, 43, 45],
+    melody: melody([
+      [[0, 74, 2], [2, 77, 2], [4, 76, 1], [5, 75, 1], [6, 74, 2], [8, 69, 4], [12, 70, 2], [14, 69, 2]],
+      [[0, 70, 2], [2, 74, 2], [4, 77, 2], [6, 74, 2], [8, 70, 6], [14, 69, 2]],
+      [[0, 67, 2], [2, 70, 2], [4, 74, 2], [6, 79, 2], [8, 77, 2], [10, 74, 2], [12, 70, 4]],
+      [[0, 69, 2], [2, 73, 2], [4, 76, 2], [6, 79, 2], [8, 81, 4], [12, 76, 2], [14, 73, 2]],
+    ]),
+    calm: ({ at, s, bar, chord, root, note, stepTime, barTime }) => {
+      if (s === 0) instruments.sustain(at, chord.map((n) => n - 12), barTime, 0.018);
+      if (s === 0 || s === 8) instruments.bass(at, root, stepTime * 2);
+      if (s === 4 || s === 12) chord.forEach((n) => instruments.pluck(at, n, 0.035));
+      if (s % 4 === 2) instruments.woodblock(at, s % 8 === 2 ? 1.5 : 1.8);
+      if (s === 0 && bar === 3) instruments.bell(at, 74, 0.05);
+      if (note) instruments.musicBox(at, note.note + 12, 0.07, 0.996);
+    },
+  },
   // Bee-zebub's waltz: one-two-three in the dark, low strings and a music box gone sour.
   infernal: {
     bpm: 84,

@@ -638,6 +638,24 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   title dock's 👕 Wardrobe (next to 🏡 My garden, after the first run) opens your garden with the panel open; both
   buttons count unlocked items not yet seen (`meta.wearablesSeen`, local). To preview models outside the game, build
   frogs with `buildFrog` and `dressFrog` into a scene of their own and render a contact sheet.
+- **Seasons** (v0.38, `components/Seasons.js`, shared with the server; `components/SeasonDecor.js`): `SEASONS` lists
+  themed weeks by UTC day (`from`/`to` as 'MM-DD', may wrap over New Year); only **Halloween** (Oct 17 – Nov 2) so far.
+  `applySeason()` in main.js shows `currentSeason()` everywhere unless ⚙️ Settings switched it off (`settings.seasonal`,
+  the switch only shows while a season is on): `SeasonDecor.apply` dresses the garden (Halloween: autumn round trees
+  and bushes by swapping the geometry of the meshes Divinity.js toggles, so the forms still work; fallen leaves, a
+  pumpkin patch, instanced jack-o'-lanterns whose faces flicker through one shared glow material, a cauldron by the
+  tea table, gravestones and ghosts toward the camera's far side, bats instead of the butterflies, orange pollen),
+  `weather.setSeason` swaps the garden's time-of-day palettes (`SEASON_PALETTES`; arenas and the cosmic sky keep
+  theirs) and tints the fireflies, `setEnemySeason` puts a shared witch-hat mesh on the garden bee's head bone (arena
+  species and bosses don't get one), `body.season-<id>` themes the title (wordmark, a note that opens Settings), and
+  `calmSong()` plays the season's song on the title and in menus. Nothing seasonal blocks or changes gameplay.
+  **Unlocks:** wearables with `unlock: { season }` (Witch Hat, Jack-o'-Lantern, Bat Swarm) and garden songs with
+  `season` (Pumpkin Patch Creep) are out while the season is on by the calendar; a run finished during it keeps its
+  wearables for good (`keepSeasonal`, in `progress.wearables` like the champion's; the server's `applyRun` does the
+  same, so the cloud save agrees). Songs aren't kept: they're only out during their season.
+  **Testing:** `?season=halloween` or `?season=none` in the address, or `game.setSeason('halloween')` in the console,
+  pretends (the server never does, so pretended wearables don't save). To add a season: an entry in `SEASONS`, a
+  builder in `SeasonDecor.js`'s `BUILDERS`, optional palettes, wearables and a song, and CSS under `body.season-<id>`.
 - **Level aura** (v0.26, bolder in v0.26.2: `GardenFx.levelAura` builds a `GardenAura` from
   `components/GardenAuras.js`): every frog in a garden carries its account level (`accountLevel`, sent as `lv` in
   `genter`, with `mt` the best form; the server passes both in `frogInfo`; looks only, so the client's word is
@@ -1196,6 +1214,8 @@ server proxies `/ws` and `/api`).
 | `components/Skills.js` | 24 skills and 13 fusions (`SKILLS`, `FUSIONS`) and the `SkillBook` (6 slots, cooldowns, auto-cast targeting). |
 | `components/Spirits.js` | The tea spirits and their dialogue (greetings, Legendary lines, Duo exchanges, memories of past runs, voices) and the bosses' taunts. |
 | `components/Divinity.js` | World transformation per ascension tier (variant trees/rocks, lanterns, petals, crystals, islands, heaven). |
+| `components/Seasons.js` | The seasonal calendar (`SEASONS`, `seasonAt`, `currentSeason`, `pretendSeason`; no three.js: the server imports it). |
+| `components/SeasonDecor.js` | The garden dressed for a season (Halloween: pumpkins, jack-o'-lanterns, cauldron, graves, ghosts, bats, autumn trees). |
 | `components/Random.js` | Seeded randomness for the Daily Brew (`seeded(fn)` swaps `Math.random` only inside `fn`). |
 | `components/Leaderboard.js` | Client for the leaderboard API; fails quietly without a server. |
 | `components/CloudSave.js` | Cloud save client: save code, sync at start, run and Pantry reports. |
@@ -1330,6 +1350,7 @@ game.hurt(99)             // hurt Tode (test downed / game over)
 game.coop                 // co-op state (remotes, host flag)
 game.renderer.info        // draw calls, triangles, GPU textures/geometries (watch for leaks)
 game.setArena('hell')     // show an arena right away; game.startWave(21) travels there instead
+game.setSeason('halloween') // show a season whatever the date ('none': none, no argument: the calendar's)
 game.arena                // the current arena id
 game.ultimate('summon')   // then press E for the Great Tode
 game.charm('spoon', 5)    // gain charms (no id: a random one); game.charmCounts

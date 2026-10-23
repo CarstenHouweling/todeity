@@ -2017,6 +2017,43 @@ body.coop-menu .corner-buttons {
   cursor: pointer;
 }
 
+/* Seasons (Seasons.js, main.js `applySeason`): body.season-<id> while one shows. The title says hello (the note
+   opens ⚙️ Settings, where the decorations switch off) and dresses its wordmark. */
+.season-note {
+  margin: -4px 0 12px;
+  padding: 5px 14px;
+  border: 1px solid rgba(255, 170, 70, 0.55);
+  border-radius: 999px;
+  background: rgba(36, 14, 48, 0.7);
+  color: #ffd2a0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 120, 30, 0.25);
+}
+
+body.season-halloween .menu.title-screen {
+  background: linear-gradient(rgba(34, 10, 46, 0.72), rgba(34, 10, 46, 0.15) 45%, rgba(34, 10, 46, 0) 70%, rgba(34, 10, 46, 0.55));
+}
+
+body.season-halloween .title-screen h1.wordmark {
+  color: #ffb347;
+  text-shadow: 0 0 18px rgba(255, 120, 20, 0.75), 0 0 42px rgba(160, 60, 220, 0.55), 0 4px 0 #3a1550;
+}
+
+body.season-halloween .title-screen h1.wordmark::after {
+  content: ' 🎃';
+  font-size: 0.6em;
+  vertical-align: 0.25em;
+  text-shadow: none;
+}
+
+body.season-halloween .title-screen .subtitle {
+  color: #e8c8ff;
+  text-shadow: 0 0 12px rgba(170, 80, 255, 0.85), 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
 .title-dock {
   margin-top: auto;
   display: flex;
@@ -2184,6 +2221,12 @@ body.coop-menu .corner-buttons {
 
   .gentle-note {
     margin-top: 10px;
+  }
+
+  .season-note {
+    margin: -2px 0 8px;
+    padding: 3px 10px;
+    font-size: 12px;
   }
 
   .dock-tile {

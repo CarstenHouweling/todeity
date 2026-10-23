@@ -659,6 +659,9 @@ export function createEnvironment() {
     insideGrass,
     blocked,
     keepClear,
+    // For the seasons (SeasonDecor.js): bats fly instead of the butterflies, the pollen changes colour.
+    butterflies: butterflies.butterflies,
+    pollen: pollen.points,
     update(time) {
       pond.update(time);
       pollen.update(time);

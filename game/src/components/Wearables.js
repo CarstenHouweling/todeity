@@ -6,10 +6,12 @@
  *
  * `unlock`: { achievement } | { level } | { tier } (the best form reached) | { trinkets } (how many garden trinkets
  * are owned, `ownedTrinkets` in Rewards.js) | { champion } (a chance in the Daily Brew champion's medal, kept in
- * `progress.wearables`, see Rewards.js); none: free.
+ * `progress.wearables`, see Rewards.js) | { season } (out while that season is on, Seasons.js; a run finished during
+ * the season keeps it for good, `keepSeasonal`); none: free.
  */
 import { accountLevel, ownedTrinkets } from './Rewards.js';
 import { bestTier } from './Emotes.js';
+import { seasonAt, seasonById, seasonOn } from './Seasons.js';
 
 export const SLOTS = [
   { id: 'head', name: 'Hats', icon: '🎩' },
@@ -39,6 +41,8 @@ export const WEARABLES = [
   { id: 'acorn', slot: 'head', name: 'Acorn Cap', icon: '🌰', unlock: { achievement: 'skills3' } },
   { id: 'tricorn', slot: 'head', name: "Captain's Tricorn", icon: '⛵', unlock: { achievement: 'wave30' } },
   { id: 'teacup', slot: 'head', name: 'Teacup Hat', icon: '☕', unlock: { trinkets: 10 } },
+  { id: 'witchhat', slot: 'head', name: 'Witch Hat', icon: '🧙', unlock: { season: 'halloween' } },
+  { id: 'pumpkinhat', slot: 'head', name: "Jack-o'-Lantern", icon: '🎃', unlock: { season: 'halloween' } },
   // Face
   { id: 'specs', slot: 'face', name: 'Round Specs', icon: '👓' },
   { id: 'shades', slot: 'face', name: 'Cool Shades', icon: '😎', unlock: { level: 4 } },
@@ -97,6 +101,7 @@ export const WEARABLES = [
   { id: 'bees', slot: 'aura', name: 'Friendly Bees', icon: '🐝', unlock: { level: 26 } },
   { id: 'goldleaf', slot: 'aura', name: 'Golden Leaf Fall', icon: '🍁', unlock: { trinkets: 30 } },
   { id: 'butterflies', slot: 'aura', name: 'Butterflies', icon: '🦋', unlock: { trinkets: 35 } },
+  { id: 'bats', slot: 'aura', name: 'Bat Swarm', icon: '🦇', unlock: { season: 'halloween' } },
 ];
 
 export const wearableById = (id) => WEARABLES.find((item) => item.id === id);
@@ -109,6 +114,7 @@ export function wearableUnlocked(item, progress = {}) {
   if (!item) return false;
   if (!unlock) return true;
   if (unlock.champion) return Boolean(progress.wearables?.includes(item.id));
+  if (unlock.season) return seasonOn(unlock.season) || Boolean(progress.wearables?.includes(item.id));
   if (unlock.achievement) return Boolean(progress.achievements?.includes(unlock.achievement));
   if (unlock.tier) return bestTier(progress) >= unlock.tier;
   if (unlock.trinkets) return ownedTrinkets(progress).length >= unlock.trinkets;
@@ -116,10 +122,15 @@ export function wearableUnlocked(item, progress = {}) {
 }
 
 /** How a wearable unlocks, for the wardrobe (`achievementName` turns an id into its name). */
-export function wearableHint(item, achievementName = (id) => id) {
+export function wearableHint(item, achievementName = (id) => id, progress = {}) {
   const unlock = item.unlock;
   if (!unlock) return 'Free';
   if (unlock.champion) return 'Win a Daily Brew';
+  if (unlock.season) {
+    const season = seasonById(unlock.season);
+    if (progress.wearables?.includes(item.id)) return `${season.icon} ${season.name} wardrobe: yours for good`;
+    return seasonOn(season.id) ? `${season.icon} ${season.name}: finish a run by ${season.until} to keep it` : `${season.icon} Comes back every ${season.name}`;
+  }
   if (unlock.achievement) return `Achievement: ${achievementName(unlock.achievement)}`;
   if (unlock.tier) return `Become ${FORMS[unlock.tier]} Tode in a run`;
   if (unlock.trinkets) return `Collect ${unlock.trinkets} garden trinkets`;
@@ -150,6 +161,19 @@ export function shownOutfit(outfit, { run = false } = {}) {
   const shown = { ...outfit };
   if (run) delete shown.aura;
   return shown;
+}
+
+/**
+ * A run finished during a season keeps that season's wearables for good (in `progress.wearables`, like the champion's).
+ * By the calendar at `ms`, so the server and the browser agree. Returns the ids it added.
+ */
+export function keepSeasonal(progress, ms = Date.now()) {
+  const season = seasonAt(ms);
+  if (!season) return [];
+  progress.wearables ??= [];
+  const fresh = WEARABLES.filter((item) => item.unlock?.season === season.id && !progress.wearables.includes(item.id)).map((item) => item.id);
+  progress.wearables.push(...fresh);
+  return fresh;
 }
 
 /** The ids of every wearable `progress` has unlocked. */

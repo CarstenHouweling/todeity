@@ -606,6 +606,50 @@ Object.assign(MODELS, {
       add([1.6, 4, 0.5], [-3.6, 7, -3.5], '#d9443a', { rotation: [-0.6, 0, 0.5], material: 'cloth' });
     });
   },
+  witchhat(rig, f) {
+    // A wide brim and a tall crown in three steps, its tip bent back and bobbing as the frog moves (Halloween).
+    piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
+      add([f.headW + 9, 0.7, 17], [0, 0.35, 0], '#2a1f3a');
+      add([f.headW - 1, 3.2, 9], [0, 2.3, -0.4], '#33264a');
+      add([f.headW - 0.6, 1.3, 9.4], [0, 1.5, -0.4], '#8a3ac8');
+      add([2.6, 1.8, 0.6], [0, 1.5, 4.5], '#ffcf3a', { material: 'shiny' });
+      add([f.headW - 4, 3, 6.6], [0, 5.3, -0.9], '#33264a');
+      add([f.headW - 7, 2.6, 4.4], [0, 8, -1.6], '#2a1f3a');
+    });
+    const tip = piece(rig.parts.head, [0, HAT_Y + 9.2, 0.6], (add) => {
+      add([2.8, 2.6, 3], [0, 1, -0.6], '#33264a');
+      add([1.8, 1.6, 2.6], [0, 1.6, -2.8], '#2a1f3a');
+      add([1, 1, 1.4], [0, 1.4, -4.4], '#8a3ac8');
+    });
+    return {
+      update(time) {
+        tip.rotation.x = 0.35 + Math.sin(time * 2.4) * 0.12;
+        tip.rotation.z = Math.sin(time * 1.7) * 0.1;
+      },
+    };
+  },
+  pumpkinhat(rig, f) {
+    // A little carved pumpkin worn as a hat, its face glowing (Halloween).
+    piece(rig.parts.head, [0, HAT_Y - 0.6, 2.5], (add) => {
+      const w = f.headW;
+      add([w - 1, 7, 9], [0, 3.5, 0], '#f08a1c');
+      add([w + 1, 6, 6.4], [0, 3.5, 0], '#e07814');
+      add([w - 3.4, 6.2, 10.6], [0, 3.5, 0], '#f39a2a');
+      add([w - 4, 0.8, 7], [0, 7.2, 0], '#c8640e');
+      add([1.6, 2.6, 1.6], [0, 8.4, -0.4], '#5a7a2a', { rotation: [0.2, 0, 0.15] });
+      add([3.4, 0.5, 2.2], [1.8, 7.8, -0.6], '#4f9a2e', { rotation: [0, 0.5, -0.3] });
+      // The face on the front: triangle eyes (stepped), a nose and a jagged grin.
+      const z = 5.35;
+      for (const s of [-1, 1]) {
+        add([2.4, 0.8, 0.4], [s * 2.4, 4.4, z], '#ffc240', { material: 'glow' });
+        add([1.4, 0.8, 0.4], [s * 2.4, 5.2, z], '#ffc240', { material: 'glow' });
+      }
+      add([1, 0.8, 0.4], [0, 3.6, z], '#ffc240', { material: 'glow' });
+      add([w - 4.4, 0.9, 0.4], [0, 2.1, z], '#ffc240', { material: 'glow' });
+      for (const x of [-2.6, 0, 2.6]) add([1, 0.7, 0.4], [x, 2.8, z], '#ffc240', { material: 'glow' });
+      for (const x of [-1.3, 1.3]) add([1, 0.7, 0.4], [x, 1.4, z], '#ffc240', { material: 'glow' });
+    });
+  },
   teacup(rig, f) {
     // A whole teacup on its saucer, still steaming.
     piece(rig.parts.head, [0, HAT_Y, 2.5], (add) => {
@@ -852,6 +896,16 @@ const shape = (draw) => {
   return geometry;
 };
 const AURA_SHAPES = {
+  bat: shape((add) => {
+    add([0.22, 0.22, 0.5], [0, 0, 0]);
+    add([0.08, 0.14, 0.08], [-0.07, 0.15, 0.18]);
+    add([0.08, 0.14, 0.08], [0.07, 0.15, 0.18]);
+    for (const s of [-1, 1]) {
+      add([0.4, 0.05, 0.36], [s * 0.3, 0, 0.02]);
+      add([0.3, 0.05, 0.24], [s * 0.62, 0, 0.08]);
+      add([0.14, 0.05, 0.14], [s * 0.42, 0, -0.2]);
+    }
+  }),
   heart: shape((add) => {
     add([0.5, 0.45, 0.3], [-0.25, 0.2, 0]);
     add([0.5, 0.45, 0.3], [0.25, 0.2, 0]);
@@ -903,6 +957,7 @@ const AURAS = {
   bees: { motion: 'orbit', shape: 'bee', colors: ['#ffd23f', '#ffb000', '#ffe14a'], size: [2.3, 2.3, 2.3], speed: 1.6, buzz: true },
   goldleaf: { motion: 'fall', shape: 'leaf', colors: ['#ffd36b', '#ffcf3a', '#fff2a0', '#e8a820'], size: [1.8, 1.8, 1.8], spin: 2, speed: 6 },
   butterflies: { motion: 'orbit', shape: 'butterfly', colors: ['#ff9ec7', '#7fd8ff', '#ffd23f', '#c58aff'], size: [3.4, 3.4, 3.4], speed: 0.55, flap: true },
+  bats: { motion: 'orbit', shape: 'bat', colors: ['#2a1f3a', '#3a2a52', '#1e1828'], size: [3.2, 3.2, 3.2], speed: 1.1, flap: true },
 };
 
 function aura(rig, look) {

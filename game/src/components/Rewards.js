@@ -8,6 +8,7 @@
  * Shared by the game and the server (server/saves.js pays the rewards), so no three.js here. `progress` is the cloud
  * save's progress object (see Meta.js `meta` for the local copy).
  */
+import { seasonById, seasonOn } from './Seasons.js';
 
 export const KETTLE_HOURS = 4;
 const HOUR = 3_600_000;
@@ -219,7 +220,8 @@ const RANKS = [
 ];
 
 // --- Garden music: the owner picks a song for their garden, and everyone in it hears it ------------------------
-// `level`: the account level that unlocks it; `achievement`: an achievement that does. The songs are in Music.js.
+// `level`: the account level that unlocks it; `achievement`: an achievement that does; `season`: out while that
+// season is on (Seasons.js). The songs are in Music.js.
 export const GARDEN_SONGS = [
   { id: 'garden', name: 'Morning Brew', icon: '🌅' },
   { id: 'lantern', name: 'Lantern Night', icon: '🏮', level: 3 },
@@ -228,6 +230,7 @@ export const GARDEN_SONGS = [
   { id: 'groove', name: 'Garden Groove', icon: '🕺', level: 15 },
   { id: 'celestial', name: 'Celestial Steep', icon: '🌌', level: 20 },
   { id: 'infernal', name: 'Infernal Waltz', icon: '😈', achievement: 'beezebub' },
+  { id: 'pumpkin', name: 'Pumpkin Patch Creep', icon: '🎃', season: 'halloween' },
 ];
 export const gardenSong = (id) => GARDEN_SONGS.find((song) => song.id === id) ?? GARDEN_SONGS[0];
 
@@ -235,12 +238,14 @@ export const gardenSong = (id) => GARDEN_SONGS.find((song) => song.id === id) ??
 export function songUnlocked(id, progress) {
   const song = GARDEN_SONGS.find((s) => s.id === id);
   if (!song) return false;
+  if (song.season) return seasonOn(song.season);
   if (song.achievement) return Boolean(progress.achievements?.includes(song.achievement));
   return accountLevel(progress).level >= (song.level ?? 1);
 }
 
 /** How a song unlocks, for the song list. */
-export const songHint = (song) => (song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`);
+export const songHint = (song) =>
+  song.season ? `${seasonById(song.season).icon} ${seasonById(song.season).name} only` : song.achievement ? 'Beat Bee-zebub' : `Reach level ${song.level}`;
 
 const LEVEL_XP = 150;
 const LEVEL_CURVE = 1.4;

@@ -182,6 +182,42 @@ function createHorns() {
   return horns;
 }
 
+// Halloween (Seasons.js): the garden's bees wear little witch hats. One shared mesh each, on the head bone.
+let seasonHats = false;
+let hatGeometry = null;
+const HAT_MATERIAL = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8 });
+const HAT_LIFT = 0.8; // world units above the head bone, for a drone
+const HAT_SIZE = 0.48; // the hat's size on a drone
+
+/** Bees spawned from now on dress for `season` (null: none). */
+export function setEnemySeason(season) {
+  seasonHats = season?.id === 'halloween';
+}
+
+function witchHat() {
+  if (hatGeometry) return hatGeometry;
+  const parts = [
+    [new THREE.CylinderGeometry(6.4, 6.4, 0.8, 10), '#2a1f3a', [0, 0.4, 0]],
+    [new THREE.ConeGeometry(3.8, 8.5, 8), '#33264a', [0, 4.9, 0]],
+    [new THREE.CylinderGeometry(3.6, 3.8, 1.3, 8), '#ff8a1a', [0, 1.4, 0]],
+  ].map(([geometry, color, position]) => {
+    const g = geometry.toNonIndexed();
+    g.translate(...position);
+    const c = new THREE.Color(color);
+    const colors = new Float32Array(g.attributes.position.count * 3);
+    for (let i = 0; i < g.attributes.position.count; i++) c.toArray(colors, i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.deleteAttribute('uv');
+    geometry.dispose();
+    return g;
+  });
+  hatGeometry = mergeGeometries(parts);
+  hatGeometry.rotateZ(-0.25); // a jaunty tilt
+  hatGeometry.rotateX(Math.PI / 2); // modelled Y-up, the world is Z-up
+  hatGeometry.computeVertexNormals();
+  return hatGeometry;
+}
+
 let template = null;
 let graphicsLevel = 0;
 let beeDetail = 1; // the arena bees' geometry detail (Quality.js `beeDetail`)
@@ -374,7 +410,27 @@ export class Enemy {
     if (type.boss && !this.rig) {
       this.mixer.update(0);
       this.addCrown();
+    } else if (seasonHats && !this.rig) {
+      this.mixer.update(0);
+      this.addHat();
     }
+  }
+
+  /** A seasonal hat on the head bone (see setEnemySeason). */
+  addHat() {
+    const head = this.model.getObjectByName('Head');
+    if (!head) return;
+    this.group.updateMatrixWorld(true);
+    const top = head.getWorldPosition(new THREE.Vector3());
+    const hat = new THREE.Mesh(witchHat(), HAT_MATERIAL);
+    hat.castShadow = true;
+    hat.userData.shared = true; // the geometry and material stay for the next bee
+    const size = this.type.scale / ENEMY_TYPES.drone.scale;
+    hat.scale.setScalar(size * HAT_SIZE);
+    hat.position.set(top.x, top.y, top.z + HAT_LIFT * size);
+    this.group.add(hat);
+    hat.updateMatrixWorld(true);
+    head.attach(hat);
   }
 
   /** Puts a crown (or Bee-zebub's horns) on the head bone, so it follows the flying animation. */

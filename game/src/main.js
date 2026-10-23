@@ -5,7 +5,7 @@ import './style.css';
 import { createCamera } from './components/Camera.js';
 import { createRenderer } from './components/Renderer.js';
 import { FROG_SCALE, Player } from './components/Player.js';
-import { ELITE_MODS, Enemy, loadEnemyModel, setEnemyGraphics } from './components/Enemy.js';
+import { ELITE_MODS, Enemy, loadEnemyModel, setEnemyGraphics, setEnemySeason } from './components/Enemy.js';
 import { Projectile, PROJECTILE_HEIGHT, initProjectiles, drawProjectiles } from './components/Projectile.js';
 import { Input } from './components/Input.js';
 import { Hud } from './components/Hud.js';
@@ -26,6 +26,8 @@ import { rollWeather, timeOfDay, Weather } from './components/Weather.js';
 import { boss as bossMemory, buy, harvestBonus, leavesForRun, meta, pantryLevel, rememberRun, runLine, saveMeta, setPersist } from './components/Meta.js';
 import { FUSION_MAX, MAX_SKILL_LEVEL, SKILLS, SkillBook } from './components/Skills.js';
 import { Divinity } from './components/Divinity.js';
+import { SeasonDecor } from './components/SeasonDecor.js';
+import { currentSeason, pretendSeason, seasonAt } from './components/Seasons.js';
 import { ACHIEVEMENTS, unlock } from './components/Achievements.js';
 import { fetchScores, playerName, savePlayerName, submitScore } from './components/Leaderboard.js';
 import { isDaily, seeded, startDaily, stopDaily, todayKey } from './components/Random.js';
@@ -57,7 +59,7 @@ import { GardenHub } from './components/GardenHub.js';
 import { gardenWarmup } from './components/GardenGames.js';
 import { heightField, trinketHeightAt } from './components/GardenPhysics.js';
 import { EMOTES, bestTier, emoteUnlocked } from './components/Emotes.js';
-import { SLOTS, WEARABLES, cleanOutfit, shownOutfit, unlockedWearables, wearableById, wearableHint, wearableUnlocked } from './components/Wearables.js';
+import { SLOTS, WEARABLES, cleanOutfit, keepSeasonal, shownOutfit, unlockedWearables, wearableById, wearableHint, wearableUnlocked } from './components/Wearables.js';
 import { onServerBack, setPresence, startPresence } from './components/Presence.js';
 import { VERSION } from './components/Changelog.js';
 
@@ -242,6 +244,12 @@ initProjectiles(scene);
 let map = null;
 let environment = null;
 let divinity = null;
+let seasonDecor = null; // the garden dressed for the season (SeasonDecor.js)
+// The season the garden shows (Seasons.js): the calendar's, unless switched off in ⚙️ Settings (`applySeason`).
+// `?season=halloween` (or `none`) in the address pretends, to look at a season out of its time.
+let gardenSeason = null;
+const seasonParam = new URLSearchParams(location.search).get('season');
+if (seasonParam) pretendSeason(seasonParam);
 
 let worldTiles = SOLO_TILES; // the garden's size (bigger in co-op); later arenas grow from it
 
@@ -325,6 +333,7 @@ function buildWorld(tiles) {
   if (map) {
     for (const root of [map, environment.group, divinity.root]) {
       root.removeFromParent();
+      if (root === environment.group) seasonDecor.dispose(); // (puts the plain trees back, so they're freed below)
       root.traverse((child) => {
         if (child === houses[0]?.house || houses[0]?.house?.getObjectById(child.id)) return;
         child.geometry?.dispose();
@@ -340,6 +349,8 @@ function buildWorld(tiles) {
   environment = createEnvironment();
   scene.add(environment.group);
   divinity = new Divinity({ scene, map, environment });
+  seasonDecor = new SeasonDecor(environment);
+  seasonDecor.apply(gardenSeason);
   if (houses[0]) map.add(houses[0].house);
 }
 let houses = []; // footprints of loaded houses: { rect }
@@ -426,7 +437,8 @@ let endingTier = 0; // the form Tode had when he beat Bee-zebub (the ending cut-
 const runTier = () => Math.max(endingTier, ascension.tier);
 let autoPause = true;
 // autoSpit: on a computer Tode spits by himself whenever a bee is in range (aimed with the mouse), like on touch.
-const settings = { calmFx: false, autoSpit: true, graphics: 'auto', showFps: false, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
+// seasonal: the garden and title dress up for the season (Seasons.js), unless switched off.
+const settings = { calmFx: false, autoSpit: true, graphics: 'auto', showFps: false, seasonal: true, ...JSON.parse(safeStorage('get', 'tode-settings') ?? '{}') };
 hud.autoSpit = settings.autoSpit;
 hud.graphics = settings.graphics;
 
@@ -610,6 +622,20 @@ const weather = new Weather({
 const ascension = new Ascension(player, particles, effects);
 const skills = new SkillBook(ctx);
 Object.assign(ctx, { effects, weather });
+
+// --- Seasons (Seasons.js): Halloween dresses the garden, its bees, the sky, the title and the calm music ---
+/** Shows the current season everywhere, or none when it's switched off in ⚙️ Settings. */
+function applySeason() {
+  gardenSeason = settings.seasonal ? currentSeason() : null;
+  seasonDecor.apply(gardenSeason);
+  weather.setSeason(gardenSeason);
+  setEnemySeason(gardenSeason);
+  hud.season = gardenSeason;
+  for (const season of ['halloween']) document.body.classList.toggle(`season-${season}`, gardenSeason?.id === season);
+}
+applySeason();
+/** The calm song (title, menus): the season's own while it's on. */
+const calmSong = () => (gardenSeason?.id === 'halloween' ? 'pumpkin' : 'garden');
 
 // --- Collisions & movement ---
 const next = new THREE.Vector3();
@@ -4657,7 +4683,7 @@ function wardrobeInfo() {
       ...item,
       worn: outfit[item.slot] === item.id,
       locked: !wearableUnlocked(item, meta),
-      hint: wearableHint(item, achievementName),
+      hint: wearableHint(item, achievementName, meta),
     })),
     unlocked: unlockedWearables(meta).length,
     total: WEARABLES.length,
@@ -5062,7 +5088,7 @@ const FIGHT_MUSIC_PHASES = new Set(['ascending', 'bossIntro', 'travel', 'clash',
 
 function updateMusic() {
   if (!PLAYING.has(phase) && !FIGHT_MUSIC_PHASES.has(phase)) {
-    music.play('garden', 0);
+    music.play(calmSong(), 0);
     return;
   }
   const tier = ascension.tier;
@@ -7804,6 +7830,13 @@ function endRun({ victory = false } = {}) {
   meta.runs++;
   meta.bossKills += bossKills;
   meta.bestWave = Math.max(meta.bestWave, wave);
+  // A run during a season keeps its wearables for good (the server does the same in its copy).
+  const kept = keepSeasonal(meta);
+  if (kept.length) {
+    const season = seasonAt();
+    const names = kept.map((id) => `${wearableById(id).icon} ${wearableById(id).name}`).join(', ');
+    hud.toast(`<span class="toast-icon">${season.icon}</span><span><small>${season.name} wardrobe</small><b>Yours for good</b><em>${names}</em></span>`, '', 7);
+  }
   saveMeta();
   // The server has the final word on the leaves (cloud saves); this screen shows the local count meanwhile.
   reportRun({
@@ -8377,6 +8410,12 @@ const MENU_ACTIONS = {
     play('click');
     hud.showPlayer(bestScore);
   },
+  'toggle-season': () => {
+    settings.seasonal = !settings.seasonal;
+    saveSettings();
+    applySeason();
+    refreshMenu();
+  },
   'toggle-fps': () => {
     settings.showFps = !settings.showFps;
     fpsMeter.hidden = !settings.showFps;
@@ -8530,6 +8569,8 @@ function openSettings() {
     calmFx: settings.calmFx,
     showFps: settings.showFps,
     autoSpit: touch.enabled ? null : settings.autoSpit,
+    season: currentSeason(),
+    seasonal: settings.seasonal,
   });
 }
 
@@ -8747,7 +8788,7 @@ function frame(realDelta, render = true, elapsed = realDelta) {
   updateGarden(realDelta);
   const inGarden = phase === 'title' && decorating && hub.active;
   setMusicScene(inGarden ? GARDEN_MUSIC : 1);
-  if (phase === 'title') music.play(inGarden ? gardenLook().song : 'garden', 0);
+  if (phase === 'title') music.play(inGarden ? gardenLook().song : calmSong(), 0);
   lap('garden: trinkets, title');
 
   // The world keeps living while menus are open (except when paused).
@@ -8757,8 +8798,10 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     particles.update(delta);
     weather.update(delta, player.position, clock.elapsedTime);
     updatePropFade(realDelta);
-    if (arena.id === 'garden') environment.update(clock.elapsedTime);
-    else builtArenas.get(arena.id)?.update(clock.elapsedTime, delta);
+    if (arena.id === 'garden') {
+      environment.update(clock.elapsedTime);
+      seasonDecor.update(clock.elapsedTime);
+    } else builtArenas.get(arena.id)?.update(clock.elapsedTime, delta);
     // At the Tournament of the Gods reality itself glitches now and then.
     if (arena.id === 'cosmos' && PLAYING.has(phase) && (realityGlitch -= delta) <= 0) {
       realityGlitch = 6 + Math.random() * 5;
@@ -9014,6 +9057,12 @@ Promise.all([player.load(chosenClass().id), loadEnemyModel(), loadHouse(HOME)])
 // Debug handle for the browser console during development.
 if (import.meta.env.DEV) {
   window.game = {
+    /** game.setSeason('halloween') shows a season whatever the date ('none': none, no argument: the calendar's). */
+    setSeason(id) {
+      pretendSeason(id);
+      applySeason();
+      refreshMenu();
+    },
     meta, // progress (Golden Leaves, trinkets…): change it, then game.syncGarden()
     garden,
     hub, // the garden meeting place: frogs, party, inviting

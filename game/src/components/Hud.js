@@ -73,6 +73,7 @@ export class Hud {
     this.camera = camera;
     this.projected = new THREE.Vector3();
     this.onAction = () => {};
+    this.season = null; // the season on the title (Seasons.js; main.js `applySeason`)
     this.onSpeak = () => {}; // (voice, text, delay): a character's line starts being typed out
     this.onHush = () => {}; // a menu with dialogue closed
 
@@ -951,6 +952,7 @@ export class Hud {
       <div class="title-main">
         <h1 class="wordmark">Todeity</h1>
         <p class="subtitle">Rise of the Tea God</p>
+        ${this.season ? `<button type="button" class="season-note" data-action="settings" title="Seasonal decorations: ⚙️ Settings">${this.season.icon} Happy ${this.season.name}! ${this.season.greeting}</button>` : ''}
         ${intro}
         ${best && fresh ? `<p class="best">Best score: ${best}</p>` : ''}
         <p class="portrait-hint"><span class="turn-phone">📱</span> Turn your phone sideways: Todeity plays best in landscape</p>
@@ -1520,7 +1522,7 @@ export class Hud {
    * Settings (⚙️ on the title and in the pause menu). `autoSpit` is null on touch screens, where Tode always spits
    * by himself; `inRun` (the pause menu) leaves out Gentle Brew, which only applies from the next run.
    */
-  showSettings({ sound, graphics, calmFx, showFps, autoSpit, inRun = false }) {
+  showSettings({ sound, graphics, calmFx, showFps, autoSpit, season = null, seasonal = true, inRun = false }) {
     const text = (label, note) => `<span class="setting-text"><b>${label}</b>${note ? `<small>${note}</small>` : ''}</span>`;
     const toggle = (action, on, label, note = '') =>
       `<div class="setting">${text(label, note)}<button type="button" class="switch${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="${label}" data-action="${action}"><i></i></button></div>`;
@@ -1548,6 +1550,7 @@ export class Hud {
       ${fullscreen}
       ${choice('✨ Effects', 'Calm: softer screen effects, no spit trails', [['Full', !calmFx, 'data-action="toggle-calm"'], ['Calm', calmFx, 'data-action="toggle-calm"']])}
       ${toggle('toggle-fps', showFps, '📈 FPS counter')}
+      ${season ? toggle('toggle-season', seasonal, `${season.icon} ${season.name} decorations`, `${season.greeting}: the garden, the bees and the music`) : ''}
       <div class="menu-buttons split-end"><button type="button" class="link-button" data-action="changelog">📜 What's new in v${VERSION}</button><button class="menu-button primary" data-action="close-modal">Done</button></div>`
     );
   }
