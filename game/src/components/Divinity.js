@@ -11,7 +11,7 @@ import {
   roundTree,
   scatterPoints,
 } from './Environment.js';
-import { MAP_HALF_SIZE } from './Map.js';
+import { LAWN_STYLES, MAP_HALF_SIZE } from './Map.js';
 import { createTeapot } from './Ultimates.js';
 
 /**
@@ -296,7 +296,9 @@ export class Divinity {
     const previous = this.tier;
     this.tier = tier;
 
-    this.map.setStyle(tier >= 4 ? 'marble' : tier >= 1 ? 'lush' : 'garden', tier >= 4 ? 'clouds' : 'meadow');
+    const lawn = tier >= 4 ? 'marble' : tier >= 1 ? 'lush' : 'garden';
+    this.map.setStyle(lawn, tier >= 4 ? 'clouds' : 'meadow');
+    if (tier < 4) this.environment.grassField.setLawn(LAWN_STYLES[lawn]); // (the grass grows out of the lawn)
     for (const mesh of this.environment.outside) mesh.visible = tier < 4;
     this.environment.insideGrass.visible = tier < 4; // no weeds between the marble tiles
     this.environment.grassField.mesh.visible = tier < 4;

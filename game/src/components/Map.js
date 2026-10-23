@@ -20,7 +20,7 @@ const LAWN_TEXTURE_SIZE = 2048;
  * the garden, a lusher garden in bloom, and finally gold-veined marble tiles
  * (a nod to the checkerboard of the original course game).
  */
-const LAWN_STYLES = {
+export const LAWN_STYLES = {
   garden: {
     light: '#7cc75a',
     dark: '#70bb4f',

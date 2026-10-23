@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.40.1',
+    date: '2026-10-23',
+    title: 'A softer lawn',
+    changes: [
+      '🌱 The grass grows out of the lawn again: short, soft tufts in the lawn\'s own colours, with the mowing pattern showing between them, instead of a carpet of dark spikes',
+      '🔍 No more blur at the top and bottom of the screen on the title and in gardens: everything is sharp again',
+    ],
+  },
+  {
     version: '0.40.0',
     date: '2026-10-23',
     title: 'The garden comes alive',

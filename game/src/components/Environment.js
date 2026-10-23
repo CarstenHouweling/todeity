@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MAP_HALF_SIZE } from './Map.js';
+import { LAWN_STYLES, MAP_HALF_SIZE, TILE_SIZE } from './Map.js';
 import { createGrass } from './Grass.js';
 
 // Fixed seed: the garden looks the same every run.
@@ -624,19 +624,28 @@ export function createEnvironment() {
     ...PATH.map(([x, y]) => ({ x, y, radius: 34 })),
   ];
   // The lawn itself: a field of blades swaying in the wind (Grass.js), off the path, the pond and the house.
-  const nearPath = (x, y) =>
-    PATH.some(([ax, ay], i) => {
-      const [bx, by] = PATH[i + 1] ?? [ax, ay];
-      const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1)));
-      return Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay)) < 19;
-    });
+  const pathDistance = (x, y) =>
+    Math.min(
+      ...PATH.slice(1).map(([bx, by], i) => {
+        const [ax, ay] = PATH[i];
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
+        return Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay));
+      })
+    );
+  const fade = (d, from, to) => THREE.MathUtils.smoothstep(d, from, to);
   const grassField = createGrass({
     half: MAP_HALF_SIZE,
-    clear: (x, y) =>
-      nearPath(x, y) ||
-      Math.hypot(x - POND.x, y - POND.y) < POND.radius + 7 ||
-      (Math.abs(x - HOME.x) < 62 && Math.abs(y - HOME.y) < 62) ||
-      Math.hypot(x - TEA_TABLE.x, y - TEA_TABLE.y) < 20,
+    tile: TILE_SIZE,
+    lawn: LAWN_STYLES.garden,
+    // Shorter and sparser toward the path's edge (its sandy part is ~12 wide), the pond, the house and the fence.
+    room: (x, y) =>
+      Math.min(
+        fade(pathDistance(x, y), 12, 26),
+        fade(Math.hypot(x - POND.x, y - POND.y) - POND.radius, 3, 16),
+        fade(Math.hypot(Math.max(0, Math.abs(x - HOME.x) - 52), Math.max(0, Math.abs(y - HOME.y) - 52)), 2, 14),
+        fade(Math.hypot(x - TEA_TABLE.x, y - TEA_TABLE.y) - 14, 0, 10),
+        fade(MAP_HALF_SIZE - Math.max(Math.abs(x), Math.abs(y)), 0, 12)
+      ),
   });
   group.add(grassField.mesh);
 

@@ -1060,7 +1060,7 @@ against the game as it is: when a wave, boss or menu changes, check the contact 
 
 ## Graphics levels
 
-The garden keeps the original low-poly props (since v0.40 with sculpted bees, a grass field and a tilt-shift, see The
+The garden keeps the original low-poly props (since v0.40 with sculpted bees and tufts of grass, see The
 garden comes alive below); every new arena raises the graphics level (`GFX_LEVELS` in
 `components/Graphics.js`, applied by `setArena()` in main.js during the travel flash):
 
@@ -1145,7 +1145,7 @@ garden comes alive below); every new arena raises the graphics level (`GFX_LEVEL
   some frames, so clear the bees first.
 - **The garden comes alive** (v0.40). Researched what beats bodies made of primitives stuck through each other,
   for a game that builds everything in code (no Blender on the dev Mac, no third-party models wanted): sculpting with
-  signed distance fields, one instanced grass field with its motion in the vertex shader, and cheap stylized shading.
+  signed distance fields, instanced grass with its motion in the vertex shader, and cheap stylized shading.
   - *Sculpted bees* (`components/Sculpt.js`, `sculpt(shapes, { cell, paint, carve })`): ellipsoids and capsules
     melted together with a smooth minimum, sampled on a grid and meshed with surface nets, normals from the field's
     gradient, colours from the nearest shapes. The garden's bees (`STYLES[0]`, `sculpted`) are one soft
@@ -1159,18 +1159,22 @@ garden comes alive below); every new arena raises the graphics level (`GFX_LEVEL
     crown worn back on the head, two-row ermine ruff, lashes, cheeks, honeycomb sceptre, purple cape, a second wing
     pair. Seasonal hats are merged into the body's mesh (`buildBee(…, hat)`, cached per hat; the glTF bee wears one on its Head bone). All five styles × eight kinds build
     (checked with `buildBee` in a loop).
-  - *Grass field* (`components/Grass.js`, `environment.grassField`): 32,000 blades (a 4-segment tapering ribbon,
-    7 triangles) in 5 × 5 `InstancedMesh` chunks (one draw call each; the camera culls the ones out of view, their
-    bounds padded for the bending), no shadow casting. The vertex shader applies the instance,
-    then rolling gusts and a flutter scaled by height², and bends blades away from up to four frogs (`uPush`, set by
-    `environment.update(time, frogs)`); the fragment shader shades root to tip. Kept off the path, the pond, the
-    house and the tea table; `clearAround` hides the blades under trinkets (`garden.onLayout` → `clearGrass` in
-    main.js, at 0.85 of each trinket's `footprint`). Quality: `features.grass` (1, ½ from step 2, none at Low, via
-    `setDensity` in `applyArenaFx`); hidden from tier 4 (marble) and under winter snow (`k.hide`). The old lawn's
-    mowing squares live on as lighter and darker blades (`MOWN`).
-  - *Tilt-shift* (`tilt` in PostFX's reality shader): on the title and in gardens (not while editing), a 9-tap blur
-    growing away from a band just below the middle of the screen, and colours 14% richer. Off in lite mode (step 2+),
-    so those steps still render straight to the screen.
+  - *Grass* (`components/Grass.js`, `environment.grassField`; reworked in v0.40.1): ~5,000 tufts of 3–6 thin
+    blades (~21k blades, a 3-segment taper of 5 triangles, 2.4–5 tall) in 5 × 5 `InstancedMesh` chunks (one draw call
+    each; the camera culls the ones out of view, their bounds padded for the bending), no shadow casting. A blade's
+    root is the colour of the lawn square it stands on (`LAWN_STYLES` light/dark, squares counted from the texture's
+    top-left like `createLawnTexture`; `setLawn` when Divinity changes the lawn) and its normal points straight up, so
+    it's lit exactly like the lawn and melts into it; only the tips are lighter and sunnier. The tufts leave gaps, so
+    the mowing squares show, and `room(x, y)` in Environment.js makes them shorter and sparser toward the path's
+    edge, the pond, the house, the tea table and the fence instead of stopping at a hard line. The vertex shader
+    applies the instance, then soft gusts and a flutter scaled by height², and bends blades away from up to four frogs
+    (`uPush`, set by `environment.update(time, frogs)`). `clearAround` hides the blades under trinkets
+    (`garden.onLayout` → `clearGrass` in main.js, at 0.85 of each trinket's `footprint`). Quality: `features.grass`
+    (1, ½ from step 2, none at Low, via `setDensity` in `applyArenaFx`); hidden from tier 4 (marble) and under winter
+    snow (`k.hide`). **v0.40.0** had 32,000 wide blades with dark roots covering the lawn: from the title camera they
+    read as spikes laid over the garden and hid the mowing pattern; don't go back to a carpet.
+  - *No tilt-shift*: v0.40.0 blurred the top and bottom of the screen on the title and in gardens (a miniature
+    look); it smeared the trees and the foreground and was taken out again in v0.40.1.
   - Compare looks with `game.snap` (Testing and debugging). Measured at step 0 on a Mac: the garden walk 2.1 ms a
     frame (render CPU 1.8); a run with ~40 garden bees 3.4 ms.
 - **Auto comes back up** (v0.40, `considerStepUp` / `judgeProbe` / `stepDown` in main.js). Steps used to never
@@ -1198,13 +1202,13 @@ garden comes alive below); every new arena raises the graphics level (`GFX_LEVEL
   none). Checked in the real frame loop too: 28 ms of busy-waiting a frame cost a notch in 4 s and it was back 25 s
   after; 40 ms a frame went to Low in 12 s, and since that load was pure CPU, the looks came back while it lasted.
 - **Performance of v0.40** (Mac, M1 Max; GPU time with `game.gpuTime`, its clocks raised by 20 renders a query): the
-  full garden at the title, 1536×1152, ~1.5 ms at step 0 (grass ~0.1–0.2 ms, tilt-shift ~0.1 ms; with the GPU
+  full garden at the title, 1536×1152, ~1.5 ms at step 0 (the v0.40.0 grass ~0.1–0.2 ms, the tilt-shift ~0.1 ms; with the GPU
   idling the same frame read 3 ms). A garden run with ~25 bees and the Queen in a phone-sized landscape view
   (740×360, buffer 1110×540, touch): step 0 1.55 ms GPU, 2 ms CPU, 336 draw calls, 671k triangles; step 2 0.9 ms;
   Low 0.78 ms, 196 calls, 224k. A run with ~50 garden bees (desktop pane, 1536×1152): 3 ms GPU, 4 ms CPU. Not measured on a real
   phone (none at hand): a phone GPU is several times slower, which the Auto ladder is for. What v0.40 does for
-  phones: the grass is 25 chunks the camera culls (`CHUNKS`), half the blades from step 2 and none at Low; the
-  tilt-shift is 9 reads and off in lite; a garden bee is 2 meshes + its shadow (the abdomen and the seasonal hat are
+  phones: the grass is 25 chunks the camera culls (`CHUNKS`), half the blades from step 2 and none at Low (and
+  since v0.40.1 a third of the triangles: ~107k for the whole lawn, was 224k); a garden bee is 2 meshes + its shadow (the abdomen and the seasonal hat are
   in the body's mesh), so no more draw calls than the glTF bee with its hat; Low keeps the glTF bee.
 - **Safety:** PostFX first runs a sanitize pass (NaN/Inf → black, values capped at 6) so a bad pixel can't become
   a flickering black box and a pile of additive particles can't haze the screen. Arena particles (`motes`) use a
@@ -1349,7 +1353,7 @@ server proxies `/ws` and `/api`).
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
 | `components/Sculpt.js` | Signed-distance sculpting: smooth-blended shapes meshed with surface nets (the garden's bees). |
-| `components/Grass.js` | The garden's instanced grass field: wind and frogs bending it in the vertex shader, cleared under trinkets. |
+| `components/Grass.js` | The garden's grass tufts, coloured like the lawn under them: wind and frogs bending them in the vertex shader, cleared under trinkets. |
 | `dev/coplanar.js`, `dev/snap.js`, `dev/gputime.js` | Dev-only: `game.coplanar()` finds z-fighting faces, `game.snap()` renders contact sheets of close-ups, `game.gpuTime()` times a frame on the GPU. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |
 | `components/GardenPhysics.js` | Height fields: what frogs stand on in a garden (the house, trinkets). |

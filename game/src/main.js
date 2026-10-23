@@ -8902,8 +8902,6 @@ function frame(realDelta, render = true, elapsed = realDelta) {
     bloom: look.bloom * (boost.tierBloom ?? 1) + (boost.bloom ?? 0),
     warp: look.warp * soft + (boost.warp ?? 0),
     aberration: look.aberration * soft + (boost.aberration ?? 0),
-    // The title and the garden look like a miniature (not while placing trinkets, which needs the whole lawn sharp).
-    tilt: (phase === 'title' || decorating) && !garden.editing ? 1 : 0,
   });
   // Calm effects soften flashes, shakes and particles during play (cut-scenes keep the full show).
   postfx.calm = settings.calmFx && PLAYING.has(phase);

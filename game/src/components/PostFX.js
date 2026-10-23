@@ -6,8 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-// Rippling "reality warp" around Tode, chromatic aberration, vignette and screen flashes; in the garden a tilt-shift
-// (the top and bottom of the screen softly out of focus, colours a little richer), so it looks like a miniature.
+// Rippling "reality warp" around Tode, chromatic aberration, vignette and screen flashes.
 const RealityShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -19,8 +18,6 @@ const RealityShader = {
     flashColor: { value: new THREE.Color(1, 1, 1) },
     shatter: { value: 0 },
     invert: { value: 0 },
-    tilt: { value: 0 },
-    texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -30,8 +27,7 @@ const RealityShader = {
     }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float time, warp, aberration, vignette, flash, shatter, invert, tilt;
-    uniform vec2 texel;
+    uniform float time, warp, aberration, vignette, flash, shatter, invert;
     uniform vec3 flashColor;
     varying vec2 vUv;
 
@@ -82,21 +78,6 @@ const RealityShader = {
         texture2D(tDiffuse, uv).g,
         texture2D(tDiffuse, uv - split).b
       );
-      if (tilt > 0.01) {
-        // Tilt-shift: a sharp band a little below the middle (where the frog stands), blurring toward the edges.
-        float blur = tilt * smoothstep(0.12, 0.5, abs(uv.y - 0.45)) * 7.0;
-        if (blur > 0.05) {
-          vec3 sum = color;
-          for (int i = 0; i < 8; i++) { // a golden-angle spiral (8 reads: phones are short of fill rate)
-            float a = float(i) * 2.39996;
-            float r = sqrt(float(i) + 0.5) / 2.9;
-            sum += texture2D(tDiffuse, uv + vec2(cos(a), sin(a)) * r * blur * texel).rgb;
-          }
-          color = sum / 9.0;
-        }
-        float luma = dot(color, vec3(0.299, 0.587, 0.114));
-        color = mix(vec3(luma), color, 1.0 + 0.14 * tilt);
-      }
       color *= 1.0 - vignette * smoothstep(0.35, 0.85, dist * 1.25);
       color = mix(color, vec3(1.0) - clamp(color, 0.0, 1.0), invert);
       color += crack * vec3(1.0, 0.95, 0.85);
@@ -202,9 +183,9 @@ export class PostFX {
     this.composer.setPixelRatio(ratio);
   }
 
-  setTargets({ bloom = BASE_BLOOM, warp = 0, aberration = 0, tilt = 0 }) {
-    // Lite: no steady warp or tilt-shift, so the screen can skip post-processing between flashes.
-    Object.assign(this.target, { bloom, warp: this.lite ? 0 : warp, aberration: this.lite ? 0 : aberration, tilt: this.lite ? 0 : tilt });
+  setTargets({ bloom = BASE_BLOOM, warp = 0, aberration = 0 }) {
+    // Lite: no steady warp, so the screen can skip post-processing between flashes.
+    Object.assign(this.target, { bloom, warp: this.lite ? 0 : warp, aberration: this.lite ? 0 : aberration });
   }
 
   /**
@@ -223,7 +204,7 @@ export class PostFX {
   /** No screen effect running and no bloom: the picture needs no post-processing. */
   get idle() {
     const { warp, aberration } = this.reality.uniforms;
-    return !this.bloom.enabled && this.flashAmount < 0.01 && this.shatterAmount < 0.01 && this.invertAmount < 0.01 && warp.value < 0.02 && aberration.value < 0.02 && this.reality.uniforms.tilt.value < 0.01;
+    return !this.bloom.enabled && this.flashAmount < 0.01 && this.shatterAmount < 0.01 && this.invertAmount < 0.01 && warp.value < 0.02 && aberration.value < 0.02;
   }
 
   /** A brief burst of extra bloom / warp / aberration that fades out. */
@@ -261,9 +242,6 @@ export class PostFX {
     uniforms.time.value = this.time;
     uniforms.warp.value += (this.target.warp + this.spike.warp - uniforms.warp.value) * ease;
     uniforms.aberration.value += (this.target.aberration + this.spike.aberration - uniforms.aberration.value) * ease;
-    uniforms.tilt.value += ((this.target.tilt ?? 0) - uniforms.tilt.value) * ease;
-    const size = this.renderer.getDrawingBufferSize(this.bufferSize ??= new THREE.Vector2());
-    uniforms.texel.value.set(1 / size.x, 1 / size.y);
     uniforms.flash.value = this.flashAmount;
     this.shatterAmount *= Math.exp(-2.2 * delta);
     this.invertAmount *= Math.exp(-9 * delta);

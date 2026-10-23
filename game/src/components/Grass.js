@@ -1,29 +1,37 @@
 import * as THREE from 'three';
 
 /**
- * The garden's lawn as a field of grass blades (v0.40): instanced meshes, one per square chunk of the lawn (so the
- * camera skips the chunks out of view), each a single draw call. Everything that moves happens in the vertex shader: the wind's gusts roll across the lawn, and blades
- * bow away from the frogs walking through them. The CPU only sets a few uniforms a frame.
+ * The garden's lawn grows a little (v0.40.1): short tufts of grass blades that grow out of the lawn itself. Each
+ * blade's root has the colour of the lawn square it stands on and is lit like the lawn (its normal points straight
+ * up), so the field melts into the ground and only the lighter tips stand out; the tufts leave gaps, so the lawn's
+ * mowing squares still show. v0.40.0 had a dense carpet of wide dark-rooted blades, which looked like spikes laid
+ * over the lawn and clashed with the low-poly garden.
  *
- * `createGrass({ half, count, clear })`: blades over the square lawn (`half` its half size), skipping spots where
- * `clear(x, y)` is true (the path, the pond, the house). `field.clearAround(circles)` hides the blades under trinkets
- * (each { x, y, radius }), `field.setDensity(0..1)` thins it out for weaker devices, `field.update(time, frogs)` moves it.
+ * Instanced meshes, one per square chunk of the lawn (the camera skips the chunks out of view), each a single draw
+ * call. Everything that moves happens in the vertex shader: soft gusts roll across the lawn, and blades bow away
+ * from the frogs walking through them. The CPU only sets a few uniforms a frame.
+ *
+ * `createGrass({ half, tufts, room, tile, lawn })`: tufts over the square lawn (`half` its half size); `room(x, y)`
+ * says how much grass a spot has room for (0 none, 1 full height: shorter toward the path, the pond, the house),
+ * `tile` is the lawn's square size and `lawn` its { light, dark } colours. `field.setLawn(lawn)` follows a new lawn
+ * look, `field.clearAround(circles)` hides the blades under trinkets (each { x, y, radius }), `field.setDensity(0..1)`
+ * thins it out for weaker devices, `field.update(time, frogs)` moves it.
  */
 
-const BLADE_SEGMENTS = 4;
+const BLADE_SEGMENTS = 3;
 const PUSHERS = 4; // frogs that bend the grass
-const MOWN = 30; // the lawn's squares (a map tile)
 const CHUNKS = 5; // the field is cut into CHUNKS × CHUNKS squares
+const TUFT = { blades: [3, 6], radius: 2.6 };
 
 function bladeGeometry() {
-  // A tapering ribbon, base at z = 0 and tip at z = 1, a little curved; `aH` (0 at the root, 1 at the tip) drives the
-  // colour and how far the wind bends it.
+  // A thin tapering blade, base at z = 0 and tip at z = 1, a little curved; `aH` (0 at the root, 1 at the tip)
+  // drives the colour and how far the wind bends it.
   const positions = [];
   const heights = [];
   for (let i = 0; i <= BLADE_SEGMENTS; i++) {
     const h = i / BLADE_SEGMENTS;
-    const width = 0.5 * (1 - h) ** 0.9;
-    const curve = 0.25 * h * h;
+    const width = 0.5 * (1 - h);
+    const curve = 0.3 * h * h;
     if (i < BLADE_SEGMENTS) {
       positions.push(-width, curve, h, width, curve, h);
       heights.push(h, h);
@@ -42,19 +50,17 @@ function bladeGeometry() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('aH', new THREE.Float32BufferAttribute(heights, 1));
-  // Normals point up (and a little out of the blade), so the whole field is lit like a soft lawn, not like cards.
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(positions.flatMap((_, i) => (i % 3 === 2 ? [0, 0.35, 1] : [])), 3));
+  // Straight up, like the lawn's own normal: a blade is lit exactly like the ground it grows from.
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(positions.flatMap((_, i) => (i % 3 === 2 ? [0, 0, 1] : [])), 3));
   geometry.setIndex(index);
   return geometry;
 }
 
-export function createGrass({ half, count = 32000, clear = () => false, colors = ['#5aa83c', '#6cbf45', '#4f9a35', '#7ccc52'] }) {
+export function createGrass({ half, tufts = 5200, room = () => 1, tile = 30, lawn = { light: '#7cc75a', dark: '#70bb4f' } }) {
   const material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
   const uniforms = {
     uTime: { value: 0 },
     uPush: { value: Array.from({ length: PUSHERS }, () => new THREE.Vector3(1e5, 1e5, 1)) }, // (x, y, reach)
-    uRoot: { value: new THREE.Color('#2f6a22') },
-    uTip: { value: new THREE.Color('#d8f08a') },
   };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -73,11 +79,11 @@ varying float vH;`
 vec4 grassWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
 vec3 root = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 float bend = aH * aH;
-// Gusts rolling across the lawn, and a quicker flutter.
-float gust = sin(uTime * 1.3 + root.x * 0.021 + root.y * 0.013) * 0.6 + sin(uTime * 0.53 - root.y * 0.009) * 0.4;
-float flutter = sin(uTime * 4.7 + root.x * 0.31 + root.y * 0.27) * 0.18;
 float tall = grassWorld.z - root.z;
-grassWorld.xy += vec2(0.8, 0.45) * (gust * 0.55 + flutter) * tall * bend;
+// Soft gusts rolling across the lawn, and a little flutter.
+float gust = sin(uTime * 1.1 + root.x * 0.018 + root.y * 0.011) * 0.6 + sin(uTime * 0.47 - root.y * 0.008) * 0.4;
+float flutter = sin(uTime * 3.9 + root.x * 0.29 + root.y * 0.23) * 0.12;
+grassWorld.xy += vec2(0.8, 0.45) * (gust * 0.35 + flutter) * tall * bend;
 // Frogs walking through push the blades aside and down.
 for (int i = 0; i < ${PUSHERS}; i++) {
   vec2 away = root.xy - uPush[i].xy;
@@ -90,21 +96,42 @@ vec4 mvPosition = viewMatrix * grassWorld;
 gl_Position = projectionMatrix * mvPosition;`
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRoot;\nuniform vec3 uTip;\nvarying float vH;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(uRoot * 1.6, uTip * 1.15, smoothstep(0.0, 1.0, vH));');
+      .replace('#include <common>', '#include <common>\nvarying float vH;')
+      // The root is the lawn's colour; toward the tip a little lighter and sunnier.
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.22, 1.2, 0.92) + vec3(0.02, 0.03, 0.0), smoothstep(0.15, 1.0, vH));');
   };
-  material.customProgramCacheKey = () => 'grass-field';
+  material.customProgramCacheKey = () => 'grass-tufts';
 
+  // Tufts of a few blades, a little longer in some patches of the lawn than in others.
   const spots = [];
-  for (let tries = 0; spots.length < count && tries < count * 3; tries++) {
-    const x = (Math.random() * 2 - 1) * (half - 3);
-    const y = (Math.random() * 2 - 1) * (half - 3);
-    if (clear(x, y)) continue;
-    spots.push({ x, y, angle: Math.random() * Math.PI * 2, height: 3.5 + Math.random() ** 1.6 * 5.5, width: 1.6 + Math.random() * 1.6 });
+  const patch = (x, y) => 0.75 + 0.25 * Math.sin(x * 0.021 + 1.3) * Math.sin(y * 0.017 + 0.4) + 0.15 * Math.sin(x * 0.07 - y * 0.05);
+  for (let t = 0; t < tufts; t++) {
+    const cx = (Math.random() * 2 - 1) * (half - 4);
+    const cy = (Math.random() * 2 - 1) * (half - 4);
+    const space = room(cx, cy);
+    if (space < 0.2 || Math.random() > space) continue; // sparser toward the edges, too
+    const blades = TUFT.blades[0] + Math.floor(Math.random() * (TUFT.blades[1] - TUFT.blades[0] + 1));
+    const tuftHeight = (2.4 + Math.random() * 2.2) * patch(cx, cy) * (0.45 + 0.55 * space);
+    for (let b = 0; b < blades; b++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * TUFT.radius;
+      // Leaning out of the tuft's middle, the middle ones the tallest.
+      spots.push({
+        x: cx + Math.cos(a) * r,
+        y: cy + Math.sin(a) * r,
+        angle: a + Math.PI / 2 + (Math.random() - 0.5) * 0.8,
+        height: tuftHeight * (1.15 - (0.45 * r) / TUFT.radius) * (0.8 + Math.random() * 0.4),
+        width: 0.75 + Math.random() * 0.5,
+        shade: (Math.random() - 0.5) * 0.06,
+      });
+    }
+  }
+  // Random order within the field, so any first part (setDensity) is spread over the lawn.
+  for (let i = spots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [spots[i], spots[j]] = [spots[j], spots[i]];
   }
 
-  // In square chunks, so the camera skips the ones out of view (in a run it sees about half the lawn): one draw call
-  // each, but tens of thousands fewer blades through the vertex shader on a phone.
   const field = new THREE.Group();
   field.userData.grass = true;
   const geometry = bladeGeometry();
@@ -121,37 +148,44 @@ gl_Position = projectionMatrix * mvPosition;`
   const at = new THREE.Vector3();
   const scale = new THREE.Vector3();
   const color = new THREE.Color();
-  const palette = colors.map((c) => new THREE.Color(c));
   const place = (chunk, i, hidden) => {
     const spot = chunk.spots[i];
     q.setFromAxisAngle(up, spot.angle);
     matrix.compose(at.set(spot.x, spot.y, 0), q, hidden ? scale.set(0, 0, 0) : scale.set(spot.width, spot.width, spot.height));
     chunk.mesh.setMatrixAt(i, matrix);
   };
-  chunks.forEach((chunk, c) => {
-    if (!chunk.spots.length) return;
+  // The lawn's squares as the lawn texture draws them (Map.js): counted from its top-left corner.
+  const light = (spot) => (Math.floor((spot.x + half) / tile) + Math.floor((half - spot.y) / tile)) % 2 === 0;
+  const filled = [];
+  const paint = (colors) => {
+    const lightColor = new THREE.Color(colors.light);
+    const darkColor = new THREE.Color(colors.dark);
+    for (const chunk of filled) {
+      chunk.spots.forEach((spot, i) => chunk.mesh.setColorAt(i, color.copy(light(spot) ? lightColor : darkColor).offsetHSL(0, 0, spot.shade)));
+      chunk.mesh.instanceColor.needsUpdate = true;
+    }
+  };
+  for (const chunk of chunks) {
+    if (!chunk.spots.length) continue;
     const mesh = new THREE.InstancedMesh(geometry, material, chunk.spots.length);
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     mesh.userData.grass = true;
     chunk.mesh = mesh;
-    chunk.spots.forEach((spot, i) => {
-      place(chunk, i, false);
-      // The mowing pattern of the old lawn texture lives on in the blades: lighter and darker squares.
-      const mown = (Math.floor(spot.x / MOWN) + Math.floor(spot.y / MOWN)) % 2 ? 0.05 : -0.04;
-      color.copy(palette[(c + i) % palette.length]).offsetHSL((Math.random() - 0.5) * 0.03, 0, mown + (Math.random() - 0.5) * 0.07);
-      mesh.setColorAt(i, color);
-    });
+    chunk.spots.forEach((spot, i) => place(chunk, i, false));
     // Bounds from the blades at rest, with room for the wind and the frogs bending them.
     mesh.computeBoundingSphere();
-    mesh.boundingSphere.radius += 14;
+    mesh.boundingSphere.radius += 10;
     chunk.hidden = new Set();
     field.add(mesh);
-  });
-  const filled = chunks.filter((chunk) => chunk.mesh);
+    filled.push(chunk);
+  }
+  paint(lawn);
 
   return {
     mesh: field,
+    /** The lawn changed its look (Divinity.js): the roots take its colours. */
+    setLawn: paint,
     /** Hides the blades under these circles ({ x, y, radius }: the trinkets), shows the rest again. */
     clearAround(circles) {
       for (const chunk of filled) {
@@ -175,7 +209,7 @@ gl_Position = projectionMatrix * mvPosition;`
       uniforms.uTime.value = time;
       uniforms.uPush.value.forEach((push, i) => {
         const frog = frogs[i];
-        if (frog) push.set(frog.x, frog.y, 16);
+        if (frog) push.set(frog.x, frog.y, 14);
         else push.set(1e5, 1e5, 1);
       });
     },
