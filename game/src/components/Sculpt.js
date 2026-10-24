@@ -12,32 +12,60 @@ import * as THREE from 'three';
  *   ], { cell: 0.6, paint: (p, color) => …, carve: (p, d) => d })
  *
  * `blend` is how far a shape melts into the ones before it (smooth minimum), `cell` the grid spacing in model units
- * (smaller: finer, more triangles), `paint` may recolour a point (stripes), `carve` may change the distance (grooves).
+ * (smaller: finer, more triangles), `paint` may recolour a point (stripes), `carve` may change the distance (grooves),
+ * `glow` (x, y, z) → 0–1 marks points that shine (a `glow` attribute, see BeeModels' glowShader: lava cracks, seams).
  * Returns a non-indexed BufferGeometry with position, normal and color, like BeeModels' `piece`.
  */
 
 const length3 = (x, y, z) => Math.sqrt(x * x + y * y + z * z);
 
-function distance(shape, x, y, z) {
-  if (shape.ellipsoid) {
-    const [cx, cy, cz] = shape.ellipsoid;
-    const [rx, ry, rz] = shape.radii;
-    const px = x - cx;
-    const py = y - cy;
-    const pz = z - cz;
+// Shapes are packed into one flat array, STRIDE numbers each (the field is sampled tens of thousands of times, and
+// shape objects of different kinds made every lookup slow): kind (0 ellipsoid, 1 capsule), centre or end a, radii or
+// end b, capsule radius, blend, then the shape's box (centre, half size).
+const STRIDE = 15;
+
+function pack(shapes) {
+  const flat = new Float64Array(shapes.length * STRIDE);
+  shapes.forEach((shape, s) => {
+    const o = s * STRIDE;
+    const capsule = Boolean(shape.capsule);
+    const [a, b] = capsule ? shape.capsule : [shape.ellipsoid, shape.radii];
+    const r = capsule ? shape.radius : 0;
+    const center = capsule ? a.map((v, i) => (v + b[i]) / 2) : a;
+    const extent = capsule ? a.map((v, i) => Math.abs(v - b[i]) / 2 + r) : b;
+    flat.set([capsule ? 1 : 0, ...a, ...b, r, shape.blend ?? 0, ...center, ...extent], o);
+  });
+  return flat;
+}
+
+function distance(f, o, x, y, z) {
+  if (f[o] === 0) {
+    const px = x - f[o + 1];
+    const py = y - f[o + 2];
+    const pz = z - f[o + 3];
+    const rx = f[o + 4];
+    const ry = f[o + 5];
+    const rz = f[o + 6];
     const k0 = length3(px / rx, py / ry, pz / rz);
     const k1 = length3(px / (rx * rx), py / (ry * ry), pz / (rz * rz));
     return k1 > 1e-6 ? (k0 * (k0 - 1)) / k1 : -Math.min(rx, ry, rz);
   }
-  const [[ax, ay, az], [bx, by, bz]] = shape.capsule;
-  const pax = x - ax;
-  const pay = y - ay;
-  const paz = z - az;
-  const bax = bx - ax;
-  const bay = by - ay;
-  const baz = bz - az;
+  const pax = x - f[o + 1];
+  const pay = y - f[o + 2];
+  const paz = z - f[o + 3];
+  const bax = f[o + 4] - f[o + 1];
+  const bay = f[o + 5] - f[o + 2];
+  const baz = f[o + 6] - f[o + 3];
   const h = Math.min(1, Math.max(0, (pax * bax + pay * bay + paz * baz) / (bax * bax + bay * bay + baz * baz)));
-  return length3(pax - bax * h, pay - bay * h, paz - baz * h) - shape.radius;
+  return length3(pax - bax * h, pay - bay * h, paz - baz * h) - f[o + 7];
+}
+
+/** How far a point is from a shape's box: never more than from the shape itself. */
+function boxDistance(f, o, x, y, z) {
+  const dx = Math.max(0, Math.abs(x - f[o + 9]) - f[o + 12]);
+  const dy = Math.max(0, Math.abs(y - f[o + 10]) - f[o + 13]);
+  const dz = Math.max(0, Math.abs(z - f[o + 11]) - f[o + 14]);
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 function smoothMin(a, b, k) {
@@ -46,29 +74,28 @@ function smoothMin(a, b, k) {
   return Math.min(a, b) - h * h * k * 0.25;
 }
 
-function reach(shape) {
-  if (shape.ellipsoid) return { center: shape.ellipsoid, extent: shape.radii };
-  const [a, b] = shape.capsule;
-  const r = shape.radius;
-  return { center: a.map((v, i) => (v + b[i]) / 2), extent: a.map((v, i) => Math.abs(v - b[i]) / 2 + r) };
-}
-
-export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) {
+export function sculpt(shapes, { cell = 0.6, paint = null, carve = null, glow = null } = {}) {
   const colors = shapes.map((s) => new THREE.Color(s.color ?? '#ffffff'));
+  const f = pack(shapes);
+  const shapeCount = shapes.length;
+  // A point farther from a shape's box than the distance so far plus the shape's blend can't be changed by it, so most
+  // shapes are skipped for most points.
   const field = (x, y, z) => {
     let d = Infinity;
-    for (const shape of shapes) d = smoothMin(d, distance(shape, x, y, z), shape.blend ?? 0);
+    for (let o = 0; o < shapeCount * STRIDE; o += STRIDE) {
+      if (boxDistance(f, o, x, y, z) > d + f[o + 8]) continue;
+      d = smoothMin(d, distance(f, o, x, y, z), f[o + 8]);
+    }
     return carve ? carve(x, y, z, d) : d;
   };
 
   // The grid: around every shape, with room for blending and a cell to spare.
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
-  for (const shape of shapes) {
-    const { center, extent } = reach(shape);
+  for (let o = 0; o < shapeCount * STRIDE; o += STRIDE) {
     for (let a = 0; a < 3; a++) {
-      min[a] = Math.min(min[a], center[a] - extent[a] - (shape.blend ?? 0) - 2 * cell);
-      max[a] = Math.max(max[a], center[a] + extent[a] + (shape.blend ?? 0) + 2 * cell);
+      min[a] = Math.min(min[a], f[o + 9 + a] - f[o + 12 + a] - f[o + 8] - 2 * cell);
+      max[a] = Math.max(max[a], f[o + 9 + a] + f[o + 12 + a] + f[o + 8] + 2 * cell);
     }
   }
   const [nx, ny, nz] = [0, 1, 2].map((a) => Math.ceil((max[a] - min[a]) / cell) + 1);
@@ -87,12 +114,17 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
   const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
   const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
   const v = new Float32Array(8);
+  // (flat tables: destructuring the corners and edges for every cell made this loop slow)
+  const cornerOffset = corners.map(([x, y, z]) => x + nx * (y + ny * z));
+  const cornerAxes = new Float32Array(corners.flat());
+  const edgeEnds = new Int8Array(edges.flat());
   for (let k = 0; k < nz - 1; k++) {
     for (let j = 0; j < ny - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
+        const base = at(i, j, k);
         let inside = 0;
         for (let c = 0; c < 8; c++) {
-          v[c] = values[at(i + corners[c][0], j + corners[c][1], k + corners[c][2])];
+          v[c] = values[base + cornerOffset[c]];
           if (v[c] < 0) inside++;
         }
         if (inside === 0 || inside === 8) continue;
@@ -100,12 +132,14 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
         let sy = 0;
         let sz = 0;
         let count = 0;
-        for (const [a, b] of edges) {
+        for (let e = 0; e < 24; e += 2) {
+          const a = edgeEnds[e];
+          const b = edgeEnds[e + 1];
           if (v[a] < 0 === v[b] < 0) continue;
           const t = v[a] / (v[a] - v[b]);
-          sx += corners[a][0] + (corners[b][0] - corners[a][0]) * t;
-          sy += corners[a][1] + (corners[b][1] - corners[a][1]) * t;
-          sz += corners[a][2] + (corners[b][2] - corners[a][2]) * t;
+          sx += cornerAxes[a * 3] + (cornerAxes[b * 3] - cornerAxes[a * 3]) * t;
+          sy += cornerAxes[a * 3 + 1] + (cornerAxes[b * 3 + 1] - cornerAxes[a * 3 + 1]) * t;
+          sz += cornerAxes[a * 3 + 2] + (cornerAxes[b * 3 + 2] - cornerAxes[a * 3 + 2]) * t;
           count++;
         }
         cellIndex[cellAt(i, j, k)] = vertices.length / 3;
@@ -118,7 +152,9 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
   const count = vertices.length / 3;
   const normals = new Float32Array(count * 3);
   const vertexColors = new Float32Array(count * 3);
+  const vertexGlow = glow ? new Float32Array(count) : null;
   const e = cell * 0.5;
+  const ds = new Float64Array(shapeCount);
   const color = new THREE.Color();
   for (let n = 0; n < count; n++) {
     const [x, y, z] = [vertices[n * 3], vertices[n * 3 + 1], vertices[n * 3 + 2]];
@@ -126,23 +162,31 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
     const gy = field(x, y + e, z) - field(x, y - e, z);
     const gz = field(x, y, z + e) - field(x, y, z - e);
     const g = length3(gx, gy, gz) || 1;
-    normals.set([gx / g, gy / g, gz / g], n * 3);
-    const ds = shapes.map((shape) => distance(shape, x, y, z));
-    const nearest = Math.min(...ds);
+    normals[n * 3] = gx / g;
+    normals[n * 3 + 1] = gy / g;
+    normals[n * 3 + 2] = gz / g;
+    // Shapes whose box is far from the point weigh nothing (e^-12 at most).
+    let nearest = Infinity;
+    for (let o = 0, s = 0; s < shapeCount; o += STRIDE, s++) {
+      ds[s] = boxDistance(f, o, x, y, z) > 4 + f[o + 8] ? Infinity : distance(f, o, x, y, z);
+      nearest = Math.min(nearest, ds[s]);
+    }
     let total = 0;
     let r = 0;
     let gg = 0;
     let b = 0;
-    ds.forEach((d, s) => {
-      const w = Math.exp(-(d - nearest) / Math.max(0.3, (shapes[s].blend ?? 0) * 0.35));
+    for (let o = 0, s = 0; s < shapeCount; o += STRIDE, s++) {
+      if (ds[s] === Infinity) continue;
+      const w = Math.exp(-(ds[s] - nearest) / Math.max(0.3, f[o + 8] * 0.35));
       total += w;
       r += colors[s].r * w;
       gg += colors[s].g * w;
       b += colors[s].b * w;
-    });
+    }
     color.setRGB(r / total, gg / total, b / total);
     if (paint) paint(x, y, z, color);
     color.toArray(vertexColors, n * 3);
+    if (glow) vertexGlow[n] = glow(x, y, z);
   }
 
   // Quads across every grid edge the surface crosses, between the four cells around it.
@@ -187,6 +231,7 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
   const position = new Float32Array(index.length * 3);
   const normal = new Float32Array(index.length * 3);
   const colorOut = new Float32Array(index.length * 3);
+  const glowOut = glow ? new Float32Array(index.length) : null;
   for (let t = 0; t < index.length; t += 3) {
     let [a, b, c] = [index[t], index[t + 1], index[t + 2]];
     ab.set(vertices[b * 3] - vertices[a * 3], vertices[b * 3 + 1] - vertices[a * 3 + 1], vertices[b * 3 + 2] - vertices[a * 3 + 2]);
@@ -194,16 +239,22 @@ export function sculpt(shapes, { cell = 0.6, paint = null, carve = null } = {}) 
     tri.crossVectors(ab, ac);
     const outward = tri.x * (normals[a * 3] + normals[b * 3] + normals[c * 3]) + tri.y * (normals[a * 3 + 1] + normals[b * 3 + 1] + normals[c * 3 + 1]) + tri.z * (normals[a * 3 + 2] + normals[b * 3 + 2] + normals[c * 3 + 2]);
     if (outward < 0) [b, c] = [c, b];
-    [a, b, c].forEach((vi, corner) => {
+    // (copied by hand: a slice or subarray per corner made this loop most of a sculpt's time)
+    for (let corner = 0; corner < 3; corner++) {
+      const vi = corner === 0 ? a : corner === 1 ? b : c;
       const o = (t + corner) * 3;
-      position.set(vertices.slice(vi * 3, vi * 3 + 3), o);
-      normal.set(normals.subarray(vi * 3, vi * 3 + 3), o);
-      colorOut.set(vertexColors.subarray(vi * 3, vi * 3 + 3), o);
-    });
+      for (let k = 0; k < 3; k++) {
+        position[o + k] = vertices[vi * 3 + k];
+        normal[o + k] = normals[vi * 3 + k];
+        colorOut[o + k] = vertexColors[vi * 3 + k];
+      }
+      if (glow) glowOut[t + corner] = vertexGlow[vi];
+    }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colorOut, 3));
+  if (glow) geometry.setAttribute('glow', new THREE.BufferAttribute(glowOut, 1));
   return geometry;
 }

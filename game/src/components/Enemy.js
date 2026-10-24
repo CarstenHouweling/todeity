@@ -4,7 +4,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { computeFootprintRadius } from './collision.js';
 import { buildBee, buildNest, buildWard, prepareBees } from './BeeModels.js';
-import { buildDevil } from './DevilModel.js';
+import { buildDevil, prepareDevil } from './DevilModel.js';
 
 export const ENEMY_SCALE = 5;
 const BASE_HP = 3;
@@ -291,6 +291,8 @@ export function setEnemyGraphics(level, detail = 1, classic = false) {
   beeDetail = detail;
   classicBees = classic;
   if (!classic) prepareBees(level, detail);
+  // Bee-zebub is sculpted too (his own model at every level): ahead of the Underworld, or ahead of time at Low.
+  if (level >= 4 || classic) prepareDevil(level);
 }
 
 export async function loadEnemyModel() {

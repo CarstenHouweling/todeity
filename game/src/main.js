@@ -150,11 +150,15 @@ const twist = (id) => twistIds.has(id);
 // Objectives get tougher per arena (garden, mountain, sky, tournament, underworld), on top of the wave's hpScale:
 // Tode's damage grows much faster than the bees' health, so later hives and shields went down in a blink.
 const STRUCTURE_SCALE = {
-  nest: [1, 2.4, 4, 5.5, 7],
+  nest: [1, 2.4, 6, 7.5, 9],
   ward: [1.6, 3.2, 5, 7, 9],
   guardian: [1.5, 3, 4.5, 6, 8],
 };
 const ZONE_TIMES = [5, 7, 8.5, 10, 11]; // seconds to hold an arena shrine
+// The Sky Citadel's golden hives have a honey shell: they take at most `rate` of their health a second in full (with
+// a second's worth to spare), and only `leak` of whatever comes on top. More health alone didn't do it: a strong
+// build's bursts still broke one in a couple of seconds. Now a hive lasts ~10 s against a strong build, ~15 s weak.
+const HONEY_SHELL = { rate: 0.06, leak: 0.12, pingEvery: 0.6 };
 const LIGHT_TIMES = [3.5, 4.5, 5.5, 6.5, 7.5]; // seconds to hold a boss's circle of light
 const arenaIndex = () => Math.max(0, ARENAS.indexOf(arena));
 
@@ -197,7 +201,12 @@ const GAUGE_PER_HIT = 6; // % for getting hit
 const ULTIMATE_WAVE = 5; // the ultimate is chosen after beating the first boss
 
 // Score
-const SCORE_PER_SECOND = 0.1;
+// Fast play pays: a wave cleared quickly earns a swift bonus on top of the clear bonus (up to `points` × the wave, a
+// boss wave twice that), so of two runs with about the same kills the faster one scores more. Until v0.41 the score
+// also grew with time alive, which paid the slower run. The bonus is full when the wave is cleared as its last bees
+// arrive (its spawn time; `bossArrive` seconds into a boss wave) and runs out `slack` (`bossSlack`) seconds later.
+// Fighting time only: picks, menus and cut-scenes don't count.
+const SWIFT = { points: 40, slack: 30, bossArrive: 25, bossSlack: 150 };
 const WAVE_CLEAR_BONUS = 25; // × wave number
 
 // Pacing
@@ -560,7 +569,7 @@ function safeStorage(op, key, value) {
 
 function updateScore() {
   // In co-op the host keeps the team's score.
-  score = isGuest() ? coopScore : (timeAlive * SCORE_PER_SECOND + points) * steepBonus(steep) * (twistDay?.score ?? 1) * (gentle ? GENTLE.score : 1);
+  score = isGuest() ? coopScore : points * steepBonus(steep) * (twistDay?.score ?? 1) * (gentle ? GENTLE.score : 1);
   const daily = isDaily();
   const best = daily ? Math.max(dailyBest.top, dailyBest.own) : bestScore;
   hud.setScore(Math.floor(score), Math.max(best, Math.floor(score)), timeAlive, daily ? "Today's best" : 'Best');
@@ -1002,6 +1011,7 @@ function spawnEnemy(kind, at, { elite = rollElite(kind) } = {}) {
   if (enemy.type.boss) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (BOSS_SCRIPTS[kind]?.hp ?? 1));
   // Hives, shield wards and guardians keep up with how strong Tode has grown by this arena.
   if (STRUCTURE_SCALE[kind]) enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * STRUCTURE_SCALE[kind][arenaIndex()]);
+  if (kind === 'nest' && arena.id === 'sky') enemy.honeyShell = true;
   if (enemy.damage > 0) enemy.damage += config.contactBonus ?? 0;
   let spot = at ?? freeCorner(enemy.radius);
   // A requested spot can be blocked (a huge boss at a corner, a summon inside a tree): step toward the middle.
@@ -1070,6 +1080,7 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
   const procs = !fromTeammate && charmCounts.size > 0 && PROC_SOURCES.has(source) && procScale > 0.15;
 
   if (isGuest()) queueHit(enemy.netId, damage, direction, force);
+  if (enemy.honeyShell) damage = honeyShell(enemy, damage); // (after queueHit: the host's hive takes a guest's hit through its own shell)
   const landed = Math.min(damage, Math.max(0, enemy.hp)); // overkill doesn't charge the ultimate
   const killed = enemy.takeDamage(damage, direction, force);
   if (enemy.reviving && !isGuest()) riseAgain(enemy); // Bee-zebub's first fall
@@ -1088,6 +1099,21 @@ function damageEnemy(enemy, amount, direction = null, force = 0, source = 'spit'
     onEnemyKilled(enemy);
     if (procs) charmKill(enemy);
   }
+}
+
+/** A golden hive's honey shell (see HONEY_SHELL): what's left of a hit after it. */
+function honeyShell(enemy, damage) {
+  const now = timeAlive; // (game time: a pause doesn't refill it)
+  const full = enemy.maxHp * HONEY_SHELL.rate;
+  enemy.honey = Math.min(full, (enemy.honey ?? full) + (now - (enemy.honeyAt ?? now)) * full);
+  enemy.honeyAt = now;
+  const through = Math.min(damage, enemy.honey);
+  enemy.honey -= through;
+  if (damage > through && clock.elapsedTime - (enemy.lastShieldPing ?? 0) > HONEY_SHELL.pingEvery) {
+    enemy.lastShieldPing = clock.elapsedTime;
+    hud.damageNumber(enemy.position, '🍯', enemy.height + 10, 'frost');
+  }
+  return Math.max(1, Math.round(through + (damage - through) * HONEY_SHELL.leak));
 }
 
 // --- The hive adapts ----------------------------------------------------------------------------------------
@@ -5590,7 +5616,7 @@ function createZone(position, color) {
   return { position, progress: 0, done: false, group, edge, fill, beam, emblem, color, spawnTimer: 1 };
 }
 
-let objectiveArrows = []; // positions of the objective's unfinished parts (the HUD points at them)
+let objectiveArrows = []; // the objective's unfinished parts, { position, icon } (the HUD points at them)
 
 function updateObjective(delta) {
   objectiveArrows = [];
@@ -5623,7 +5649,7 @@ function updateObjective(delta) {
   const remaining = def.type === 'nests'
     ? enemies.filter((enemy) => enemy.kind === 'nest' && !enemy.dying).map((enemy) => enemy.position)
     : objective.zones.filter((zone) => !zone.done).map((zone) => zone.position);
-  objectiveArrows = objective.done >= OBJECTIVE_COUNT ? [] : remaining;
+  objectiveArrows = objective.done >= OBJECTIVE_COUNT ? [] : remaining.map((position) => ({ position, icon: def.icon }));
   const gate = isGateWave() && objective.done < OBJECTIVE_COUNT;
   hud.setObjective(objective.done >= OBJECTIVE_COUNT ? null : `${def.icon} ${def.label} ${objective.done}/${OBJECTIVE_COUNT}${gate ? ' · the way on is sealed!' : ''}`, gate);
 }
@@ -6289,7 +6315,8 @@ function waveCleared() {
     share({ k: 'cleared' });
   }
   const bonus = WAVE_CLEAR_BONUS * wave;
-  points += bonus;
+  const swift = swiftBonus();
+  points += bonus + swift;
   const heal = player.stats.waveHeal;
   player.heal(heal);
   updateHealth();
@@ -6297,8 +6324,18 @@ function waveCleared() {
   setPhase('cleared', WAVE_CLEARED_TIME);
   if (!config.isBoss) {
     play('waveClear');
-    hud.showBanner('Wave cleared!', `+${bonus} points · +${heal} heart${heal > 1 ? 's' : ''}`, WAVE_CLEARED_TIME);
+    hud.showBanner('Wave cleared!', `+${bonus} points${swift ? ` · ⚡ +${swift} swift` : ''} · +${heal} heart${heal > 1 ? 's' : ''}`, WAVE_CLEARED_TIME);
+  } else if (swift) {
+    hud.showCallout(`⚡ Swift! +${swift}`);
   }
+}
+
+/** The swift bonus for the wave just cleared (see SWIFT). */
+function swiftBonus() {
+  const arrive = config.isBoss ? SWIFT.bossArrive : config.count * config.spawnInterval;
+  const slack = config.isBoss ? SWIFT.bossSlack : SWIFT.slack;
+  const share = THREE.MathUtils.clamp(1 - (fightTime - arrive) / slack, 0, 1);
+  return Math.round(SWIFT.points * wave * share * (config.isBoss ? 2 : 1));
 }
 
 function offerRewards() {
@@ -8696,7 +8733,7 @@ function updateGame(delta) {
   updateCursedTiles(delta);
   updateBossMechanics(delta);
   // Raid targets first (they matter most), then the arena's objective.
-  hud.setObjectiveArrows([...raidTargets(), ...objectiveArrows]);
+  hud.setObjectiveArrows([...raidTargets().map((position) => ({ position, icon: '❗' })), ...objectiveArrows]);
   for (const charm of charmDrops.update(delta, player.position, !player.downed)) gainCharm(charm);
   lap('waves, hazards, events, boss mechanics');
   if (player.downed) {

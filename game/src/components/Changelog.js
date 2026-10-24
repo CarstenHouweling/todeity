@@ -3,6 +3,20 @@
 
 export const CHANGELOG = [
   {
+    version: '0.41.0',
+    date: '2026-10-24',
+    title: 'Bosses in their finest',
+    changes: [
+      '😈 Bee-zebub reborn: a sculpted, muscular devil with a scowling face, burning eyes, a grin that glows from inside, great ram horns with fire at their tips, bee antennae, and cracks of hellfire across his chest and back that throb like a heartbeat',
+      '⚔️ The Hornet Shogun in full armour: a lacquered breastplate, a ribbed kabuto helmet with a golden crescent crest, a face mask with gold teeth, a katana raised and his banner flying on his back',
+      '😇 The Seraph Queen: a great halo with rays of light behind her head, a collar of lily petals, a royal-blue robe, a star-topped staff and six wings of layered feathers',
+      '💜 Empress Buzzbelle: a crown of crystal spires, a lace collar with gems on its points, a starry cape and seams of violet light between her stripes',
+      '🎯 Objectives off screen are easy to find on every screen: big pulsing badges with what they are (🔔, 🐝, 🍯, 🌀) and a pointer, sized to your screen',
+      '🍯 The golden hives in the Sky Citadel have a honey shell: they no longer melt in seconds, even to a strong build',
+      '⚡ Fast play scores: clearing a wave (or felling a boss) quickly pays a swift bonus, so the faster of two similar runs wins. Time alive no longer adds to the score',
+    ],
+  },
+  {
     version: '0.40.1',
     date: '2026-10-23',
     title: 'A softer lawn',

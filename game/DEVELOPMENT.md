@@ -184,7 +184,14 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   (garden) or golden hives (Sky Citadel), hives being `nest` structure enemies that keep letting out bees; or hold
   3 shrines (temple bells, reality rifts), circles that fill while a Tode stands in them and draw bees in. The
   arena's last wave doesn't clear until it's done (`gateOpen`): the way on is sealed. Arrows at the screen edge
-  point at objectives out of view. Tode's damage grows much faster than the bees' health, so hives, shield wards and
+  point at objectives out of view (since v0.41 a pulsing badge with the objective's icon and a pointer, `{ position,
+  icon }` points for `hud.setObjectiveArrows`; raid targets get ❗), sized to the screen (7.5% of its short side,
+  40–80 px; the old 28 px arrow was easy to miss on a big monitor). The Sky Citadel's golden hives have a **honey
+  shell** (`HONEY_SHELL`, `honeyShell()` in `damageEnemy`, on `enemy.honeyShell`): they take at most 6% of their health
+  a second in full (a second's worth banked, refilled in game time) and 12% of whatever comes on top; with more
+  health too (`STRUCTURE_SCALE.nest` 6 there, was 4) a hive lasts ~7 s against ~2,000 damage a second, ~12 s against
+  800, ~15 s against 300 (it went down in 1–2.5 s against a strong build). A huge single hit still breaks through.
+  🍯 shows when the shell holds back damage. Tode's damage grows much faster than the bees' health, so hives, shield wards and
   guardians get an extra health factor per arena (`STRUCTURE_SCALE`, on top of the wave's `hpScale`), arena circles
   take longer to hold and draw more (and later tougher) bees (`ZONE_TIMES`), and so do a boss's circles of light
   (`LIGHT_TIMES`).
@@ -234,6 +241,12 @@ changed. The admin page's "Who's online" table lists everyone (only the admin AP
   through the picks (`FIGHT_MUSIC_PHASES`: skills, brews, the ultimate, the chest, and the cut-scenes); only pause,
   the title and the menus outside a run play the calm garden theme. Until v0.36.4 every pick dropped to it, which
   cut the late waves' epic tracks at each level-up.
+- **Score** (`updateScore`): points from kills (combo bonus), grazes, wave clears (`WAVE_CLEAR_BONUS` × wave),
+  objectives, bosses and the **swift bonus** (v0.41, `SWIFT`, `swiftBonus()` in `waveCleared`): up to 40 × the wave
+  (a boss wave twice that), full when the wave is cleared as its last bees arrive (`count × spawnInterval`; 25 s into
+  a boss wave) and nothing 30 s (boss: 150 s) later, fighting time only. Of two Daily Brew runs with about the same
+  kills the faster now wins; until v0.41 time alive added 0.1 a second instead, which paid the slower run. Max over a
+  won run ~12k (a run scores ~30–40k). Steeping, the Daily's twists and Gentle multiply the total.
 - **Feel:** slow-motion finishers on the last bee of a wave and bosses, hit-stop, kill-combo callouts with a score
   bonus. The spit evolves with each ascension tier (+6% damage per tier).
 - **Classes** (`components/Classes.js`, v0.17): seven frogs, all open, picked with the class chip above Start run (`hud.showClasses`,
@@ -1177,6 +1190,31 @@ garden comes alive below); every new arena raises the graphics level (`GFX_LEVEL
     look); it smeared the trees and the foreground and was taken out again in v0.40.1.
   - Compare looks with `game.snap` (Testing and debugging). Measured at step 0 on a Mac: the garden walk 2.1 ms a
     frame (render CPU 1.8); a run with ~40 garden bees 3.4 ms.
+- **Bosses in their finest** (v0.41). Every boss is sculpted like the garden's bees (`BOSS_LOOKS` in BeeModels.js:
+  a boss keeps its own colours and wings, `home`, wherever it turns up, e.g. endless mode in the Underworld; `bossBody`
+  adds its sculpted armour and collars, `addRegalia` its pieces, now keyed by kind, `capeGeometry` its cape or banner
+  in vertex colours; the rim light has a colour per boss). The Queen is unchanged but for a gold-trimmed cape. The
+  Hornet Shogun: a red lacquered breastplate with a gold sash, a ribbed black kabuto bowl with a gold brim, turned-back
+  side wings, a three-plate neck guard and layered shoulder guards (all melted into the body), a crescent crest that
+  opens upward, a mon with a glowing gem, dark eyes with burning slit pupils under a scowling brow, a lacquered mask
+  with gold teeth, a katana with a glowing edge in a front leg and a sashimono banner on a pole (`cape: 'banner'`,
+  swaying round the pole); no antennae (under the helmet they read as eyes). The Seraph Queen: deep gold body, peach
+  face, dark blue eyes (glowing ones washed out on the white marble), a collar of ten lily petals, a royal-blue robe
+  painted under a cream seam, a big tilted halo with 16 rays behind her head, a diadem with a star and a staff topped
+  with a star in a ring, three-row feathered wings (`featherWing`). Empress Buzzbelle: obsidian with a gold face and
+  Buzzbelle's lashes, an obsidian-and-gold ruff, a crown of nine crystal spires, a lace fan collar with gems, seams of
+  violet light between her stripes (`seams`, via the sculptor's `glow`), a starry cape, a sceptre with a glowing orb
+  and four wings. **Bee-zebub** (DevilModel.js): torso, head, arms and legs are each one sculpt (a V of obliques and
+  abs, ribcage, pecs, lats, delts, traps; a skull with a heavy brow, cheekbones, square jaw, pointed ears; the eye
+  sockets and the grin carved out, the grin glowing; biceps, triceps, forearms; shaggy goat thighs and hocks). Cracks
+  of hellfire (`CHEST_CRACKS`, `BACK_CRACKS`: lines in the front and back view, charred round the edges) are marked
+  `glow`, and `emberShader` draws them as light throbbing with `pulse` (a heartbeat, harder while he winds up) plus a
+  red rim round his outline; the legs have their own matte material. Ram horns with fire at their tips, bee antennae
+  with embers, a belt buckle with a burning gem, gold-rimmed pauldrons, wings 15% bigger (40% in his true form).
+  Sculpt.js got ~2–3× faster for this (shapes packed into one Float64Array and skipped by their boxes, no per-corner
+  allocations): a boss sculpts in ~30 ms in Node. Bosses are built ahead with each arena's bees (`prepareBees`
+  includes the arena's boss) and Bee-zebub with the Underworld's (`prepareDevil`, from `setEnemyGraphics`). Note:
+  timing sculpts in a hidden browser pane reads 10–20× too slow.
 - **Auto comes back up** (v0.40, `considerStepUp` / `judgeProbe` / `stepDown` in main.js). Steps used to never
   return in a session: one heavy late wave (or a shader-compile hitch) left the rest of the session, the garden
   included, on Low. Now every step down is remembered (`quality.history`, the state before it); after `RECOVER_WAIT`
@@ -1327,7 +1365,7 @@ server proxies `/ws` and `/api`).
 | `components/Player.js` | Tode: movement with acceleration and hop animation, dash charges, shield, revive, gauge, `BASE_STATS` (every stat a brew can change lives here). |
 | `components/Enemy.js` | Bee types (`ENEMY_TYPES`: drone, zipper, brute, stinger, queen, shogun, seraph, empress, beezebub), statuses (burn, chill/freeze), hit flash, death animation, glTF or procedural model. |
 | `components/BeeModels.js` | Procedural bee species per arena and boss regalia, with their flight animation. |
-| `components/DevilModel.js` | Bee-zebub's devil (horns, trident, bat wings, goat legs, spade tail) on pivots: hovers, raises the trident while winding up (`enemy.glow`), leans into charges, slumps when staggered. `height` keeps the shield bubble to his body. |
+| `components/DevilModel.js` | Bee-zebub's devil, sculpted since v0.41 (see Bosses in their finest): body, head, arms and goat legs on pivots, plus horns, trident, bat wings and spade tail: hovers, raises the trident while winding up (`enemy.glow`), leans into charges, slumps when staggered. `height` keeps the shield bubble to his body. `prepareDevil` builds him in an idle moment. |
 | `components/Bullets.js` | Instanced enemy bullets (spawn, update with a hit callback, cancel in a radius). |
 | `components/Leaves.js` | Tea-leaf experience orbs and the level curve (`leavesForLevel`). |
 | `components/PowerUps.js` | Brews: `BLENDS`, regular brews with rarity values, `DUOS`, `LEGENDARIES`, `rollBrews()` offer logic. |
@@ -1352,7 +1390,7 @@ server proxies `/ws` and `/api`).
 | `components/Charms.js` | Charm definitions, rarity rolls and the charms lying on the ground (`CharmDrops`). |
 | `components/Shrines.js` | Shrine types and their models (main.js runs them: `setupShrine`, `useShrine`). |
 | `components/Arenas.js` | The arenas after the garden: builders, sky dome / portal / lava shaders, `motes` particles, `arenaForWave`. |
-| `components/Sculpt.js` | Signed-distance sculpting: smooth-blended shapes meshed with surface nets (the garden's bees). |
+| `components/Sculpt.js` | Signed-distance sculpting: smooth-blended shapes meshed with surface nets (the garden's bees, every boss), with `paint`, `carve` and `glow` hooks. |
 | `components/Grass.js` | The garden's grass tufts, coloured like the lawn under them: wind and frogs bending them in the vertex shader, cleared under trinkets. |
 | `dev/coplanar.js`, `dev/snap.js`, `dev/gputime.js` | Dev-only: `game.coplanar()` finds z-fighting faces, `game.snap()` renders contact sheets of close-ups, `game.gpuTime()` times a frame on the GPU. |
 | `components/Graphics.js` | Graphics levels: tone mapping, character reflection map, `smoothGeometry`, `upgradeMaterial`. |

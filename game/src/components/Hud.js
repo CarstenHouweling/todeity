@@ -98,12 +98,14 @@ export class Hud {
     // Raid mechanics: "🛡 Break the shield: 1/3 wards · 0:21", or "☀ Get into the light!".
     this.raid = element('weather objective raid', this.top);
     this.raid.hidden = true;
-    // Arrows at the screen edge pointing at objectives out of view.
+    // Arrows at the screen edge pointing at objectives out of view: a badge with what it is, and a pointer.
     this.arrows = [0, 1, 2, 3, 4].map(() => {
       const arrow = element('objective-arrow', this.root);
-      arrow.textContent = '➤';
+      const icon = element('arrow-icon', arrow);
+      const head = element('arrow-head', arrow);
+      head.textContent = '➤';
       arrow.hidden = true;
-      return arrow;
+      return { arrow, icon, head };
     });
     this.waiting = element('waiting', this.top);
     // Co-op: shown only while the connection to the server is weak, bad or lost (setConnection).
@@ -276,20 +278,34 @@ export class Hud {
     this.objective.classList.toggle('urgent', urgent);
   }
 
-  /** Points the edge arrows at objective positions that are off screen. */
+  /**
+   * Points the edge arrows at objective positions that are off screen: `points` are positions, or `{ position, icon }`.
+   * They are sized to the screen (7.5% of its short side, 40–80 px): a fixed 28 px arrow was easy to miss on a big
+   * monitor.
+   */
   setObjectiveArrows(points) {
-    this.arrows.forEach((arrow, i) => {
+    const width = viewWidth();
+    const height = viewHeight();
+    const size = Math.round(THREE.MathUtils.clamp(Math.min(width, height) * 0.075, 40, 80));
+    // The badge and its pointer stay inside the screen.
+    const insetX = 1 - (size * 1.6) / (width / 2);
+    const insetY = 1 - (size * 1.6) / (height / 2);
+    this.arrows.forEach(({ arrow, icon, head }, i) => {
       const point = points[i];
+      const position = point?.isVector3 ? point : point?.position;
       let show = false;
-      if (point) {
-        const p = this.projected.set(point.x, point.y, 20).project(this.camera);
+      if (position) {
+        const p = this.projected.set(position.x, position.y, 20).project(this.camera);
         if (p.z > 1) p.multiplyScalar(-1);
         if (Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.88) {
           show = true;
-          const scale = Math.max(Math.abs(p.x) / 0.9, Math.abs(p.y) / 0.82);
-          const x = ((p.x / scale + 1) / 2) * viewWidth();
-          const y = ((1 - p.y / scale) / 2) * viewHeight();
-          setStyle(arrow, 'transform', `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -50%) rotate(${Math.atan2(-p.y, p.x).toFixed(2)}rad)`);
+          const scale = Math.max(Math.abs(p.x) / insetX, Math.abs(p.y) / insetY);
+          const x = ((p.x / scale + 1) / 2) * width;
+          const y = ((1 - p.y / scale) / 2) * height;
+          setStyle(arrow, 'fontSize', `${size}px`);
+          setStyle(arrow, 'transform', `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -50%)`);
+          setStyle(head, 'transform', `rotate(${Math.atan2(-p.y, p.x).toFixed(2)}rad) translateX(1.3em)`);
+          setText(icon, point.icon ?? '❗');
         }
       }
       setProp(arrow, 'hidden', !show);

@@ -597,14 +597,51 @@ canvas.game {
   position: absolute;
   left: calc(-1 * var(--safe-left));
   top: calc(-1 * var(--safe-top));
-  font-size: 28px;
-  color: #fff3c4;
-  text-shadow: 0 0 10px #ffb020, 0 0 2px #000;
+  width: 1em; /* the font size is set to the screen's size (Hud.setObjectiveArrows) */
+  height: 1em;
   pointer-events: none;
 }
 
 .objective-arrow[hidden] {
   display: none;
+}
+
+.arrow-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.52em;
+  background: radial-gradient(circle, rgba(70, 45, 0, 0.85), rgba(30, 18, 0, 0.75));
+  border: 0.14em solid #ffd86a;
+  box-shadow: 0 0 0.6em #ffb020, 0 0 0.15em #000;
+  animation: arrow-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.arrow-head {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1em;
+  height: 1em;
+  margin: -0.5em 0 0 -0.5em;
+  font-size: 0.55em;
+  line-height: 1em;
+  text-align: center;
+  color: #fff3c4;
+  text-shadow: 0 0 0.35em #ffb020, 0 0 0.08em #000;
+}
+
+@keyframes arrow-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.12);
+    box-shadow: 0 0 1em #ffc040, 0 0 0.15em #000;
+  }
 }
 
 .weather.modifiers {
