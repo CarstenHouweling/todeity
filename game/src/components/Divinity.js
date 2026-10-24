@@ -6,6 +6,7 @@ import {
   instanced,
   material,
   outsideArena,
+  hidesField,
   pineTree,
   rock,
   roundTree,
@@ -221,8 +222,12 @@ export class Divinity {
     for (let i = 0; i < 10; i++) {
       const angle = (i / 10) * Math.PI * 2 + Math.random() * 0.3;
       const distance = MAP_HALF_SIZE + 160 + Math.random() * 380;
-      const island = floatingIsland(25 + Math.random() * 30);
-      island.position.set(Math.cos(angle) * distance, Math.sin(angle) * distance, 70 + Math.random() * 110);
+      const size = 25 + Math.random() * 30;
+      const island = floatingIsland(size);
+      let [x, y] = [Math.cos(angle) * distance, Math.sin(angle) * distance];
+      const z = 70 + Math.random() * 110;
+      if (hidesField(x, y, z + size * 1.5, size)) [x, y] = [y, x]; // over the far meadow instead of in front of the garden
+      island.position.set(x, y, z);
       island.userData.phase = Math.random() * Math.PI * 2;
       island.userData.baseZ = island.position.z;
       group.add(island);

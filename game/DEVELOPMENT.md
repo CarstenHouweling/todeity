@@ -1455,6 +1455,11 @@ server proxies `/ws` and `/api`).
   he is near or between them and the camera (meshes made with `single()` are tagged `userData.prop`).
   Obstacles still exist for scattering decoration. Bees only avoid each other (overlap is only blocked when it
   gets worse, so they always separate).
+- **Nothing tall in front of the field.** The camera looks from +x, -y, so scenery outside those two sides lands at the
+  bottom of the screen, where props don't fade; a phone held upright shows far more of it (a 450-tall Sage Mountain
+  spire hid half the screen, v0.41.1). Filter tall outside scenery with `hidesField(x, y, height, radius)`
+  (`Environment.js`): drop it, or mirror it behind the field with `[x, y] = [y, x]` (Sky Citadel and Divinity islands).
+  Landmarks go toward -x, +y anyway (`far`).
 - **Zones:** each arena's centrepiece is a zone (`zone` on its obstacle): water (the pond, oil spring, fountain)
   slows Tode to a swim, the Tournament's rift speeds him up, the Underworld's lava pool burns.
 - **Bee models:** since v0.40 the garden has its own procedural species too (style 0, see The garden comes alive under

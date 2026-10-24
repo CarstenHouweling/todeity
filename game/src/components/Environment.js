@@ -325,6 +325,20 @@ export const outsideArena = (from, to) => () => {
   return null;
 };
 
+/**
+ * Whether scenery this tall at (x, y) would stand in front of the field on screen. The camera looks from +x, -y, down
+ * at about 35°, so a prop hides the ground up to about its height behind it in x and in y (toward -x, +y); twice
+ * that, for perspective up close and tall portrait screens. Tall things go behind the field or to its sides.
+ */
+export const hidesField = (x, y, height, radius = 0) => {
+  const reach = height * 2;
+  const edge = MAP_HALF_SIZE + radius;
+  // Where along (x - t·reach, y + t·reach), t in 0…1, the line is over the field.
+  const from = Math.max(0, (x - edge) / reach, (-edge - y) / reach);
+  const to = Math.min(1, (x + edge) / reach, (edge - y) / reach);
+  return from <= to;
+};
+
 // --- Garden layout -----------------------------------------------------------
 
 export const HOME = { x: -205, y: 205, turns: 2 };

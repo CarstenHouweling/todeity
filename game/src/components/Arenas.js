@@ -4,6 +4,7 @@ import {
   instanced,
   model,
   outsideArena,
+  hidesField,
   part,
   pick,
   pineTree,
@@ -850,7 +851,10 @@ function buildMountain() {
   const keepClear = corners(38).map((c) => ({ ...c, radius: 80 }));
   const spireSpots = scatterPoints(70, { inside: outsideArena(90, 1100), spacing: 110, avoid: keepClear });
   [[160, 0.8], [240, 1], [320, 1.2]].forEach(([height], i) => {
-    const spots = spireSpots.filter((_, j) => j % 3 === i).map((s) => ({ ...s, scale: range(0.7, 1.3) }));
+    const spots = spireSpots
+      .filter((_, j) => j % 3 === i)
+      .map((s) => ({ ...s, scale: range(0.7, 1.3) }))
+      .filter((s) => !hidesField(s.x, s.y, height * s.scale, height * 0.18 * s.scale));
     if (spots.length) group.add(instanced(rockSpire(height), spots));
   });
   const forest = scatterPoints(160, { inside: outsideArena(25, 700), spacing: 34, avoid: keepClear });
@@ -1088,7 +1092,10 @@ function buildSkyCitadel() {
     const island = new THREE.Group();
     island.add(single(floatingIsland(size), { x: 0, y: 0 }));
     island.add(single(roundTree(['#ffb7d5', '#ff9ec7', '#ffd1e3'], '#d9c7a8'), { x: 0, y: 0, z: size * 0.12, scale: size / 40 }));
-    island.position.set(Math.cos(angle) * distance, Math.sin(angle) * distance, range(40, 220));
+    let [x, y] = [Math.cos(angle) * distance, Math.sin(angle) * distance];
+    const z = range(40, 220);
+    if (hidesField(x, y, z + size * 1.5, size)) [x, y] = [y, x]; // over the field's back instead of in front of it
+    island.position.set(x, y, z);
     island.userData = { phase: range(0, Math.PI * 2), baseZ: island.position.z };
     group.add(island);
     islands.push(island);

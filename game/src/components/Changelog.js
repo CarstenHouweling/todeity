@@ -3,6 +3,15 @@
 
 export const CHANGELOG = [
   {
+    version: '0.41.1',
+    date: '2026-10-24',
+    title: 'A clear view',
+    changes: [
+      '⛰️ No more giant rock spires in front of the field on Sage Mountain: tall scenery stands behind the arena or beside it, never between you and the fight (it hid the bottom of the screen on phones held upright)',
+      '🏝️ The floating islands of the Sky Citadel and the ascended garden float behind the field too',
+    ],
+  },
+  {
     version: '0.41.0',
     date: '2026-10-24',
     title: 'Bosses in their finest',
